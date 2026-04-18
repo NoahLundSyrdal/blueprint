@@ -37,6 +37,7 @@ import java.awt.Graphics
 import java.awt.Graphics2D
 import java.awt.GridLayout
 import java.awt.Insets
+import java.awt.LayoutManager
 import java.awt.RenderingHints
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
@@ -139,6 +140,33 @@ private class RoundedLineBorder(
 
     override fun getBorderInsets(c: Component): Insets =
         Insets(padding.top, padding.left, padding.bottom, padding.right)
+}
+
+private class RoundedSurfacePanel(
+    layout: LayoutManager,
+    private val fill: Color,
+    private val outline: Color? = null,
+    private val radius: Int = 20,
+) : JPanel(layout) {
+    init {
+        isOpaque = false
+    }
+
+    override fun paintComponent(g: Graphics) {
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = fill
+            g2.fillRoundRect(0, 0, width - 1, height - 1, radius, radius)
+            outline?.let {
+                g2.color = it
+                g2.drawRoundRect(0, 0, width - 1, height - 1, radius, radius)
+            }
+        } finally {
+            g2.dispose()
+        }
+        super.paintComponent(g)
+    }
 }
 
 private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
@@ -647,9 +675,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(JLabel("Blueprint").apply {
                         font = font.deriveFont(java.awt.Font.BOLD, 15f)
                     })
-                    add(JLabel("Codebase -> UML -> chat changes -> code diff -> apply").apply {
-                        foreground = Color(0x333333)
-                    })
                     add(umlStatusLabel.apply { foreground = Color(0x555555) })
                 }, BorderLayout.CENTER)
                 add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
@@ -672,7 +697,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             resizeWeight = 0.62
             isContinuousLayout = true
         }
-        add(headerPanel(), BorderLayout.NORTH)
         add(workspace, BorderLayout.CENTER)
         add(statusLabel, BorderLayout.SOUTH)
         applyDarkTheme(this)
@@ -701,22 +725,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             preferredSize = Dimension(0, 120)
         }
 
-    private fun headerPanel(): JPanel =
-        JPanel(BorderLayout()).apply {
-            border = BorderFactory.createEmptyBorder(8, 12, 8, 12)
-            add(JPanel(GridLayout(0, 1)).apply {
-                add(JLabel("Blueprint").apply {
-                    font = font.deriveFont(java.awt.Font.BOLD, 18f)
-                })
-                add(JLabel("Abstract code to UML, refine with chat, generate code when ready. Repeat anytime.").apply {
-                    foreground = Color(0x666666)
-                })
-            }, BorderLayout.CENTER)
-            add(JLabel("Main canvas: editable UML. Sidecar: OpenAI-assisted architecture chat.").apply {
-                foreground = Color(0x555555)
-            }, BorderLayout.EAST)
-        }
-
     private fun chatPanel(): JPanel =
         JPanel(BorderLayout(6, 6)).apply {
             preferredSize = Dimension(560, 0)
@@ -726,15 +734,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JPanel(BorderLayout(4, 4)).apply {
                 add(JPanel(GridLayout(0, 2, 4, 4)).apply {
                     border = BorderFactory.createEmptyBorder(0, 0, 4, 0)
-                    add(JButton("Explain").apply {
-                        addActionListener { sendSuggestedChat("explain this UML") }
-                    })
-                    add(JButton("Add policy").apply {
-                        addActionListener { sendSuggestedChat("add an InvitePolicy entity") }
-                    })
-                    add(JButton("Next").apply {
-                        addActionListener { sendSuggestedChat("what should I generate next?") }
-                    })
                     add(JButton("Set key").apply {
                         addActionListener { setOpenAIKey() }
                     })
@@ -941,19 +940,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun appendChat(author: String, message: String) {
         val isUser = author.equals("You", ignoreCase = true)
-        val bubbleColor = if (isUser) BlueprintTheme.AccentSurface else BlueprintTheme.Surface
-        val borderColor = if (isUser) BlueprintTheme.Accent else BlueprintTheme.Border
+        val bubbleColor = if (isUser) Color(0x2D323A) else Color(0x202225)
+        val borderColor = if (isUser) null else BlueprintTheme.Border
         val labelColor = if (isUser) BlueprintTheme.Accent else BlueprintTheme.Muted
         val displayName = if (isUser) "You" else "Blueprint"
 
-        val bubble = JPanel(BorderLayout(0, 5)).apply {
-            isOpaque = true
-            background = bubbleColor
-            border = BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(borderColor, 1, true),
-                BorderFactory.createEmptyBorder(8, 10, 8, 10)
-            )
+        val bubble = RoundedSurfacePanel(BorderLayout(0, 8), bubbleColor, borderColor, radius = 24).apply {
+            border = BorderFactory.createEmptyBorder(12, 16, 12, 16)
             add(JLabel(displayName).apply {
+                isOpaque = false
                 foreground = labelColor
                 font = BlueprintTheme.font(11f, Font.BOLD)
             }, BorderLayout.NORTH)
@@ -964,8 +959,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 isFocusable = false
                 lineWrap = true
                 wrapStyleWord = true
-                isOpaque = true
-                background = bubbleColor
+                isOpaque = false
                 foreground = BlueprintTheme.Text
                 border = BorderFactory.createEmptyBorder()
                 font = BlueprintTheme.font(13f)
@@ -974,7 +968,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val row = JPanel(BorderLayout()).apply {
             isOpaque = false
-            border = BorderFactory.createEmptyBorder(4, 0, 4, 0)
+            border = BorderFactory.createEmptyBorder(8, 0, 8, 0)
             add(bubble, if (isUser) BorderLayout.EAST else BorderLayout.WEST)
         }
         row.maximumSize = Dimension(Int.MAX_VALUE, row.preferredSize.height)
@@ -2063,7 +2057,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             selectedCanvasId = id
             updateMiniGraph(project.service<DependencyGraphService>().analyze())
             status("Selected UML entity: $id")
-            appendChat("Blueprint", "$id selected on the UML canvas. Ask me to refine it, or edit the UML source directly.")
             return
         }
         selectedCanvasId = id
@@ -2074,7 +2067,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.setSelectedNode(id)
         loadSelectedIntoForm()
         status("Selected from graph: ${node.title.ifBlank { node.id.take(8) }}")
-        appendChat("Blueprint", "${node.title.ifBlank { node.id.take(8) }} selected from the diagram. Ask 'what next?' or 'why blocked?'.")
         logActivity("Graph selected ${node.title.ifBlank { node.id.take(8) }} (${node.id.take(8)}).")
     }
 
