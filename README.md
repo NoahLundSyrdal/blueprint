@@ -54,6 +54,51 @@ Build:
 JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradlew build -x test --no-daemon
 ```
 
+## Teammate / Agent Notes
+
+The fastest reliable way to test the plugin is:
+
+```bash
+cd /Users/noahsyrdal/blueprint
+./scripts/run-blueprint-pycharm.sh
+```
+
+This does three important things:
+
+1. Uses JDK 17.
+2. Runs the plugin through Gradle `runIde`.
+3. Opens the bundled demo Python project at `examples/invite_project`.
+
+Do not test Blueprint from PyCharm's normal right-click `Diagrams` menu. That is PyCharm's built-in diagram feature, not this plugin.
+
+Blueprint is a ToolWindow inside the launched sandbox IDE. If the side tab is not visible, open it with:
+
+```text
+View -> Tool Windows -> Blueprint
+```
+
+The expected sandbox flow is:
+
+1. Open the `Blueprint` ToolWindow.
+2. Enable `Offline mock demo`.
+3. Click `Generate UML`.
+4. Review the generated Mermaid class diagram.
+5. Click OK to import it into Blueprint nodes.
+6. Select the first schema node.
+7. Run `Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All`.
+
+Useful diagnostics:
+
+- If the sandbox starts but Blueprint is missing, check `build/idea-sandbox/system/log/idea.log` for `Loaded custom plugins: Blueprint`.
+- If Gradle fails with Java/class-version errors, make sure JDK 17 is selected:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+```
+
+- If `Generate UML` finds no classes, confirm the opened project is `examples/invite_project` or another Python project with class definitions.
+- Shutdown warnings from forcibly closing `runIde` are usually PyCharm sandbox noise, not Blueprint plugin failures.
+
 ## Demo Tip
 
 In the Blueprint ToolWindow, enable `Offline mock demo`, then click `Generate UML` or `Seed: UML Invite Flow`.
