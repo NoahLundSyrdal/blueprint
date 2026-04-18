@@ -22,6 +22,7 @@ class CodexClient {
 
     private val log = Logger.getInstance(CodexClient::class.java)
     @Volatile private var providerOverride: String? = null
+    @Volatile private var openAiKeyOverride: String? = null
 
     data class Result(val text: String, val ok: Boolean, val error: String? = null, val latencyMs: Long = 0)
 
@@ -31,6 +32,21 @@ class CodexClient {
     }
 
     fun providerMode(): String = providerOverride ?: (System.getenv("BLUEPRINT_LLM_PROVIDER") ?: "openai").lowercase()
+
+    fun setOpenAIKeyOverride(key: String?) {
+        openAiKeyOverride = key?.trim()?.takeIf { it.isNotBlank() }
+        log.info("CodexClient OpenAI key override ${if (openAiKeyOverride.isNullOrBlank()) "cleared" else "set"}")
+    }
+
+    fun hasOpenAIKey(): Boolean =
+        !openAiKeyOverride.isNullOrBlank() || !System.getenv("OPENAI_API_KEY").isNullOrBlank()
+
+    fun openAIKeySource(): String =
+        when {
+            !openAiKeyOverride.isNullOrBlank() -> "session key"
+            !System.getenv("OPENAI_API_KEY").isNullOrBlank() -> "OPENAI_API_KEY"
+            else -> "missing key"
+        }
 
     fun sendPrompt(prompt: String): String {
         val result = sendPromptResult(prompt)
@@ -87,7 +103,7 @@ class CodexClient {
     }
 
     private fun callOpenAI(prompt: String): String {
-        val key = System.getenv("OPENAI_API_KEY") ?: error("OPENAI_API_KEY not set")
+        val key = openAiKeyOverride ?: System.getenv("OPENAI_API_KEY") ?: error("OPENAI_API_KEY not set")
         val model = System.getenv("BLUEPRINT_MODEL") ?: "gpt-4o-mini"
         val body = """
             {

@@ -2,16 +2,14 @@
 
 Blueprint is a PyCharm/JetBrains plugin for architecture-first Python development.
 
-The demo flow is:
+The core loop is:
 
 1. Open an existing Python project.
-2. Generate editable UML from the project.
-3. Edit or import UML as an architecture contract.
-4. Convert the UML into Blueprint nodes.
-5. Generate a plan.
-6. Execute the selected node.
-7. Review the generated diff.
-8. Apply approved, in-scope changes.
+2. Abstract the codebase up into editable Mermaid UML.
+3. Edit the UML directly or use the side chat to refine the architecture.
+4. When the UML is ready, generate scoped code nodes from it.
+5. Plan, execute, review, preview diff, and apply approved changes.
+6. Repeat the loop whenever needed: codebase -> UML -> chat refinement -> code.
 
 ## Current Scope
 
@@ -19,7 +17,8 @@ Blueprint is intentionally focused on a hackathon-ready vertical slice:
 
 - Python project context detection.
 - Editable Mermaid UML generation from Python classes.
-- UML import into dependency-aware nodes.
+- OpenAI-assisted UML refinement in the side chat.
+- UML conversion into dependency-aware code-generation nodes.
 - Offline mock mode for deterministic demos.
 - Plan, execute, review, diff preview, and scoped apply.
 - List-based node workflow with a read-only mini graph.
@@ -81,11 +80,12 @@ The expected sandbox flow is:
 
 1. Open the `Blueprint` ToolWindow.
 2. Enable `Offline mock demo`.
-3. Click `Generate UML`.
-4. Review the generated Mermaid class diagram.
-5. Click OK to import it into Blueprint nodes.
-6. Select the first schema node.
-7. Run `Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All`.
+3. Click `Abstract Code to UML`.
+4. Review or edit the Mermaid UML in the main editor.
+5. Ask chat to refine it, for example: `add an InvitePolicy entity`.
+6. Click `Create Code Nodes`.
+7. Select the first generated schema node.
+8. Run `Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All`.
 
 Useful diagnostics:
 
@@ -96,23 +96,25 @@ Useful diagnostics:
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 ```
 
-- If `Generate UML` finds no classes, confirm the opened project is `examples/invite_project` or another Python project with class definitions.
+- If `Abstract Code to UML` finds no classes, confirm the opened project is `examples/invite_project` or another Python project with class definitions.
+- Live chat uses the configured provider through `CodexClient`; default live provider is OpenAI and requires `OPENAI_API_KEY`.
 - Shutdown warnings from forcibly closing `runIde` are usually PyCharm sandbox noise, not Blueprint plugin failures.
 
 ## Demo Tip
 
-In the Blueprint ToolWindow, enable `Offline mock demo`, then click `Generate UML` or `Seed: UML Invite Flow`.
+In the Blueprint ToolWindow, enable `Offline mock demo`, then click `Abstract Code to UML`.
 
 Recommended smoke test:
 
 1. Run `./scripts/run-blueprint-pycharm.sh`.
 2. In the sandbox PyCharm window, open the `Blueprint` ToolWindow.
 3. Enable `Offline mock demo`.
-4. Click `Generate UML`.
-5. Click OK to import the generated diagram.
-6. Select `01 Imported UML schema contract`.
-7. Click `Generate Plan`.
-8. Click `Execute Node`.
-9. Click `Review`.
-10. Click `Preview Diff`.
-11. Click `Apply All`.
+4. Click `Abstract Code to UML`.
+5. Ask chat: `add an InvitePolicy entity`.
+6. Click `Create Code Nodes`.
+7. Select `01 Imported UML schema contract`.
+8. Click `Generate Plan`.
+9. Click `Execute Node`.
+10. Click `Review`.
+11. Click `Preview Diff`.
+12. Click `Apply All`.

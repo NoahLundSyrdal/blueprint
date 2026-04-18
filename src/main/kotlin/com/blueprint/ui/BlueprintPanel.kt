@@ -30,6 +30,7 @@ import java.awt.Color
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.GridLayout
+import java.awt.Insets
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import javax.swing.BorderFactory
@@ -41,11 +42,13 @@ import javax.swing.JComboBox
 import javax.swing.JLabel
 import javax.swing.JOptionPane
 import javax.swing.JPanel
+import javax.swing.JPasswordField
 import javax.swing.JSplitPane
 import javax.swing.JTabbedPane
 import javax.swing.JTable
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
+import javax.swing.UIManager
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 import javax.swing.table.DefaultTableModel
@@ -144,16 +147,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val miniGraph = MiniGraphPanel()
     private val summaryLabel = JLabel("Total 0 | Ready 0 | Blocked 0 | Applied 0")
     private val providerLabel = JLabel(providerText())
+    private val actionProviderLabel = JLabel(providerText())
     private val filterCombo = JComboBox(NodeFilter.values())
     private val activityLog = JBTextArea(6, 40).apply {
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
     }
-    private val chatHistory = JBTextArea(12, 28).apply {
+    private val chatHistory = JBTextArea(12, 46).apply {
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
+        font = UIManager.getFont("Label.font")?.deriveFont(13f) ?: font.deriveFont(13f)
+        margin = Insets(8, 8, 8, 8)
         text = """
             Blueprint chat
 
@@ -164,12 +170,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             - add an InvitePolicy entity
             - what should I generate next?
 
-            Live mode uses OpenAI through OPENAI_API_KEY. Mock mode is deterministic for demos.
+            Live mode uses OpenAI. Use OPENAI_API_KEY or Set key.
         """.trimIndent() + "\n"
     }
-    private val chatInput = JBTextArea(3, 28).apply {
+    private val chatInput = JBTextArea(3, 46).apply {
         lineWrap = true
         wrapStyleWord = true
+        font = UIManager.getFont("Label.font")?.deriveFont(13f) ?: font.deriveFont(13f)
+        margin = Insets(6, 6, 6, 6)
     }
     private val umlStatusLabel = JLabel("UML: not generated yet")
     private val umlEditor = JBTextArea(18, 72).apply {
@@ -193,7 +201,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
             codex.setProviderOverride(if (isSelected) "mock" else null)
-            providerLabel.text = providerText()
+            refreshProviderLabels()
             logActivity("Mode changed to ${providerText()}")
         }
     }
@@ -288,6 +296,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val secondaryTabs = JTabbedPane().apply {
+            addTab("Generated Nodes", left)
             addTab("UML Source", JBScrollPane(umlEditor))
             addTab("Node Details", JBScrollPane(form))
             addTab("Review / Safety", summary)
@@ -298,7 +307,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val lowerWorkspace = JPanel(BorderLayout()).apply {
-            minimumSize = Dimension(0, 260)
+            minimumSize = Dimension(0, 150)
+            preferredSize = Dimension(0, 190)
             add(actions, BorderLayout.NORTH)
             add(secondaryTabs, BorderLayout.CENTER)
         }
@@ -316,8 +326,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(umlStatusLabel.apply { foreground = Color(0x555555) })
                 }, BorderLayout.CENTER)
                 add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
-                    add(JButton("Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
-                    add(JButton("Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
+                    add(JButton("1 Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
+                    add(JButton("2 Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
                 }, BorderLayout.EAST)
             }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph), BorderLayout.CENTER)
@@ -325,28 +335,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val mainCanvas = JSplitPane(JSplitPane.VERTICAL_SPLIT, diagramPanel, lowerWorkspace).apply {
             dividerLocation = 520
-            resizeWeight = 0.76
+            resizeWeight = 0.82
             isContinuousLayout = true
         }
 
         val workspace = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, mainCanvas, chatPanel()).apply {
-            dividerLocation = 840
-            resizeWeight = 1.0
-            isContinuousLayout = true
-        }
-
-        val right = JPanel(BorderLayout()).apply {
-            add(workspace, BorderLayout.CENTER)
-        }
-
-        val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right).apply {
-            dividerLocation = 300
-            resizeWeight = 0.0
+            dividerLocation = 680
+            resizeWeight = 0.62
             isContinuousLayout = true
         }
         add(headerPanel(), BorderLayout.NORTH)
-        add(split, BorderLayout.CENTER)
+        add(workspace, BorderLayout.CENTER)
         add(statusLabel, BorderLayout.SOUTH)
+        SwingUtilities.invokeLater {
+            workspace.setDividerLocation((workspace.width - 560).coerceAtLeast(520))
+            mainCanvas.setDividerLocation(0.82)
+        }
 
         nodeList.addListSelectionListener {
             if (!it.valueIsAdjusting) {
@@ -386,27 +390,67 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun chatPanel(): JPanel =
         JPanel(BorderLayout(6, 6)).apply {
-            preferredSize = Dimension(320, 0)
-            minimumSize = Dimension(260, 0)
-            border = BorderFactory.createTitledBorder("Blueprint Chat")
+            preferredSize = Dimension(560, 0)
+            minimumSize = Dimension(460, 0)
+            border = BorderFactory.createTitledBorder("Architecture Chat")
             add(JBScrollPane(chatHistory), BorderLayout.CENTER)
             add(JPanel(BorderLayout(4, 4)).apply {
-                add(JPanel(GridLayout(0, 1, 4, 4)).apply {
+                add(JPanel(GridLayout(0, 2, 4, 4)).apply {
                     border = BorderFactory.createEmptyBorder(0, 0, 4, 0)
-                    add(JButton("Explain UML").apply {
+                    add(JButton("Explain").apply {
                         addActionListener { sendSuggestedChat("explain this UML") }
                     })
-                    add(JButton("Add InvitePolicy").apply {
+                    add(JButton("Add policy").apply {
                         addActionListener { sendSuggestedChat("add an InvitePolicy entity") }
                     })
-                    add(JButton("What next?").apply {
+                    add(JButton("Next").apply {
                         addActionListener { sendSuggestedChat("what should I generate next?") }
                     })
+                    add(JButton("Set key").apply {
+                        addActionListener { setOpenAIKey() }
+                    })
                 }, BorderLayout.NORTH)
-                add(JBScrollPane(chatInput), BorderLayout.CENTER)
-                add(JButton("Send").apply { addActionListener { sendChat() } }, BorderLayout.EAST)
+                add(JPanel(BorderLayout(4, 0)).apply {
+                    add(JBScrollPane(chatInput), BorderLayout.CENTER)
+                    add(JButton("Send").apply {
+                        preferredSize = Dimension(88, 64)
+                        addActionListener { sendChat() }
+                    }, BorderLayout.EAST)
+                }, BorderLayout.CENTER)
             }, BorderLayout.SOUTH)
         }
+
+    private fun setOpenAIKey() {
+        val keyField = JPasswordField(36)
+        val panel = JPanel(BorderLayout(6, 6)).apply {
+            add(
+                JLabel("Paste an OpenAI API key for this PyCharm session. It is kept in memory only."),
+                BorderLayout.NORTH
+            )
+            add(keyField, BorderLayout.CENTER)
+        }
+        val choice = JOptionPane.showConfirmDialog(
+            this,
+            panel,
+            "Blueprint - OpenAI Key",
+            JOptionPane.OK_CANCEL_OPTION,
+            JOptionPane.PLAIN_MESSAGE,
+        )
+        if (choice != JOptionPane.OK_OPTION) return
+
+        val key = String(keyField.password).trim()
+        if (key.isBlank()) {
+            status("OpenAI key unchanged")
+            return
+        }
+        codex.setOpenAIKeyOverride(key)
+        refreshProviderLabels()
+        if (!chatHistory.text.contains("OpenAI key set for this session.")) {
+            appendChat("Blueprint", "OpenAI key set for this session. Live chat will use OpenAI unless Offline mock demo is enabled.")
+        }
+        logActivity("OpenAI key set for this session.")
+        status("OpenAI key set")
+    }
 
     private fun actionPanel(): JPanel =
         JPanel().apply {
@@ -414,7 +458,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(mockMode)
-                add(JLabel(providerText()).apply { foreground = providerColor() })
+                add(actionProviderLabel.apply { foreground = providerColor() })
                 add(JLabel("  Loop: Code -> UML -> Chat -> Code Nodes -> Apply -> UML again").apply {
                     foreground = Color(0x555555)
                 })
@@ -474,6 +518,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         appendChat("You", message)
         if (shouldRefineUml(message)) {
             refineUmlWithChat(message)
+        } else if (shouldAnswerWithModel(message)) {
+            answerArchitectureChat(message)
         } else {
             appendChat("Blueprint", chatResponse(message))
         }
@@ -534,9 +580,38 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
 
+    private fun shouldAnswerWithModel(message: String): Boolean {
+        if (codex.providerMode() == "mock") return false
+        val lower = message.lowercase()
+        if (!codex.hasOpenAIKey() && codex.providerMode() == "openai") return false
+        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "apply").any { it in lower }) {
+            return false
+        }
+        return listOf("explain", "what is", "what are", "current product", "product", "architecture", "summarize", "describe")
+            .any { it in lower }
+    }
+
+    private fun answerArchitectureChat(message: String) {
+        status("Asking OpenAI...")
+        appendChat("Blueprint", "Thinking with ${providerText()}...")
+        val prompt = architectureChatPrompt(message)
+        Thread {
+            val result = codex.sendPromptResult(prompt)
+            SwingUtilities.invokeLater {
+                if (!result.ok) {
+                    appendChat("Blueprint", "I could not answer with the model: ${result.error ?: "request failed"}")
+                    status("Chat failed")
+                    return@invokeLater
+                }
+                appendChat("Blueprint", result.text.trim().ifBlank { "No answer returned." })
+                status("Chat answered")
+            }
+        }.start()
+    }
+
     private fun shouldRefineUml(message: String): Boolean {
         val lower = message.lowercase()
-        return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field", "uml", "diagram")
+        return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field")
             .any { it in lower } &&
             !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "code nodes", "explain").any { it in lower }
     }
@@ -593,6 +668,33 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         User request:
         $message
         """.trimIndent()
+
+    private fun architectureChatPrompt(message: String): String {
+        val selected = nodeList.selectedValue
+        val graph = project.service<DependencyGraphService>()
+        val ready = graph.readyNodes()
+        return """
+        You are Blueprint, an architecture assistant inside PyCharm.
+
+        Product loop:
+        codebase -> editable UML -> chat refinement -> code nodes -> plan/execute/review/apply -> UML again.
+
+        Answer the user's question clearly and briefly. Do not claim you changed code unless the user used the execution buttons.
+        When useful, refer to the current UML and generated nodes.
+
+        Current UML:
+        ${umlEditor.text}
+
+        Selected generated node:
+        ${selected?.let { "${it.title} (${it.type.name.lowercase()}, ${badgeFor(it)})" } ?: "none"}
+
+        Ready generated nodes:
+        ${ready.joinToString("\n") { node -> "- ${node.title.ifBlank { node.id.take(8) }}" }.ifBlank { "none" }}
+
+        User question:
+        $message
+        """.trimIndent()
+    }
 
     private fun extractMermaid(text: String): String {
         val fenced = Regex("""```(?:mermaid)?\s*(classDiagram.*?)(?:```|$)""", RegexOption.DOT_MATCHES_ALL)
@@ -1562,8 +1664,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val blockedCount = allNodes.count { hasDependencyBlock(report.readiness[it.id]) }
         val appliedCount = allNodes.count { it.executionStatus == ExecutionStatus.APPLIED }
         summaryLabel.text = "Total ${allNodes.size} | Ready $readyCount | Blocked $blockedCount | Applied $appliedCount"
-        providerLabel.text = providerText()
-        providerLabel.foreground = providerColor()
+        refreshProviderLabels()
+    }
+
+    private fun refreshProviderLabels() {
+        val text = providerText()
+        val color = providerColor()
+        providerLabel.text = text
+        providerLabel.foreground = color
+        actionProviderLabel.text = text
+        actionProviderLabel.foreground = color
     }
 
     private fun badgeFor(node: BlueprintNode): String {
@@ -1597,12 +1707,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun providerText(): String =
         if (codex.providerMode() == "mock") {
             "Mode: MOCK DEMO (offline, deterministic)"
+        } else if (codex.providerMode() == "openai") {
+            "Mode: LIVE OpenAI (${codex.openAIKeySource()})"
         } else {
             "Mode: LIVE (${codex.providerMode()})"
         }
 
     private fun providerColor(): Color =
-        if (codex.providerMode() == "mock") Color(0x2E7D32) else Color(0x5F6368)
+        when {
+            codex.providerMode() == "mock" -> Color(0x2E7D32)
+            codex.providerMode() == "openai" && !codex.hasOpenAIKey() -> Color(0xB3261E)
+            else -> Color(0x5F6368)
+        }
 
     private fun changedFileSummary(exec: com.blueprint.model.ExecutionArtifact?): String {
         if (exec == null) return "Changed files: none yet."

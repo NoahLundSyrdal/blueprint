@@ -4,7 +4,7 @@ Last updated: 2026-04-18
 
 ## One-Line Status
 
-Blueprint is a working PyCharm/JetBrains plugin demo for architecture-first, dependency-aware Python node execution with scoped plan, execute, review, diff preview, and apply.
+Blueprint is a working PyCharm/JetBrains plugin demo for an infinite architecture loop: abstract a Python codebase into editable UML, refine that UML with chat, create reviewable code nodes, apply scoped changes, then abstract back to UML again.
 
 ## What Works Today
 
@@ -39,10 +39,11 @@ Blueprint is a working PyCharm/JetBrains plugin demo for architecture-first, dep
 - Hover tooltips on mini graph node cards.
 - Demo sample flows, including Project Invite Flow.
 - UML Invite Flow seed that starts from a prefilled UML-like schema contract and Python file scopes.
-- UML import from pasted PlantUML, Mermaid classDiagram, or simple entity-bullet text.
+- Editable UML workspace from pasted PlantUML, Mermaid classDiagram, or generated project UML.
+- Chat-assisted UML refinement through `CodexClient`; live mode defaults to OpenAI and requires `OPENAI_API_KEY`.
 - Python project analyzer that detects config files, package roots, test roots, framework hints, and suggested test commands.
 - Python-to-UML generation from the open project, producing editable Mermaid `classDiagram` text.
-- Edited generated UML can be imported into normal Blueprint nodes, then executed through the existing plan/review/apply pipeline.
+- Current UML can be converted into normal Blueprint code nodes, then executed through the existing plan/review/apply pipeline.
 
 ## Current Demo Flow
 
@@ -50,24 +51,24 @@ The recommended demo is:
 
 1. Open the Blueprint tool window.
 2. Enable Offline mock demo mode.
-3. For an existing Python project, click `Generate UML`.
-4. Review or edit the generated Mermaid class diagram, then click OK.
-5. Blueprint imports the edited UML into schema, service, CLI, test, and docs nodes.
-6. Show the node list and mini graph.
-7. Click graph cards to show graph-driven navigation.
+3. For an existing Python project, click `Abstract Code to UML`.
+4. Review or edit the generated Mermaid class diagram in the main UML editor.
+5. Ask chat to refine the UML, for example `add an InvitePolicy entity`.
+6. Click `Create Code Nodes`.
+7. Show the generated node graph.
 8. Select the first ready schema node.
 9. Click `Generate Plan`.
 10. Click `Execute Node`.
 11. Click `Review`.
 12. Click `Preview Diff`.
 13. Click `Apply All`.
-14. Show that downstream nodes become ready after dependencies are applied.
+14. Click `Abstract Code to UML` again to show the loop can repeat from the updated codebase.
 
-If the open project has too few Python classes for a compelling diagram, use `Import UML` or `Seed: UML Invite Flow` as the fallback demo path.
+If the open project has too few Python classes for a compelling diagram, use `Paste UML` or `Sample: Invite UML` as the fallback demo path.
 
 ## UML / Schema Support Today
 
-Blueprint supports UML-like architecture input as a schema node and can import common text UML formats into Blueprint nodes.
+Blueprint supports UML-like architecture as the central editable artifact. The user can abstract it from Python code, paste it manually, or refine it with chat before creating code-generation nodes.
 
 This means a user can either create a node manually like:
 
@@ -79,7 +80,7 @@ This means a user can either create a node manually like:
 
 Downstream Python service, CLI, test, and docs nodes can depend on that schema node. Blueprint will treat the schema node as an upstream architecture contract through the node definition, dependency graph, and generated artifacts.
 
-The `Import UML` button currently accepts pasted text and parses:
+The `Paste UML` flow accepts pasted text into the main UML editor. `Create Code Nodes` then parses:
 
 - PlantUML/Mermaid-style `class` or `entity` blocks.
 - Simple bullet-field entity blocks.
@@ -88,15 +89,16 @@ The `Import UML` button currently accepts pasted text and parses:
 
 The importer creates normal Blueprint nodes, so the imported graph uses the same planning, execution, review, diff preview, and apply pipeline as hand-authored nodes.
 
-Blueprint also has a `Generate UML` button. It scans Python files in detected source roots, extracts class names, fields, public methods, inheritance, and simple field-type relationships, then produces editable Mermaid `classDiagram` text. The user can change that diagram before importing it into Blueprint nodes.
+Blueprint also has an `Abstract Code to UML` button. It scans Python files in detected source roots, extracts class names, fields, public methods, inheritance, and simple field-type relationships, then writes editable Mermaid `classDiagram` text into the main UML editor.
 
 This is the current honest product loop:
 
 1. Open an existing Python project in PyCharm.
-2. Generate UML from the current code.
-3. Edit the generated UML text.
-4. Import the edited UML into Blueprint nodes.
+2. Abstract UML from the current code.
+3. Edit the generated UML text or refine it with chat.
+4. Create code nodes from the edited UML.
 5. Run the existing plan, execute, review, diff, and apply flow to change code.
+6. Abstract the updated codebase back into UML and continue.
 
 ## Python Project Context
 
@@ -112,7 +114,7 @@ This context is injected into planning and execution prompts so generated work i
 
 The ToolWindow also has a `Python Context` button that displays the analyzer output in the graph/status panel.
 
-The `Generate UML` button uses the same analyzer context to prefer real Python source roots over generated, virtualenv, build, and cache folders.
+The `Abstract Code to UML` button uses the same analyzer context to prefer real Python source roots over generated, virtualenv, build, and cache folders.
 
 ## What Not To Claim Yet
 
@@ -138,7 +140,7 @@ For the hackathon demo, say:
 
 For the project-to-UML flow, say:
 
-> "Blueprint reads the Python project into an editable UML diagram. I can change the architecture at the diagram level, import that edited design into nodes, and then Blueprint safely plans, patches, reviews, previews, and applies the code changes."
+> "Blueprint abstracts the Python project into editable UML. I can refine the architecture with chat, create reviewable code nodes when the design is ready, safely apply the changes, and then abstract the updated codebase back into UML again."
 
 ## Suggested UML Demo Node
 
@@ -211,7 +213,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradl
 
 ## Latest Product Improvement
 
-Blueprint now includes `Generate UML`, which scans the open Python project and produces editable Mermaid `classDiagram` text. When the user clicks OK, the edited diagram is imported into the same Blueprint node pipeline as pasted UML.
+Blueprint now centers on an editable UML workspace. `Abstract Code to UML` scans the open Python project and fills the UML editor. Chat can refine that UML. `Create Code Nodes` converts the current UML into the same Blueprint node pipeline as pasted UML.
 
 Blueprint also includes `Import UML`, which turns pasted UML-like architecture text into:
 
