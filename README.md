@@ -42,7 +42,7 @@ For the easiest demo test, use the helper script:
 That launches a PyCharm sandbox with Blueprint installed and opens:
 
 ```text
-examples/invite_project
+examples/car_company_project
 ```
 
 Once PyCharm opens, use `View -> Tool Windows -> Blueprint` if the Blueprint tab is not already visible.
@@ -66,7 +66,7 @@ This does three important things:
 
 1. Uses JDK 17.
 2. Runs the plugin through Gradle `runIde`.
-3. Opens the bundled demo Python project at `examples/invite_project`.
+3. Opens the bundled demo Python project at `examples/car_company_project`.
 
 Do not test Blueprint from PyCharm's normal right-click `Diagrams` menu. That is PyCharm's built-in diagram feature, not this plugin.
 
@@ -82,7 +82,7 @@ The expected sandbox flow is:
 2. Enable `Offline mock demo`.
 3. Click `Abstract Code to UML`.
 4. Review or edit the Mermaid UML in the main editor.
-5. Ask chat to refine it, for example: `add an InvitePolicy entity`.
+5. Ask chat to refine it, for example: `add a Supplier entity`.
 6. Click `Create Code Nodes`.
 7. Select the first generated schema node.
 8. Run `Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All`.
@@ -96,7 +96,7 @@ Useful diagnostics:
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
 ```
 
-- If `Abstract Code to UML` finds no classes, confirm the opened project is `examples/invite_project` or another Python project with class definitions.
+- If `Abstract Code to UML` finds no classes, confirm the opened project is `examples/car_company_project` or another Python project with class definitions.
 - Live chat uses the configured provider through `CodexClient`; default live provider is OpenAI and requires `OPENAI_API_KEY`.
 - Shutdown warnings from forcibly closing `runIde` are usually PyCharm sandbox noise, not Blueprint plugin failures.
 
@@ -110,7 +110,7 @@ Recommended smoke test:
 2. In the sandbox PyCharm window, open the `Blueprint` ToolWindow.
 3. Enable `Offline mock demo`.
 4. Click `Abstract Code to UML`.
-5. Ask chat: `add an InvitePolicy entity`.
+5. Ask chat: `add a Supplier entity`.
 6. Click `Create Code Nodes`.
 7. Select `01 Imported UML schema contract`.
 8. Click `Generate Plan`.

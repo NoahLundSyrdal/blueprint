@@ -379,7 +379,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             override fun changed() = SwingUtilities.invokeLater { refreshList() }
         })
         refreshList()
-        logActivity("Blueprint ready. Seed UML Invite Flow, keep mock mode on, then run the first ready node.")
+        logActivity("Blueprint ready. Seed UML Car Company Flow, keep mock mode on, then run the first ready node.")
     }
 
     private fun applyDarkTheme(component: Component) {
@@ -602,7 +602,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JButton("Paste UML").apply { addActionListener { importUml() } })
             add(JButton("Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
             add(JButton("+ Manual Node").apply { addActionListener { addNode() } })
-            add(JButton("Sample: Invite UML").apply { addActionListener { seedUmlInviteFlow() } })
+            add(JButton("Sample: Car Company UML").apply { addActionListener { seedUmlCarCompanyFlow() } })
             add(JButton("- Remove").apply { addActionListener { removeSelected() } })
         }
         val left = JPanel(BorderLayout()).apply {
@@ -935,7 +935,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
             Try:
             - explain this UML
-            - add an InvitePolicy entity
+            - add a Supplier entity
             - what should I generate next?
 
             Live mode uses OpenAI. Use OPENAI_API_KEY or Set key.
@@ -1019,7 +1019,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 changedFileSummary(registry.getExecution(node.id))
             }
             "uml" in lower || "diagram" in lower -> {
-                "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add an InvitePolicy entity' or 'make Project own many Invites'. I will rewrite the UML, then you can Create Code Nodes."
+                "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Create Code Nodes."
             }
             selected != null -> {
                 val readiness = graph.readinessFor(selected)
@@ -1160,25 +1160,25 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun mockUmlEdit(currentUml: String, message: String): String {
         val lower = message.lowercase()
         val addition = when {
-            "policy" in lower -> """
+            "supplier" in lower -> """
 
-                class InvitePolicy {
-                  maxAgeDays: int
-                  requiresDomainMatch: bool
-                }
-
-                Invite --> InvitePolicy : uses
-            """.trimIndent()
-            "audit" in lower || "event" in lower -> """
-
-                class AuditEvent {
+                class Supplier {
                   id: str
-                  actorEmail: str
-                  action: str
-                  createdAt: datetime
+                  name: str
+                  category: str
                 }
 
-                Project --> AuditEvent : records
+                CarCompany --> Supplier : sources parts from
+            """.trimIndent()
+            "service" in lower || "center" in lower -> """
+
+                class ServiceCenter {
+                  id: str
+                  name: str
+                  city: str
+                }
+
+                Dealership --> ServiceCenter : services with
             """.trimIndent()
             else -> """
 
@@ -1477,182 +1477,203 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun umlImportExample(): String =
         """
         classDiagram
-        class Project {
+        class CarCompany {
           id: string
           name: string
+          headquartersCity: string
         }
 
-        class User {
+        class VehicleModel {
           id: string
-          email: string
+          name: string
+          segment: string
+          basePrice: decimal
+          companyId: string
         }
 
-        class Invite {
+        class Dealership {
           id: string
-          projectId: string
-          email: string
-          token: string
-          status: pending | accepted | expired
-          createdAt: datetime
-          expiresAt: datetime
+          name: string
+          city: string
+          companyId: string
         }
 
-        Project "1" --> "many" Invite
-        User may accept Invite
-        Invite belongs to Project
+        class InventoryVehicle {
+          vin: string
+          modelId: string
+          dealershipId: string
+          status: available | reserved | sold
+          modelYear: int
+          color: string
+        }
+
+        CarCompany "1" --> "many" VehicleModel
+        CarCompany "1" --> "many" Dealership
+        Dealership "1" --> "many" InventoryVehicle
+        InventoryVehicle belongs to VehicleModel
         """.trimIndent()
 
     private fun seedSampleNode() {
-        val n = inviteBackendNode()
+        val n = carCompanyBackendNode()
         registry.add(n)
         selectNode(n.id)
-        logActivity("Seeded one safe demo node scoped to blueprint_demo/project_invite/service.py")
+        logActivity("Seeded one safe demo node scoped to blueprint_demo/car_company/service.py")
     }
 
-    private fun seedUmlInviteFlow() {
+    private fun seedUmlCarCompanyFlow() {
         val schema = BlueprintNode(
             type = NodeType.SCHEMA,
-            title = "01 UML invite schema contract",
-            summary = "Turn the UML-like invite architecture into the upstream data contract.",
+            title = "01 UML car company schema contract",
+            summary = "Turn the UML-like car company architecture into the upstream data contract.",
             description = """
-                Define the invite domain model from this UML-like architecture:
+                Define the car company inventory model from this UML-like architecture:
 
-                Project
+                CarCompany
                 - id
                 - name
+                - headquartersCity
 
-                User
+                VehicleModel
                 - id
-                - email
+                - name
+                - segment
+                - basePrice
+                - companyId
 
-                Invite
+                Dealership
                 - id
-                - projectId
-                - email
-                - token
-                - status: pending | accepted | expired
-                - createdAt
-                - expiresAt
+                - name
+                - city
+                - companyId
+
+                InventoryVehicle
+                - vin
+                - modelId
+                - dealershipId
+                - status: available | reserved | sold
+                - modelYear
+                - color
 
                 Relationships:
-                Project 1 -> many Invite
-                User may accept Invite
-                Invite belongs to Project
+                CarCompany 1 -> many VehicleModel
+                CarCompany 1 -> many Dealership
+                Dealership 1 -> many InventoryVehicle
+                InventoryVehicle belongs to VehicleModel
 
                 The schema node is the architecture contract. Downstream Python
                 service, CLI, test, and docs nodes must respect this contract.
             """.trimIndent(),
-            fileScope = FileScope(paths = listOf("blueprint_demo/project_invite/models.py")),
+            fileScope = FileScope(paths = listOf("blueprint_demo/car_company/models.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Invite model includes projectId, email, token, status, createdAt, and expiresAt."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Invite status is limited to pending, accepted, or expired."),
+                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "InventoryVehicle includes modelId, dealershipId, status, modelYear, and color."),
+                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "InventoryVehicle status is limited to available, reserved, or sold."),
                 criterion("AC3", AcceptanceCriterionType.CODEGEN, "Generated changes stay inside the schema node file scope.")
             )
         )
         val backend = BlueprintNode(
             type = NodeType.BACKEND,
-            title = "02 Invite service from schema",
-            summary = "Create, list, and redeem invites using the UML schema contract.",
-            description = "Implement the Python service for project invites. The service must use the Invite fields and status values defined by the upstream UML schema node.",
+            title = "02 Inventory service from schema",
+            summary = "Register, list, and sell vehicles using the UML schema contract.",
+            description = "Implement the Python service for car company inventory. The service must use the VehicleModel, Dealership, and InventoryVehicle fields defined by the upstream UML schema node.",
             dependencies = listOf(schema.id),
-            fileScope = FileScope(paths = listOf("blueprint_demo/project_invite/service.py")),
+            fileScope = FileScope(paths = listOf("blueprint_demo/car_company/service.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service can create a pending invite using the schema contract."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service can list pending invites for a project."),
-                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service can redeem valid invite tokens and update status."),
+                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service can register an available vehicle using the schema contract."),
+                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service can list vehicles for a dealership."),
+                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service can mark a vehicle as sold and update status."),
                 criterion("AC4", AcceptanceCriterionType.CODEGEN, "Implementation stays inside the declared service file scope.")
             )
         )
         val frontend = BlueprintNode(
             type = NodeType.FRONTEND,
-            title = "03 Invite management CLI",
-            summary = "Create a Python CLI for managing project invites.",
-            description = "Add a compact Python CLI that uses the invite service and reflects pending, accepted, and expired invite statuses.",
+            title = "03 Inventory management CLI",
+            summary = "Create a Python CLI for managing dealership inventory.",
+            description = "Add a compact Python CLI that uses the inventory service and reflects available, reserved, and sold vehicle statuses.",
             dependencies = listOf(backend.id),
-            fileScope = FileScope(paths = listOf("blueprint_demo/project_invite/cli.py")),
+            fileScope = FileScope(paths = listOf("blueprint_demo/car_company/cli.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.UX, "User can enter an email and create an invite from the CLI."),
-                criterion("AC2", AcceptanceCriterionType.UX, "CLI shows invite status values from the schema contract."),
-                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "CLI calls the invite service produced by the service node.")
+                criterion("AC1", AcceptanceCriterionType.UX, "User can register a vehicle and assign it to a dealership from the CLI."),
+                criterion("AC2", AcceptanceCriterionType.UX, "CLI shows vehicle status values from the schema contract."),
+                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "CLI calls the inventory service produced by the service node.")
             )
         )
         val test = BlueprintNode(
             type = NodeType.TEST,
-            title = "04 Invite contract tests",
+            title = "04 Inventory contract tests",
             summary = "Verify the UML schema, service, and CLI contract path.",
-            description = "Add tests for invite creation, listing, redemption, and schema-defined status handling.",
+            description = "Add tests for vehicle registration, listing, sale, and schema-defined status handling.",
             dependencies = listOf(backend.id, frontend.id),
-            fileScope = FileScope(paths = listOf("tests/test_project_invites.py")),
+            fileScope = FileScope(paths = listOf("tests/test_car_company_inventory.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.TEST, "Tests cover create, list, redeem, and invalid token cases."),
-                criterion("AC2", AcceptanceCriterionType.TEST, "Tests assert pending, accepted, and expired status behavior.")
+                criterion("AC1", AcceptanceCriterionType.TEST, "Tests cover register, list, sell, and invalid VIN cases."),
+                criterion("AC2", AcceptanceCriterionType.TEST, "Tests assert available, reserved, and sold status behavior.")
             )
         )
         val docs = BlueprintNode(
             type = NodeType.DOCS,
-            title = "05 Invite architecture notes",
-            summary = "Document the UML-driven invite flow.",
-            description = "Document how the UML schema contract maps to Python model, service, CLI, and tests.",
+            title = "05 Car company architecture notes",
+            summary = "Document the UML-driven car company flow.",
+            description = "Document how the UML schema contract maps to Python model, inventory service, CLI, and tests.",
             dependencies = listOf(backend.id, frontend.id),
-            fileScope = FileScope(paths = listOf("docs/project_invites.md")),
+            fileScope = FileScope(paths = listOf("docs/car_company_inventory.md")),
             acceptanceCriteria = listOf(
                 criterion("AC1", AcceptanceCriterionType.OTHER, "Docs explain the schema fields, relationships, Python service behavior, CLI behavior, and validation path.")
             )
         )
         listOf(schema, backend, frontend, test, docs).forEach(registry::add)
         selectNode(schema.id)
-        logActivity("Seeded UML Invite Flow: schema contract first, downstream nodes dependency-blocked until the contract is applied.")
+        logActivity("Seeded UML Car Company Flow: schema contract first, downstream nodes dependency-blocked until the contract is applied.")
     }
 
-    private fun seedInviteFlow() {
+    private fun seedCarCompanyFlow() {
         val schema = BlueprintNode(
             type = NodeType.SCHEMA,
-            title = "01 Invite data model",
-            summary = "Define the invite record used by the Python service and tests.",
-            description = "Create a minimal invite data shape for project invite creation, listing, and redemption.",
-            fileScope = FileScope(paths = listOf("blueprint_demo/project_invite/models.py")),
+            title = "01 Car company data model",
+            summary = "Define the inventory records used by the Python service and tests.",
+            description = "Create minimal car company data shapes for vehicle registration, listing, and sales.",
+            fileScope = FileScope(paths = listOf("blueprint_demo/car_company/models.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Invite model includes projectId, email, token, status, createdAt, and expiresAt.")
+                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "InventoryVehicle includes modelId, dealershipId, status, modelYear, and color.")
             )
         )
-        val backend = inviteBackendNode(dependencies = listOf(schema.id))
+        val backend = carCompanyBackendNode(dependencies = listOf(schema.id))
         val frontend = BlueprintNode(
             type = NodeType.FRONTEND,
-            title = "03 Invite management CLI",
-            summary = "Add a clear Python CLI for managing project invites.",
-            description = "Create a small CLI for listing pending invites and creating a new project invite.",
+            title = "03 Inventory management CLI",
+            summary = "Add a clear Python CLI for managing dealership inventory.",
+            description = "Create a small CLI for listing vehicles and registering a new dealership vehicle.",
             dependencies = listOf(backend.id),
-            fileScope = FileScope(paths = listOf("blueprint_demo/project_invite/cli.py")),
+            fileScope = FileScope(paths = listOf("blueprint_demo/car_company/cli.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.UX, "User can enter an email and create an invite from the CLI."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "CLI uses the invite service contract produced by the service node.")
+                criterion("AC1", AcceptanceCriterionType.UX, "User can enter a VIN and register a vehicle from the CLI."),
+                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "CLI uses the inventory service contract produced by the service node.")
             )
         )
         val test = BlueprintNode(
             type = NodeType.TEST,
-            title = "04 Invite flow tests",
-            summary = "Add coverage for project invite creation and listing.",
-            description = "Test happy path and duplicate/invalid invite cases.",
+            title = "04 Inventory flow tests",
+            summary = "Add coverage for vehicle registration and listing.",
+            description = "Test happy path and duplicate/invalid VIN cases.",
             dependencies = listOf(backend.id, frontend.id),
-            fileScope = FileScope(paths = listOf("tests/test_project_invites.py")),
+            fileScope = FileScope(paths = listOf("tests/test_car_company_inventory.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.TEST, "Tests cover create, list, and redeem invite behavior.")
+                criterion("AC1", AcceptanceCriterionType.TEST, "Tests cover register, list, and sell vehicle behavior.")
             )
         )
         val docs = BlueprintNode(
             type = NodeType.DOCS,
-            title = "05 Invite flow docs",
-            summary = "Document the project invite flow.",
-            description = "Add concise developer-facing notes for invite data, Python service, CLI, and validation.",
+            title = "05 Car company flow docs",
+            summary = "Document the car company inventory flow.",
+            description = "Add concise developer-facing notes for car company data, Python service, CLI, and validation.",
             dependencies = listOf(backend.id, frontend.id),
-            fileScope = FileScope(paths = listOf("docs/project_invites.md")),
+            fileScope = FileScope(paths = listOf("docs/car_company_inventory.md")),
             acceptanceCriteria = listOf(
                 criterion("AC1", AcceptanceCriterionType.OTHER, "Docs explain model fields, service behavior, CLI entry point, and validation behavior.")
             )
         )
         listOf(schema, backend, frontend, test, docs).forEach(registry::add)
         selectNode(schema.id)
-        logActivity("Seeded Project Invite Flow: 5 ordered Python nodes, safe blueprint_demo file scopes, dependencies wired.")
+        logActivity("Seeded Car Company Flow: 5 ordered Python nodes, safe blueprint_demo file scopes, dependencies wired.")
     }
 
     private fun seedCheckoutFlow() {
@@ -1693,18 +1714,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         logActivity("Seeded Checkout Flow: 3 ordered nodes for a compact second demo.")
     }
 
-    private fun inviteBackendNode(dependencies: List<String> = emptyList()): BlueprintNode =
+    private fun carCompanyBackendNode(dependencies: List<String> = emptyList()): BlueprintNode =
         BlueprintNode(
             type = NodeType.BACKEND,
-            title = "02 Project invite service",
-            summary = "Create, list, and redeem project invites.",
-            description = "Implement the Python service surface for creating project invites, listing pending invites, and redeeming invite tokens.",
+            title = "02 Car company inventory service",
+            summary = "Register, list, and sell dealership vehicles.",
+            description = "Implement the Python service surface for registering dealership inventory, listing available vehicles, and marking vehicles as sold.",
             dependencies = dependencies,
-            fileScope = FileScope(paths = listOf("blueprint_demo/project_invite/service.py")),
+            fileScope = FileScope(paths = listOf("blueprint_demo/car_company/service.py")),
             acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service creates a pending invite for a project."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service lists pending invites for the current project."),
-                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service marks a valid token as redeemed."),
+                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service registers an available vehicle for a dealership."),
+                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service lists available vehicles for the current dealership."),
+                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service marks a valid VIN as sold."),
                 criterion("AC4", AcceptanceCriterionType.CODEGEN, "Implementation stays inside the declared demo service file.")
             )
         )

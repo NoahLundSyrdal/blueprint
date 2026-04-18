@@ -64,7 +64,7 @@ class NodeExecutionService(private val project: Project) {
     }
 
     private fun executeAggregateModels(node: BlueprintNode, plan: PlanArtifact?): ExecutionArtifact {
-        val path = node.fileScope.paths.firstOrNull() ?: "blueprint_demo/imported_invite/models.py"
+        val path = node.fileScope.paths.firstOrNull() ?: "blueprint_demo/imported_models/models.py"
         val modelOutputs = freshestModelOutputs(node).ifEmpty { node.outputs }
         val content = renderModelsModule(modelOutputs)
         return ExecutionArtifact(

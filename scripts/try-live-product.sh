@@ -28,7 +28,7 @@ if [[ -n "$running_pid" ]]; then
 fi
 
 echo "Launching Blueprint PyCharm sandbox..."
-echo "Project: $(pwd)/examples/invite_project"
+echo "Project: $(pwd)/examples/car_company_project"
 echo "Log: $log"
 
 nohup ./gradlew --no-daemon --console=plain runIde >"$log" 2>&1 &

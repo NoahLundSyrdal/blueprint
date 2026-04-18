@@ -37,8 +37,8 @@ Blueprint is a working PyCharm/JetBrains plugin demo for an infinite architectur
 - Click-to-select mini graph node cards.
 - Mini graph/list/detail selection synchronization.
 - Hover tooltips on mini graph node cards.
-- Demo sample flows, including Project Invite Flow.
-- UML Invite Flow seed that starts from a prefilled UML-like schema contract and Python file scopes.
+- Demo sample flows, including Car Company Inventory Flow.
+- UML Car Company Flow seed that starts from a prefilled UML-like schema contract and Python file scopes.
 - Editable UML workspace from pasted PlantUML, Mermaid classDiagram, or generated project UML.
 - Chat-assisted UML refinement through `CodexClient`; live mode defaults to OpenAI and requires `OPENAI_API_KEY`.
 - Python project analyzer that detects config files, package roots, test roots, framework hints, and suggested test commands.
@@ -53,7 +53,7 @@ The recommended demo is:
 2. Enable Offline mock demo mode.
 3. For an existing Python project, click `Abstract Code to UML`.
 4. Review or edit the generated Mermaid class diagram in the main UML editor.
-5. Ask chat to refine the UML, for example `add an InvitePolicy entity`.
+5. Ask chat to refine the UML, for example `add a Supplier entity`.
 6. Click `Create Code Nodes`.
 7. Show the generated node graph.
 8. Select the first ready schema node.
@@ -64,7 +64,7 @@ The recommended demo is:
 13. Click `Apply All`.
 14. Click `Abstract Code to UML` again to show the loop can repeat from the updated codebase.
 
-If the open project has too few Python classes for a compelling diagram, use `Paste UML` or `Sample: Invite UML` as the fallback demo path.
+If the open project has too few Python classes for a compelling diagram, use `Paste UML` or `Sample: Car Company UML` as the fallback demo path.
 
 ## UML / Schema Support Today
 
@@ -73,7 +73,7 @@ Blueprint supports UML-like architecture as the central editable artifact. The u
 This means a user can either create a node manually like:
 
 - Type: `SCHEMA`
-- Title: `Project invite UML schema`
+- Title: `Car company inventory UML schema`
 - Description: pasted UML, PlantUML, Mermaid, or structured architecture text
 - File scope: exact files the schema node may create or change
 - Acceptance criteria: explicit requirements the generated schema/model must satisfy
@@ -151,39 +151,49 @@ Type:
 SCHEMA
 
 Title:
-Project invite UML schema
+Car company inventory UML schema
 
 Description:
-Define the invite domain model from this UML-like architecture:
+Define the car company inventory model from this UML-like architecture:
 
-Project
+CarCompany
 - id
 - name
+- headquartersCity
 
-User
+VehicleModel
 - id
-- email
+- name
+- segment
+- basePrice
+- companyId
 
-Invite
+Dealership
 - id
-- projectId
-- email
-- token
-- status: pending | accepted | expired
-- createdAt
-- expiresAt
+- name
+- city
+- companyId
+
+InventoryVehicle
+- vin
+- modelId
+- dealershipId
+- status: available | reserved | sold
+- modelYear
+- color
 
 Relationships:
-Project 1 -> many Invite
-User may accept Invite
-Invite belongs to Project
+CarCompany 1 -> many VehicleModel
+CarCompany 1 -> many Dealership
+Dealership 1 -> many InventoryVehicle
+InventoryVehicle belongs to VehicleModel
 
 File scope:
-blueprint_demo/project_invite/models.py
+blueprint_demo/car_company/models.py
 
 Acceptance criteria:
-AC1: Invite model includes projectId, email, token, status, createdAt, and expiresAt.
-AC2: Invite status is limited to pending, accepted, or expired.
+AC1: InventoryVehicle includes modelId, dealershipId, status, modelYear, and color.
+AC2: InventoryVehicle status is limited to available, reserved, or sold.
 AC3: Generated changes stay inside the schema node file scope.
 ```
 
@@ -227,7 +237,7 @@ The nodes are normal persisted Blueprint nodes, not a separate demo-only path.
 
 ## Latest Demo Improvement
 
-The plugin now includes a dedicated `Seed: UML Invite Flow` button that creates:
+The plugin now includes a dedicated `Sample: Car Company UML` button that creates:
 
 1. A schema node prefilled with UML-like architecture text.
 2. A Python service node depending on the schema node.

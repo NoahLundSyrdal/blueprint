@@ -163,9 +163,7 @@ object UmlToIR {
     }
 
     private fun inferTitleStem(entities: List<UmlImportService.ParsedEntity>): String {
-        val preferred = entities.firstOrNull { it.name.contains("Invite", ignoreCase = true) }
-            ?: entities.first()
-        return preferred.name
+        return entities.first().name
     }
 
     private fun slugify(value: String): String =
