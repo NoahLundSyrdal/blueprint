@@ -64,17 +64,6 @@ class NodeRegistry(private val project: Project) : Disposable {
         fire()
     }
 
-    fun replaceAll(newNodes: List<BlueprintNode>) {
-        nodes.clear()
-        nodes += newNodes
-        plans.clear()
-        executions.clear()
-        reviews.clear()
-        selectedNodeId = nodes.firstOrNull()?.id
-        save()
-        fire()
-    }
-
     fun remove(id: String) {
         nodes.removeAll { it.id == id }
         plans.remove(id); executions.remove(id); reviews.remove(id)

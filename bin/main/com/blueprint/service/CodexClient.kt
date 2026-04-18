@@ -5,9 +5,6 @@ import com.intellij.openapi.diagnostic.Logger
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
  * Thin, vendor-neutral LLM client. Returns raw text (never assumes JSON).
@@ -18,7 +15,7 @@ import java.nio.file.Paths
  *  - "openai":    /v1/chat/completions, env OPENAI_API_KEY
  *  - "mock":      returns a canned JSON stub (for UI smoke-tests with no net)
  *
- * Select with BLUEPRINT_LLM_PROVIDER env var or .env, defaults to "openai".
+ * Select with BLUEPRINT_LLM_PROVIDER env var, defaults to "openai".
  */
 @Service(Service.Level.APP)
 class CodexClient {
@@ -34,7 +31,7 @@ class CodexClient {
         log.info("CodexClient provider override set to ${providerOverride ?: "env"}")
     }
 
-    fun providerMode(): String = providerOverride ?: (envValue("BLUEPRINT_LLM_PROVIDER") ?: "openai").lowercase()
+    fun providerMode(): String = providerOverride ?: (System.getenv("BLUEPRINT_LLM_PROVIDER") ?: "openai").lowercase()
 
     fun setOpenAIKeyOverride(key: String?) {
         openAiKeyOverride = key?.trim()?.takeIf { it.isNotBlank() }
@@ -42,12 +39,14 @@ class CodexClient {
     }
 
     fun hasOpenAIKey(): Boolean =
-        !openAiKeyOverride.isNullOrBlank() || !envValue("OPENAI_API_KEY").isNullOrBlank()
+        !openAiKeyOverride.isNullOrBlank() || !System.getenv("OPENAI_API_KEY").isNullOrBlank()
 
-    fun openAIKeySource(): String {
-        if (!openAiKeyOverride.isNullOrBlank()) return "session key"
-        return envEntry("OPENAI_API_KEY")?.source ?: "missing key"
-    }
+    fun openAIKeySource(): String =
+        when {
+            !openAiKeyOverride.isNullOrBlank() -> "session key"
+            !System.getenv("OPENAI_API_KEY").isNullOrBlank() -> "OPENAI_API_KEY"
+            else -> "missing key"
+        }
 
     fun sendPrompt(prompt: String): String {
         val result = sendPromptResult(prompt)
@@ -79,8 +78,8 @@ class CodexClient {
     // --- providers ---
 
     private fun callAnthropic(prompt: String): String {
-        val key = envValue("ANTHROPIC_API_KEY") ?: error("ANTHROPIC_API_KEY not set")
-        val model = envValue("BLUEPRINT_MODEL") ?: "claude-opus-4-6"
+        val key = System.getenv("ANTHROPIC_API_KEY") ?: error("ANTHROPIC_API_KEY not set")
+        val model = System.getenv("BLUEPRINT_MODEL") ?: "claude-opus-4-6"
         val body = """
             {
               "model": ${jsonStr(model)},
@@ -104,8 +103,8 @@ class CodexClient {
     }
 
     private fun callOpenAI(prompt: String): String {
-        val key = openAiKeyOverride ?: envValue("OPENAI_API_KEY") ?: error("OPENAI_API_KEY not set")
-        val model = envValue("BLUEPRINT_MODEL") ?: "gpt-4o-mini"
+        val key = openAiKeyOverride ?: System.getenv("OPENAI_API_KEY") ?: error("OPENAI_API_KEY not set")
+        val model = System.getenv("BLUEPRINT_MODEL") ?: "gpt-4o-mini"
         val body = """
             {
               "model": ${jsonStr(model)},
@@ -297,70 +296,6 @@ class CodexClient {
         val text = stream?.bufferedReader(StandardCharsets.UTF_8)?.use { it.readText() } ?: ""
         if (status !in 200..299) error("HTTP $status: $text")
         return text
-    }
-
-    private data class EnvEntry(val value: String, val source: String)
-
-    private fun envValue(name: String): String? = envEntry(name)?.value
-
-    private fun envEntry(name: String): EnvEntry? {
-        System.getenv(name)?.trim()?.takeIf { it.isNotBlank() }?.let {
-            return EnvEntry(it, name)
-        }
-        return dotenvFiles().firstNotNullOfOrNull { readDotenv(it, name) }
-    }
-
-    private fun dotenvFiles(): List<Path> {
-        val files = mutableListOf<Path>()
-        System.getProperty("BLUEPRINT_ENV_FILE")?.trim()?.takeIf { it.isNotBlank() }?.let {
-            files.add(Paths.get(it))
-        }
-        System.getenv("BLUEPRINT_ENV_FILE")?.trim()?.takeIf { it.isNotBlank() }?.let {
-            files.add(Paths.get(it))
-        }
-        var dir: Path? = Paths.get("").toAbsolutePath()
-        repeat(8) {
-            val current = dir ?: return@repeat
-            files.add(current.resolve(".env"))
-            dir = current.parent
-        }
-        return files.distinct()
-    }
-
-    private fun readDotenv(path: Path, name: String): EnvEntry? {
-        if (!Files.isRegularFile(path)) return null
-        return runCatching {
-            Files.readAllLines(path, StandardCharsets.UTF_8).firstNotNullOfOrNull { raw ->
-                val line = raw.trim()
-                if (line.isBlank() || line.startsWith("#")) return@firstNotNullOfOrNull null
-
-                val normalized = line.removePrefix("export ").trim()
-                val equals = normalized.indexOf('=')
-                if (equals > 0) {
-                    val key = normalized.substring(0, equals).trim()
-                    if (key != name) return@firstNotNullOfOrNull null
-                    stripEnvValue(normalized.substring(equals + 1))
-                        ?.let { EnvEntry(it, "$name from ${path.fileName}") }
-                } else if (name == "OPENAI_API_KEY" && normalized.startsWith("sk-")) {
-                    EnvEntry(stripEnvValue(normalized) ?: normalized, "raw OpenAI key from ${path.fileName}")
-                } else {
-                    null
-                }
-            }
-        }.getOrNull()
-    }
-
-    private fun stripEnvValue(raw: String): String? {
-        val trimmed = Regex("""\s+#.*$""").replace(raw.trim(), "")
-        if (trimmed.isBlank()) return null
-        if (trimmed.length >= 2) {
-            val first = trimmed.first()
-            val last = trimmed.last()
-            if ((first == '"' && last == '"') || (first == '\'' && last == '\'')) {
-                return trimmed.substring(1, trimmed.length - 1).trim().takeIf { it.isNotBlank() }
-            }
-        }
-        return trimmed
     }
 
     private fun jsonStr(s: String): String {

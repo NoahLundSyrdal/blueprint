@@ -6,7 +6,6 @@ import com.blueprint.model.BlueprintNode
 import com.blueprint.model.ExecutionStatus
 import com.blueprint.model.FileScope
 import com.blueprint.model.NodeType
-import com.blueprint.model.Patch
 import com.blueprint.service.ApplyChangesService
 import com.blueprint.service.CodexClient
 import com.blueprint.service.DependencyGraphService
@@ -149,13 +148,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val summaryLabel = JLabel("Total 0 | Ready 0 | Blocked 0 | Applied 0")
     private val providerLabel = JLabel(providerText())
     private val actionProviderLabel = JLabel(providerText())
-    private val guideLabel = JLabel("Generate UML, change it with chat, then generate a code diff.")
-    private val primaryActionButton = JButton("Generate Code Diff").apply {
-        addActionListener { generateCodeDiffFromCurrentUml() }
+    private val guideLabel = JLabel("Start by abstracting this Python project into UML.")
+    private val primaryActionButton = JButton("Next: Abstract Code to UML").apply {
+        addActionListener { runGuidedNextStep() }
     }
-    private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
-    private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
-    private val advancedMode = JBCheckBox("Advanced")
     private val filterCombo = JComboBox(NodeFilter.values())
     private val activityLog = JBTextArea(6, 40).apply {
         isEditable = false
@@ -205,7 +201,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val planArea = JBTextArea().apply { isEditable = false }
     private val execArea = JBTextArea().apply { isEditable = false }
     private val reviewArea = JBTextArea().apply { isEditable = false }
-    private val secondaryTabs = JTabbedPane()
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -243,7 +238,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JLabel("Project: ${project.name}").apply { foreground = Color(0x333333) })
             add(summaryLabel.apply { foreground = Color(0x333333) })
             add(providerLabel.apply { foreground = providerColor() })
-            add(JLabel("Workflow: UML -> code diff -> apply").apply {
+            add(JLabel("Next: Abstract Code to UML").apply {
                 foreground = Color(0x555555)
             })
             add(row("Filter", filterCombo))
@@ -304,29 +299,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(lower, BorderLayout.SOUTH)
         }
 
-        fun refreshSecondaryTabs() {
-            secondaryTabs.removeAll()
-            secondaryTabs.addTab("UML", JBScrollPane(umlEditor))
-            secondaryTabs.addTab("Nodes", left)
-            secondaryTabs.addTab("Review", summary)
-            secondaryTabs.addTab("Activity", JBScrollPane(activityLog))
-            if (advancedMode.isSelected) {
-                secondaryTabs.addTab("Node Details", JBScrollPane(form))
-                secondaryTabs.addTab("Plan JSON", JBScrollPane(planArea))
-                secondaryTabs.addTab("Execution JSON", JBScrollPane(execArea))
-                secondaryTabs.addTab("Review JSON", JBScrollPane(reviewArea))
-            }
-        }
-        refreshSecondaryTabs()
-        advancedMode.addActionListener {
-            refreshSecondaryTabs()
-            revalidate()
-            repaint()
+        val secondaryTabs = JTabbedPane().apply {
+            addTab("Generated Nodes", left)
+            addTab("UML Source", JBScrollPane(umlEditor))
+            addTab("Node Details", JBScrollPane(form))
+            addTab("Review / Safety", summary)
+            addTab("Plan JSON", JBScrollPane(planArea))
+            addTab("Execution JSON", JBScrollPane(execArea))
+            addTab("Review JSON", JBScrollPane(reviewArea))
+            addTab("Activity", JBScrollPane(activityLog))
         }
 
         val lowerWorkspace = JPanel(BorderLayout()).apply {
-            minimumSize = Dimension(0, 320)
-            preferredSize = Dimension(0, 380)
+            minimumSize = Dimension(0, 150)
+            preferredSize = Dimension(0, 190)
             add(actions, BorderLayout.NORTH)
             add(secondaryTabs, BorderLayout.CENTER)
         }
@@ -338,24 +324,23 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(JLabel("Blueprint").apply {
                         font = font.deriveFont(java.awt.Font.BOLD, 15f)
                     })
-                    add(JLabel("Codebase -> UML -> chat changes -> code diff -> apply").apply {
+                    add(JLabel("Codebase -> UML -> chat refinement -> code nodes -> apply -> UML again").apply {
                         foreground = Color(0x333333)
                     })
                     add(umlStatusLabel.apply { foreground = Color(0x555555) })
                 }, BorderLayout.CENTER)
                 add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
-                    add(JButton("Refresh UML").apply { addActionListener { generateProjectUml() } })
-                    add(JButton("Generate Code Diff").apply { addActionListener { generateCodeDiffFromCurrentUml() } })
+                    add(JButton("1 Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
+                    add(JButton("2 Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
                 }, BorderLayout.EAST)
             }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph), BorderLayout.CENTER)
         }
 
         val mainCanvas = JSplitPane(JSplitPane.VERTICAL_SPLIT, diagramPanel, lowerWorkspace).apply {
-            dividerLocation = 480
-            resizeWeight = 0.65
+            dividerLocation = 520
+            resizeWeight = 0.82
             isContinuousLayout = true
-            isOneTouchExpandable = true
         }
 
         val workspace = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, mainCanvas, chatPanel()).apply {
@@ -368,7 +353,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(statusLabel, BorderLayout.SOUTH)
         SwingUtilities.invokeLater {
             workspace.setDividerLocation((workspace.width - 560).coerceAtLeast(520))
-            mainCanvas.setDividerLocation((mainCanvas.height - 380).coerceAtLeast(360))
+            mainCanvas.setDividerLocation(0.82)
         }
 
         nodeList.addListSelectionListener {
@@ -478,7 +463,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JPanel(BorderLayout(8, 2)).apply {
                 border = BorderFactory.createEmptyBorder(2, 4, 6, 4)
                 add(primaryActionButton.apply {
-                    preferredSize = Dimension(260, 44)
+                    preferredSize = Dimension(260, 40)
                     font = font.deriveFont(java.awt.Font.BOLD, 13f)
                 }, BorderLayout.WEST)
                 add(guideLabel.apply {
@@ -488,15 +473,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(mockMode)
                 add(actionProviderLabel.apply { foreground = providerColor() })
-                add(advancedMode)
+                add(JLabel("  Loop: Code -> UML -> Chat -> Code Nodes -> Apply -> UML again").apply {
+                    foreground = Color(0x555555)
+                })
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
-                add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
-                add(previewDiffButton)
-                add(applyApprovedButton)
-            })
-            val advancedRows = listOf(
-                JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Save").apply { addActionListener { saveCurrent() } })
                 add(JButton("Generate Plan").apply { addActionListener { generatePlan() } })
                 add(JButton("Execute Node").apply { addActionListener { executeNode() } })
@@ -504,22 +485,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(JButton("Review").apply { addActionListener { review() } })
                 add(JButton("Preview Waves").apply { addActionListener { previewWaves() } })
                 add(JButton("Python Context").apply { addActionListener { showPythonContext() } })
-            },
-                JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+            })
+            add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Selected + Dependents").apply { addActionListener { previewSelectedAndDependents() } })
                 add(JButton("Why Blocked?").apply { addActionListener { showWhyBlocked() } })
+                add(JButton("Preview Diff").apply { addActionListener { previewDiff() } })
+                add(JButton("Apply All").apply { addActionListener { applyChanges(null) } })
                 add(JButton("Apply File").apply { addActionListener { applySelectedFile() } })
-            }
-            )
-            advancedRows.forEach { row ->
-                row.isVisible = advancedMode.isSelected
-                add(row)
-            }
-            advancedMode.addActionListener {
-                advancedRows.forEach { it.isVisible = advancedMode.isSelected }
-                revalidate()
-                repaint()
-            }
+            })
         }
 
     private fun dependencyEditorPanel(): JPanel =
@@ -897,132 +870,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         importUmlText(text, "editable UML")
     }
 
-    private fun generateCodeDiffFromCurrentUml() {
-        val text = umlEditor.text.trim()
-        if (text.isBlank() || !text.contains("classDiagram")) {
-            generateProjectUml()
-            return
-        }
-        importUmlText(text, "current UML")
-        val nodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
-        if (nodes.isEmpty()) return status("No code nodes created")
-        generateFirstRealCodeDiff(nodes)
-    }
-
-    private fun generateFirstRealCodeDiff(
-        nodes: List<BlueprintNode>,
-        index: Int = 0,
-        noChangeTitles: List<String> = emptyList(),
-    ) {
-        if (index >= nodes.size) {
-            val checked = noChangeTitles.size
-            reviewSummaryArea.text = if (checked == 0) {
-                "No implementation nodes were ready to run."
-            } else {
-                "No code changes were generated. The current UML appears to match the code for $checked checked node(s)."
-            }
-            safetyArea.text = "No diff to apply."
-            showArtifactTab("Review")
-            status("No code changes")
-            logActivity("Generate Code Diff found no changed patches across $checked node(s).")
-            return
-        }
-
-        generateCodeDiffForNode(
-            nodes[index],
-            onNoChange = { title ->
-                generateFirstRealCodeDiff(nodes, index + 1, noChangeTitles + title)
-            }
-        )
-    }
-
-    private fun generateCodeDiffForNode(
-        node: BlueprintNode,
-        onNoChange: ((String) -> Unit)? = null,
-    ) {
-        selectNode(node.id)
-        registry.setSelectedNode(node.id)
-        loadSelectedIntoForm()
-        saveCurrent()
-        val n = registry.find(node.id) ?: node
-        status("Generating code diff for ${n.title.ifBlank { n.id.take(8) }}...")
-        showArtifactTab("Review")
-        reviewSummaryArea.text = "Generating a code diff from the current UML. Blueprint will plan, write a scoped patch, review it, and open the diff."
-        safetyArea.text = "Review gate is on. Apply stays blocked unless review approves the patch."
-        n.executionStatus = ExecutionStatus.EXECUTING
-        registry.update(n)
-
-        project.service<NodePlanningService>().generatePlanAsync(n) { plan ->
-            registry.setPlan(n.id, plan)
-            planArea.text = plan.rawJson.ifBlank { JsonExtractor.toJson(plan) }
-            if (plan.status != "READY") {
-                n.executionStatus = ExecutionStatus.BLOCKED
-                registry.update(n)
-                refreshArtifactSummary()
-                showArtifactTab("Review")
-                status("Code diff blocked at planning")
-                logActivity("Code diff blocked at plan for ${n.title.ifBlank { n.id.take(8) }}")
-                return@generatePlanAsync
-            }
-
-            project.service<NodeExecutionService>().executeNodeAsync(n, plan) { exec ->
-                val changedPatches = exec.patches.filter { patchChangesDisk(it) }
-                val changedExec = exec.copy(
-                    patches = changedPatches,
-                    touchedFiles = exec.touchedFiles.filter { touched ->
-                        changedPatches.any { it.path == touched.path }
-                    },
-                    summary = if (changedPatches.isEmpty()) {
-                        "No code changes proposed; generated content matched current files."
-                    } else {
-                        exec.summary
-                    }
-                )
-                registry.setExecution(n.id, changedExec)
-                execArea.text = changedExec.rawJson.ifBlank { JsonExtractor.toJson(changedExec) }
-                n.executionStatus = when (changedExec.status) {
-                    "SUCCESS", "PARTIAL" -> ExecutionStatus.REVIEW
-                    "BLOCKED" -> ExecutionStatus.BLOCKED
-                    else -> ExecutionStatus.FAILED
-                }
-                registry.update(n)
-                if (changedExec.patches.isEmpty()) {
-                    n.executionStatus = ExecutionStatus.PLANNED
-                    registry.update(n)
-                    refreshArtifactSummary()
-                    showArtifactTab("Review")
-                    val title = n.title.ifBlank { n.id.take(8) }
-                    status("No changes for $title; checking next node")
-                    logActivity("Skipped no-op code diff for $title")
-                    onNoChange?.invoke(title)
-                    return@executeNodeAsync
-                }
-
-                project.service<ReviewService>().reviewAsync(n, changedExec) { review ->
-                    registry.setReview(n.id, review)
-                    reviewArea.text = review.rawJson.ifBlank { JsonExtractor.toJson(review) }
-                    refreshArtifactSummary()
-                    showArtifactTab("Review")
-                    DiffPreview.show(project, n, changedExec)
-                    logActivity(
-                        "Code diff ready for ${n.title.ifBlank { n.id.take(8) }}: " +
-                            "${changedExec.patches.size} file(s), review ${review.reviewStatus}."
-                    )
-                    status("Code diff ready: review ${review.reviewStatus}")
-                }
-            }
-        }
-    }
-
-    private fun patchChangesDisk(patch: Patch): Boolean {
-        val current = normalizeContent(project.service<ApplyChangesService>().readCurrentContent(patch.path))
-        val proposed = normalizeContent(if (patch.action.equals("delete", ignoreCase = true)) "" else patch.content)
-        return current != proposed
-    }
-
-    private fun normalizeContent(text: String): String =
-        text.replace("\r\n", "\n").trimEnd()
-
     private fun importUmlText(text: String, sourceLabel: String) {
         if (text.isBlank()) {
             status("No UML text supplied")
@@ -1037,13 +884,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return
         }
 
-        registry.replaceAll(result.nodes)
+        result.nodes.forEach(registry::add)
         selectNode(result.nodes.first().id)
         registry.setSelectedNode(result.nodes.first().id)
         graphArea.text = result.summary
         appendChat(
             "Blueprint",
-            "Imported $sourceLabel into ${result.nodes.size} implementation nodes. Click Generate Code Diff to preview code changes."
+            "Imported $sourceLabel into ${result.nodes.size} nodes. The diagram is now the main control surface; select the first schema card and run Generate Plan."
         )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
@@ -1345,14 +1192,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         saveCurrent()
         val n = nodeList.selectedValue ?: return
         status("Generating plan for ${n.title.ifBlank { n.id.take(8) }}...")
-        showArtifactTab("Plan JSON")
         planArea.text = "Generating plan...\n\nBlueprint is rendering plan_generation_prompt with this node, file scope, dependencies, and acceptance criteria."
         n.executionStatus = ExecutionStatus.EXECUTING
         registry.update(n)
         project.service<NodePlanningService>().generatePlanAsync(n) { plan ->
             registry.setPlan(n.id, plan)
             planArea.text = plan.rawJson.ifBlank { JsonExtractor.toJson(plan) }
-            showArtifactTab("Plan JSON")
             n.executionStatus = if (plan.status == "READY") ExecutionStatus.PLANNED else ExecutionStatus.BLOCKED
             registry.update(n)
             refreshArtifactSummary()
@@ -1363,15 +1208,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 logActivity("Plan ready for ${n.title}: ${plan.filesToTouch.size} scoped file(s).")
             }
             status("Plan ${plan.status}: ${n.title.ifBlank { n.id.take(8) }}")
-        }
-    }
-
-    private fun showArtifactTab(title: String) {
-        for (i in 0 until secondaryTabs.tabCount) {
-            if (secondaryTabs.getTitleAt(i) == title) {
-                secondaryTabs.selectedIndex = i
-                return
-            }
         }
     }
 
@@ -1389,14 +1225,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val plan = registry.getPlan(n.id)
         status("Executing ${n.title.ifBlank { n.id.take(8) }}...")
-        showArtifactTab("Execution JSON")
         execArea.text = "Executing node...\n\nBlueprint is rendering per_node_execution_prompt and will return structured patches for review."
         n.executionStatus = ExecutionStatus.EXECUTING
         registry.update(n)
         project.service<NodeExecutionService>().executeNodeAsync(n, plan) { exec ->
             registry.setExecution(n.id, exec)
             execArea.text = exec.rawJson.ifBlank { JsonExtractor.toJson(exec) }
-            showArtifactTab("Execution JSON")
             n.executionStatus = when (exec.status) {
                 "SUCCESS" -> ExecutionStatus.REVIEW
                 "PARTIAL" -> ExecutionStatus.REVIEW
@@ -1427,12 +1261,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = nodeList.selectedValue ?: return
         val exec = registry.getExecution(n.id) ?: return status("No execution yet")
         status("Reviewing ${n.title.ifBlank { n.id.take(8) }}...")
-        showArtifactTab("Review JSON")
         reviewArea.text = "Reviewing generated patches...\n\nBlueprint is checking scope, acceptance criteria, and safety before apply."
         project.service<ReviewService>().reviewAsync(n, exec) { r ->
             registry.setReview(n.id, r)
             reviewArea.text = r.rawJson.ifBlank { JsonExtractor.toJson(r) }
-            showArtifactTab("Review JSON")
             refreshArtifactSummary()
             val parseIssues = JsonExtractor.reviewIssues(r)
             if (parseIssues.isNotEmpty()) {
@@ -1892,13 +1724,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun updateGuide() {
-        if (currentUmlEntityCount() == 0) {
-            primaryActionButton.text = "Refresh UML From Code"
-            guideLabel.text = "Start by reading the current project into an editable UML diagram."
-        } else {
-            primaryActionButton.text = "Generate Code Diff"
-            guideLabel.text = "Change the UML with chat or direct edits, then generate a reviewed code diff."
-        }
+        val (buttonText, hint) = guidedNextState()
+        primaryActionButton.text = buttonText
+        guideLabel.text = hint
     }
 
     private fun guidedNextState(): Pair<String, String> {

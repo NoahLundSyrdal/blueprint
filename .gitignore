@@ -27,3 +27,5 @@ dist/
 
 # Local/pre-event prompt source pack; packaged prompts live in src/main/resources/prompts
 blueprint_prompt_pack/
+
+.env
