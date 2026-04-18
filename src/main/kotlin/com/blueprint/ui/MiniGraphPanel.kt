@@ -39,8 +39,8 @@ class MiniGraphPanel : JPanel() {
     var onNodeSelected: ((String) -> Unit)? = null
 
     init {
-        preferredSize = Dimension(760, 300)
-        minimumSize = Dimension(440, 220)
+        preferredSize = Dimension(900, 420)
+        minimumSize = Dimension(520, 300)
         background = Color(0xFAFAFA)
         toolTipText = ""
         addMouseListener(object : MouseAdapter() {
@@ -98,19 +98,19 @@ class MiniGraphPanel : JPanel() {
         }
 
         val waves = nodes.groupBy { it.wave }.toSortedMap()
-        val cardW = 178f
-        val cardH = 54f
-        val gapX = 58f
-        val gapY = 20f
-        val startX = 18f
-        val startY = 38f
+        val cardW = 190f
+        val cardH = 60f
+        val gapX = 70f
+        val gapY = 24f
+        val startX = 24f
+        val startY = 46f
         val localCards = mutableMapOf<String, RoundRectangle2D.Float>()
 
         waves.entries.forEachIndexed { waveIndex, (wave, waveNodes) ->
             val x = startX + waveIndex * (cardW + gapX)
             g.color = Color(0x666666)
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString("Wave $wave", x.toInt(), 24)
+            g.drawString("Wave $wave", x.toInt(), 28)
             waveNodes.forEachIndexed { row, node ->
                 val y = startY + row * (cardH + gapY)
                 localCards[node.id] = RoundRectangle2D.Float(x, y, cardW, cardH, 10f, 10f)
@@ -144,10 +144,10 @@ class MiniGraphPanel : JPanel() {
 
             g.color = Color(0x1F1F1F)
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString(node.title.take(24), (card.x + 10).toInt(), (card.y + 20).toInt())
+            g.drawString(node.title.take(25), (card.x + 12).toInt(), (card.y + 23).toInt())
             g.font = font.deriveFont(Font.PLAIN, 11f)
             g.color = Color(0x333333)
-            g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 10).toInt(), (card.y + 40).toInt())
+            g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 12).toInt(), (card.y + 45).toInt())
         }
 
         cards = localCards

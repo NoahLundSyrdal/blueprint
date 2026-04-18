@@ -148,6 +148,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         lineWrap = true
         wrapStyleWord = true
     }
+    private val chatHistory = JBTextArea(12, 28).apply {
+        isEditable = false
+        lineWrap = true
+        wrapStyleWord = true
+        text = "Blueprint chat\n\nAsk what to run next, why a node is blocked, or what changed.\n"
+    }
+    private val chatInput = JBTextArea(3, 28).apply {
+        lineWrap = true
+        wrapStyleWord = true
+    }
 
     private val planArea = JBTextArea().apply { isEditable = false }
     private val execArea = JBTextArea().apply { isEditable = false }
@@ -245,31 +255,44 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(lower, BorderLayout.SOUTH)
         }
 
-        val debugTabs = JTabbedPane().apply {
-            addTab("Mini Graph", JBScrollPane(miniGraph))
-            addTab("Plan", JBScrollPane(planArea))
-            addTab("Execution", JBScrollPane(execArea))
-            addTab("Review", JBScrollPane(reviewArea))
+        val secondaryTabs = JTabbedPane().apply {
+            addTab("Node Details", JBScrollPane(form))
+            addTab("Review / Safety", summary)
+            addTab("Plan JSON", JBScrollPane(planArea))
+            addTab("Execution JSON", JBScrollPane(execArea))
+            addTab("Review JSON", JBScrollPane(reviewArea))
             addTab("Activity", JBScrollPane(activityLog))
         }
 
-        val bottom = JPanel(BorderLayout()).apply {
-            minimumSize = Dimension(0, 250)
+        val lowerWorkspace = JPanel(BorderLayout()).apply {
+            minimumSize = Dimension(0, 260)
             add(actions, BorderLayout.NORTH)
-            add(debugTabs, BorderLayout.CENTER)
+            add(secondaryTabs, BorderLayout.CENTER)
         }
 
-        val detailsTabs = JTabbedPane().apply {
-            addTab("Node Details", JBScrollPane(form))
-            addTab("Review / Safety", summary)
+        val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
+            border = BorderFactory.createTitledBorder("UML / Architecture Diagram")
+            add(JLabel("Click a card to select the node. Generate UML from the project, then drive code changes from the diagram.").apply {
+                foreground = Color(0x555555)
+                border = BorderFactory.createEmptyBorder(2, 6, 2, 6)
+            }, BorderLayout.NORTH)
+            add(JBScrollPane(miniGraph), BorderLayout.CENTER)
         }
-        val vertical = JSplitPane(JSplitPane.VERTICAL_SPLIT, detailsTabs, bottom).apply {
-            dividerLocation = 420
-            resizeWeight = 0.58
+
+        val mainCanvas = JSplitPane(JSplitPane.VERTICAL_SPLIT, diagramPanel, lowerWorkspace).apply {
+            dividerLocation = 390
+            resizeWeight = 0.66
             isContinuousLayout = true
         }
+
+        val workspace = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, mainCanvas, chatPanel()).apply {
+            dividerLocation = 840
+            resizeWeight = 1.0
+            isContinuousLayout = true
+        }
+
         val right = JPanel(BorderLayout()).apply {
-            add(vertical, BorderLayout.CENTER)
+            add(workspace, BorderLayout.CENTER)
         }
 
         val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right).apply {
@@ -308,13 +331,25 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(JLabel("Blueprint").apply {
                     font = font.deriveFont(java.awt.Font.BOLD, 18f)
                 })
-                add(JLabel("Architecture-first node execution: plan, execute, review, apply.").apply {
+                add(JLabel("UML-first Python changes: edit architecture, then plan, execute, review, apply.").apply {
                     foreground = Color(0x666666)
                 })
             }, BorderLayout.CENTER)
-            add(JLabel("Next: select a ready node, Generate Plan, then Execute Node.").apply {
+            add(JLabel("Main canvas: UML diagram. Sidecar: chat and guidance.").apply {
                 foreground = Color(0x555555)
             }, BorderLayout.EAST)
+        }
+
+    private fun chatPanel(): JPanel =
+        JPanel(BorderLayout(6, 6)).apply {
+            preferredSize = Dimension(320, 0)
+            minimumSize = Dimension(260, 0)
+            border = BorderFactory.createTitledBorder("Blueprint Chat")
+            add(JBScrollPane(chatHistory), BorderLayout.CENTER)
+            add(JPanel(BorderLayout(4, 4)).apply {
+                add(JBScrollPane(chatInput), BorderLayout.CENTER)
+                add(JButton("Send").apply { addActionListener { sendChat() } }, BorderLayout.EAST)
+            }, BorderLayout.SOUTH)
         }
 
     private fun actionPanel(): JPanel =
@@ -374,6 +409,58 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.add(n)
         selectNode(n.id)
         logActivity("Added node ${n.title}")
+    }
+
+    private fun sendChat() {
+        val message = chatInput.text.trim()
+        if (message.isBlank()) return
+        chatInput.text = ""
+        appendChat("You", message)
+        appendChat("Blueprint", chatResponse(message))
+    }
+
+    private fun appendChat(author: String, message: String) {
+        chatHistory.append("\n$author: $message\n")
+        chatHistory.caretPosition = chatHistory.document.length
+    }
+
+    private fun chatResponse(message: String): String {
+        val selected = nodeList.selectedValue
+        val lower = message.lowercase()
+        val graph = project.service<DependencyGraphService>()
+        val ready = graph.readyNodes()
+        return when {
+            "blocked" in lower || "why" in lower -> {
+                val node = selected ?: return "Select a node in the UML diagram first, then ask why it is blocked."
+                val readiness = graph.readinessFor(node)
+                if (readiness.ready) {
+                    "${node.title.ifBlank { node.id.take(8) }} is ready. Run Generate Plan, then Execute Node."
+                } else {
+                    "Blocked reasons for ${node.title.ifBlank { node.id.take(8) }}:\n" +
+                        readiness.reasons.joinToString("\n") { "- $it" }
+                }
+            }
+            "next" in lower || "run" in lower -> {
+                if (ready.isEmpty()) {
+                    "No nodes are ready right now. Check the UML diagram for blocked nodes, or select a node and ask why it is blocked."
+                } else {
+                    "Next ready node: ${ready.first().title.ifBlank { ready.first().id.take(8) }}.\nRun Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All."
+                }
+            }
+            "changed" in lower || "diff" in lower -> {
+                val node = selected ?: return "Select a node first; I will summarize its generated changes."
+                changedFileSummary(registry.getExecution(node.id))
+            }
+            "uml" in lower || "diagram" in lower -> {
+                "The main canvas is the UML/architecture diagram. Click Generate UML to build it from the Python project, or click an existing diagram card to inspect that node."
+            }
+            selected != null -> {
+                val readiness = graph.readinessFor(selected)
+                "${selected.title.ifBlank { selected.id.take(8) }} is selected. Status: ${badgeFor(selected)}. " +
+                    if (readiness.ready) "It is ready to run." else "It is blocked; ask 'why blocked' for details."
+            }
+            else -> "Start with Generate UML. Then click a card in the diagram and ask me what to run next."
+        }
     }
 
     private fun generateProjectUml() {
@@ -467,6 +554,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         selectNode(result.nodes.first().id)
         registry.setSelectedNode(result.nodes.first().id)
         graphArea.text = result.summary
+        appendChat(
+            "Blueprint",
+            "Imported $sourceLabel into ${result.nodes.size} nodes. The diagram is now the main control surface; select the first schema card and run Generate Plan."
+        )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
                 "${result.parsed.relationships.size} relationship(s), ${result.nodes.size} node(s)."
@@ -1101,6 +1192,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.setSelectedNode(id)
         loadSelectedIntoForm()
         status("Selected from graph: ${node.title.ifBlank { node.id.take(8) }}")
+        appendChat("Blueprint", "${node.title.ifBlank { node.id.take(8) }} selected from the diagram. Ask 'what next?' or 'why blocked?'.")
         logActivity("Graph selected ${node.title.ifBlank { node.id.take(8) }} (${node.id.take(8)}).")
     }
 
