@@ -59,6 +59,8 @@ class MiniGraphPanel : JPanel() {
         val origin: NodeOrigin = NodeOrigin.WORKFLOW,
         val kind: String = "",
         val source: String = "",
+        val sourcePath: String = "",
+        val sourceLine: Int? = null,
         val preview: String = "",
         val fields: List<String> = emptyList(),
         val fieldOverflowCount: Int = 0,
@@ -69,7 +71,9 @@ class MiniGraphPanel : JPanel() {
 
     private var nodes: List<NodeView> = emptyList()
     private var cards: Map<String, RoundRectangle2D.Float> = emptyMap()
+    private var sourceBadges: Map<String, RoundRectangle2D.Float> = emptyMap()
     var onNodeSelected: ((String) -> Unit)? = null
+    var onNodeOpenSource: ((NodeView) -> Unit)? = null
 
     init {
         preferredSize = Dimension(900, 420)
@@ -79,6 +83,15 @@ class MiniGraphPanel : JPanel() {
         addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
                 nodeAt(e.point)?.let { node ->
+                    if (e.clickCount >= 2 || sourceBadgeAt(e.point)?.id == node.id) {
+                        if (node.hasSourceTarget()) {
+                            onNodeOpenSource?.invoke(node)
+                        } else {
+                            onNodeSelected?.invoke(node.id)
+                        }
+                        repaint()
+                        return
+                    }
                     onNodeSelected?.invoke(node.id)
                     repaint()
                 }
@@ -86,7 +99,7 @@ class MiniGraphPanel : JPanel() {
         })
         addMouseMotionListener(object : MouseMotionAdapter() {
             override fun mouseMoved(e: MouseEvent) {
-                cursor = if (nodeAt(e.point) != null) {
+                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
                     Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
                 } else {
                     Cursor.getDefaultCursor()
@@ -107,7 +120,8 @@ class MiniGraphPanel : JPanel() {
                 "Origin: ${node.origin.label()}<br/>" +
                 "Status: ${node.status}<br/>" +
                 node.kind.takeIf { it.isNotBlank() }?.let { "Kind: ${escape(it)}<br/>" }.orEmpty() +
-                node.source.takeIf { it.isNotBlank() }?.let { "Source: ${escape(it)}<br/>" }.orEmpty() +
+                "Source: ${escape(node.sourceDescription())}<br/>" +
+                node.hasSourceTarget().takeIf { it }?.let { "Double-click to open source.<br/>" }.orEmpty() +
                 "Wave: ${node.wave}<br/>" +
                 node.summaryLine("Fields", node.fields, node.fieldOverflowCount).takeIf { it.isNotBlank() }
                     ?.let { "${escape(it)}<br/>" }.orEmpty() +
@@ -136,6 +150,7 @@ class MiniGraphPanel : JPanel() {
             g.font = font.deriveFont(Font.PLAIN, 13f)
             g.drawString("Click Abstract Code to UML to draw this project as architecture.", 24, 38)
             cards = emptyMap()
+            sourceBadges = emptyMap()
             return
         }
 
@@ -148,6 +163,7 @@ class MiniGraphPanel : JPanel() {
         val startX = 24f
         val startY = 46f
         val localCards = mutableMapOf<String, RoundRectangle2D.Float>()
+        val localSourceBadges = mutableMapOf<String, RoundRectangle2D.Float>()
 
         waves.entries.forEachIndexed { waveIndex, (wave, waveNodes) ->
             val x = startX + waveIndex * (cardW + gapX)
@@ -227,6 +243,11 @@ class MiniGraphPanel : JPanel() {
                 }
             }
 
+            if (node.hasSourceTarget()) {
+                val badge = paintSourceBadge(g, card, textLeft)
+                localSourceBadges[node.id] = badge
+            }
+
             paintStatusBadge(g, node, card)
 
             g.color = if (node.selected) Theme.Accent else Theme.Muted
@@ -237,6 +258,7 @@ class MiniGraphPanel : JPanel() {
         }
 
         cards = localCards
+        sourceBadges = localSourceBadges
     }
 
     private fun paintDotGrid(g: Graphics2D) {
@@ -256,6 +278,25 @@ class MiniGraphPanel : JPanel() {
     private fun nodeAt(point: Point): NodeView? {
         val id = cards.entries.firstOrNull { (_, card) -> card.contains(point) }?.key ?: return null
         return nodes.firstOrNull { it.id == id }
+    }
+
+    private fun sourceBadgeAt(point: Point): NodeView? {
+        val id = sourceBadges.entries.firstOrNull { (_, badge) -> badge.contains(point) }?.key ?: return null
+        return nodes.firstOrNull { it.id == id }
+    }
+
+    private fun paintSourceBadge(g: Graphics2D, card: RoundRectangle2D.Float, textLeft: Int): RoundRectangle2D.Float {
+        val label = "src"
+        val width = 36
+        val x = textLeft
+        val y = (card.y + card.height - 22).toInt()
+        val badge = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), 16f, 8f, 8f)
+        g.color = Theme.AccentSurface
+        g.fill(badge)
+        g.color = Theme.Accent
+        g.font = font.deriveFont(Font.PLAIN, 10f)
+        g.drawString(label, x + 9, y + 12)
+        return badge
     }
 
     private fun paintStatusBadge(g: Graphics2D, node: NodeView, card: RoundRectangle2D.Float) {
@@ -359,9 +400,13 @@ class MiniGraphPanel : JPanel() {
 
     private fun NodeView.metadataLine(): String =
         when (origin) {
-            NodeOrigin.CODE -> listOf(kind.ifBlank { "code" }, source).filter { it.isNotBlank() }.joinToString("  ")
-            NodeOrigin.PROPOSED_UML -> listOf(kind.ifBlank { "UML proposal" }, "editable").joinToString("  ")
-            NodeOrigin.WORKFLOW -> listOf(kind.ifBlank { "workflow" }, id.take(8)).joinToString("  ")
+            NodeOrigin.CODE -> listOf(kind.ifBlank { "code" }, source.ifBlank { "source: not mapped" }).joinToString("  ")
+            NodeOrigin.PROPOSED_UML -> listOf(kind.ifBlank { "UML proposal" }, "proposed, not mapped").joinToString("  ")
+            NodeOrigin.WORKFLOW -> listOf(
+                kind.ifBlank { "workflow" },
+                source.ifBlank { "generated, not mapped" },
+                id.take(8),
+            ).joinToString("  ")
         }
 
     private fun NodeView.summaryLine(label: String, values: List<String>, overflow: Int): String {
@@ -372,6 +417,19 @@ class MiniGraphPanel : JPanel() {
 
     private fun NodeView.hasRichFacts(): Boolean =
         source.isNotBlank() || fields.isNotEmpty() || methods.isNotEmpty() || relationshipHint.isNotBlank()
+
+    private fun NodeView.hasSourceTarget(): Boolean =
+        sourcePath.isNotBlank()
+
+    private fun NodeView.sourceDescription(): String =
+        when {
+            source.isNotBlank() -> source
+            sourcePath.isNotBlank() && sourceLine != null -> "$sourcePath:$sourceLine"
+            sourcePath.isNotBlank() -> sourcePath
+            origin == NodeOrigin.PROPOSED_UML -> "proposed UML, not mapped to source yet"
+            origin == NodeOrigin.WORKFLOW -> "generated workflow node, not mapped to source yet"
+            else -> "not mapped to source"
+        }
 
     private fun NodeOrigin.label(): String =
         when (this) {

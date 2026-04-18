@@ -10,6 +10,7 @@ import com.blueprint.ir.Field
 import com.blueprint.ir.Operation
 import com.blueprint.ir.Ownership
 import com.blueprint.ir.ProjectMeta
+import com.blueprint.ir.SourceRef
 import com.blueprint.ir.TypeRef
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -34,6 +35,7 @@ class CodeMapProjectionTest {
                     name = "Invite",
                     kind = ComponentKind.MODEL,
                     ownership = Ownership(files = listOf("app/models.py")),
+                    sourceRef = SourceRef("app/models.py", 12),
                     fields = listOf(Field("id", TypeRef("str")), Field("project", TypeRef("Project"))),
                     operations = listOf(Operation("accept"), Operation("revoke")),
                 ),
@@ -60,7 +62,9 @@ class CodeMapProjectionTest {
         assertEquals("Invite", invite.title)
         assertEquals("CODE", invite.status)
         assertEquals("model", invite.kind)
-        assertEquals("app/models.py", invite.source)
+        assertEquals("app/models.py:12", invite.source)
+        assertEquals("app/models.py", invite.sourcePath)
+        assertEquals(12, invite.sourceLine)
         assertEquals(listOf("models.project"), invite.dependencies)
         assertTrue(invite.selected)
         assertEquals(listOf("id: str", "project: Project"), invite.fields)

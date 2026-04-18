@@ -57,6 +57,7 @@ object CodeMapProjection {
             .sortedWith(compareBy<Component>({ waveOf(it.id) }, { it.ownership.files.firstOrNull() ?: "" }, { it.name }))
             .map { component ->
                 val workflow = workflowByComponentId[component.id]
+                val sourceTarget = component.sourceTarget()
                 MiniGraphPanel.NodeView(
                     id = component.id,
                     title = component.name,
@@ -69,7 +70,9 @@ object CodeMapProjection {
                     detail = detailFor(component),
                     origin = MiniGraphPanel.NodeOrigin.CODE,
                     kind = component.kind.codeMapLabel(),
-                    source = component.primarySource(),
+                    source = sourceTarget.label,
+                    sourcePath = sourceTarget.path,
+                    sourceLine = sourceTarget.line,
                     preview = previewFor(component),
                     fields = component.fields.take(3).map { it.cardLabel() },
                     fieldOverflowCount = (component.fields.size - 3).coerceAtLeast(0),
@@ -112,9 +115,20 @@ object CodeMapProjection {
     }
 
     private fun Component.primarySource(): String =
-        sourceRef?.let { ref -> ref.line?.let { "${ref.path}:$it" } ?: ref.path }
-            ?: ownership.files.firstOrNull()
-            .orEmpty()
+        sourceTarget().label
+
+    private fun Component.sourceTarget(): SourceTarget {
+        val ref = sourceRef
+        val fallbackPath = ownership.files.firstOrNull().orEmpty()
+        val path = ref?.path?.takeIf { it.isNotBlank() } ?: fallbackPath
+        val line = ref?.line
+        val label = when {
+            path.isBlank() -> ""
+            line != null -> "$path:$line"
+            else -> path
+        }
+        return SourceTarget(path = path, line = line, label = label)
+    }
 
     private fun Field.cardLabel(): String =
         buildString {
@@ -150,4 +164,10 @@ object CodeMapProjection {
 
     private fun EdgeKind.codeMapLabel(): String =
         name.lowercase().replace('_', ' ')
+
+    private data class SourceTarget(
+        val path: String,
+        val line: Int?,
+        val label: String,
+    )
 }

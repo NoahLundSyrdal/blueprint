@@ -22,13 +22,16 @@ import com.blueprint.service.PythonUmlGenerator
 import com.blueprint.service.ReviewService
 import com.blueprint.service.UmlImportService
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
+import java.io.File
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -575,6 +578,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun buildUi() {
         miniGraph.onNodeSelected = { nodeId ->
             selectNodeFromGraph(nodeId)
+        }
+        miniGraph.onNodeOpenSource = { node ->
+            openGraphSource(node)
         }
         filterCombo.addActionListener {
             refreshList()
@@ -2190,6 +2196,57 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         logActivity("Graph selected ${node.title.ifBlank { node.id.take(8) }} (${node.id.take(8)}).")
     }
 
+    private fun openGraphSource(node: MiniGraphPanel.NodeView) {
+        val sourcePath = node.sourcePath.ifBlank {
+            status("No source mapping for ${node.title}.")
+            Messages.showInfoMessage(
+                project,
+                "${node.title} is not mapped to a source file yet.",
+                "Blueprint - Source Not Mapped",
+            )
+            return
+        }
+        val sourceFile = resolveProjectFile(sourcePath)
+        if (!sourceFile.isFile) {
+            status("Could not find source: $sourcePath")
+            Messages.showWarningDialog(
+                project,
+                "Could not find source file:\n$sourcePath",
+                "Blueprint - Source Not Found",
+            )
+            return
+        }
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(sourceFile)
+        if (virtualFile == null) {
+            status("Could not open source: ${sourceFile.path}")
+            Messages.showWarningDialog(
+                project,
+                "Could not open source file:\n${sourceFile.path}",
+                "Blueprint - Source Not Found",
+            )
+            return
+        }
+        val zeroBasedLine = (node.sourceLine ?: 1).coerceAtLeast(1) - 1
+        OpenFileDescriptor(project, virtualFile, zeroBasedLine, 0).navigate(true)
+        selectedCanvasId = node.id
+        status("Opened source: ${node.sourceDescriptionForStatus()}")
+        logActivity("Opened source for ${node.title}: ${node.sourceDescriptionForStatus()}")
+    }
+
+    private fun resolveProjectFile(path: String): File {
+        val raw = File(path)
+        if (raw.isAbsolute) return raw
+        val base = project.basePath ?: return raw
+        return File(base, path)
+    }
+
+    private fun MiniGraphPanel.NodeView.sourceDescriptionForStatus(): String =
+        when {
+            source.isNotBlank() -> source
+            sourceLine != null -> "$sourcePath:$sourceLine"
+            else -> sourcePath
+        }
+
     private fun setUmlEditorText(text: String, pendingEdits: Boolean) {
         suppressUmlDocumentEvents = true
         try {
@@ -2348,6 +2405,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 origin = MiniGraphPanel.NodeOrigin.WORKFLOW,
                 kind = node.type.name.lowercase(),
                 source = node.fileScope.paths.firstOrNull().orEmpty(),
+                sourcePath = node.fileScope.paths.firstOrNull().orEmpty(),
                 preview = readiness?.let { if (it.ready) "ready to run" else it.reasons.firstOrNull().orEmpty() }.orEmpty(),
                 relationshipHint = if (node.dependencies.isEmpty()) "" else "depends on ${node.dependencies.size} node(s)",
             )
