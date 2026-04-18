@@ -88,7 +88,7 @@ object MermaidProjection {
                     EdgeKind.READS -> "reads"
                     EdgeKind.WRITES -> "writes"
                 }
-                "$from --> $to : $label"
+                "$from --> $to : ${edge.label.ifBlank { label }}"
             }
             .distinct()
             .sorted()

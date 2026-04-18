@@ -153,7 +153,7 @@ class IRPipelineTest {
         assertTrue("must start with classDiagram", mermaid.startsWith("classDiagram"))
         assertTrue("must mention Invite", mermaid.contains("class Invite"))
         assertTrue("must mention InvitePolicy", mermaid.contains("class InvitePolicy"))
-        assertTrue("must render a contains edge", mermaid.contains("contains"))
+        assertTrue("must render relationship edge label", mermaid.contains("belongs to"))
     }
 
     @Test
@@ -206,7 +206,16 @@ class IRPipelineTest {
                 ),
             ),
             edges = listOf(
-                Edge("payments.service", "payments.gateway", EdgeTargetKind.COMPONENT, EdgeKind.CALLS, "authorize"),
+                Edge(
+                    "payments.service",
+                    "payments.gateway",
+                    EdgeTargetKind.COMPONENT,
+                    EdgeKind.CALLS,
+                    "authorize",
+                    SourceRef("payments/service.py", 42),
+                    "call expression: gateway.authorize",
+                    0.8,
+                ),
             ),
             coverage = RecoveryCoverage(componentsRecovered = 1, componentsTotal = 1, contractsRecovered = 1),
         )
@@ -224,6 +233,8 @@ class IRPipelineTest {
         assertEquals(1, c.opaqueAnnotations.size)
         assertEquals(Concurrency.ASYNC, back.contracts.single().operations.single().concurrency)
         assertEquals(EdgeKind.CALLS, back.edges.single().kind)
+        assertEquals("call expression: gateway.authorize", back.edges.single().evidence)
+        assertEquals(0.8, back.edges.single().confidence, 0.001)
     }
 
     // ---- Empty IR guard ----
