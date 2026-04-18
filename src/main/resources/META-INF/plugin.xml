@@ -1,0 +1,31 @@
+<idea-plugin>
+    <id>com.blueprint.plugin</id>
+    <name>Blueprint</name>
+    <vendor>blueprint</vendor>
+    <description><![CDATA[
+        Architecture-first Python development inside PyCharm and JetBrains IDEs.
+        Generate editable UML from Python projects, import UML into nodes, plan, execute, review diff, apply.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow id="Blueprint"
+                    anchor="right"
+                    factoryClass="com.blueprint.ui.BlueprintToolWindowFactory"/>
+
+        <applicationService serviceImplementation="com.blueprint.service.PromptTemplateService"/>
+        <applicationService serviceImplementation="com.blueprint.service.CodexClient"/>
+
+        <projectService serviceImplementation="com.blueprint.service.NodeRegistry"/>
+        <projectService serviceImplementation="com.blueprint.service.NodePlanningService"/>
+        <projectService serviceImplementation="com.blueprint.service.NodeExecutionService"/>
+        <projectService serviceImplementation="com.blueprint.service.ReviewService"/>
+        <projectService serviceImplementation="com.blueprint.service.ApplyChangesService"/>
+        <projectService serviceImplementation="com.blueprint.service.ProjectContextCollector"/>
+        <projectService serviceImplementation="com.blueprint.service.DependencyGraphService"/>
+        <projectService serviceImplementation="com.blueprint.service.UmlImportService"/>
+        <projectService serviceImplementation="com.blueprint.service.PythonProjectAnalyzer"/>
+        <projectService serviceImplementation="com.blueprint.service.PythonUmlGenerator"/>
+    </extensions>
+</idea-plugin>

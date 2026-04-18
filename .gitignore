@@ -1,0 +1,29 @@
+# OS/editor noise
+.DS_Store
+*.swp
+*.swo
+
+# IntelliJ/PyCharm local state
+.idea/
+*.iml
+
+# Gradle/build output
+.gradle/
+build/
+out/
+
+# Python local/runtime output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+
+# Blueprint local persisted demo state
+.idea/blueprint/
+
+# Local/pre-event prompt source pack; packaged prompts live in src/main/resources/prompts
+blueprint_prompt_pack/
