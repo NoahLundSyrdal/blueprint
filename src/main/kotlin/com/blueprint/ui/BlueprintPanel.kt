@@ -7,6 +7,7 @@ import com.blueprint.model.ExecutionStatus
 import com.blueprint.model.FileScope
 import com.blueprint.model.NodeType
 import com.blueprint.model.Patch
+import com.blueprint.model.ReviewArtifact
 import com.blueprint.service.ApplyChangesService
 import com.blueprint.service.CodexClient
 import com.blueprint.service.DependencyGraphService
@@ -305,12 +306,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val guideLabel = JLabel("Generate UML, change it with chat, then generate a code diff.")
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
-        addActionListener { generateCodeDiffFromCurrentUml() }
+        addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
     private val advancedMode = JBCheckBox("Advanced")
     private val filterCombo = JComboBox(NodeFilter.values())
+    private var umlHasPendingEdits = false
     private val activityLog = JBTextArea(6, 40).apply {
         isEditable = false
         lineWrap = true
@@ -1086,8 +1088,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
                 umlEditor.text = nextUml
                 umlEditor.caretPosition = 0
+                umlHasPendingEdits = true
                 umlStatusLabel.text = "UML: refined by chat. Create Code Nodes when ready, or keep editing."
                 appendChat("Blueprint", "Updated the UML. Review it in the main canvas, then keep refining or click Create Code Nodes.")
+                updateGuide()
                 status("UML refined")
             }
         }.start()
@@ -1192,10 +1196,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun generateProjectUml() {
+        if (!confirmDiscardPendingUmlEdits()) return
         status("Generating UML from Python project...")
         val generated = project.service<PythonUmlGenerator>().generate()
         umlEditor.text = generated.text
         umlEditor.caretPosition = 0
+        umlHasPendingEdits = false
         umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
         graphArea.text = buildString {
             appendLine("Abstracted Python codebase to editable UML.")
@@ -1211,6 +1217,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         appendChat("Blueprint", "I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Create Code Nodes when ready.")
         logActivity("Abstracted code to UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s).")
         status("Code abstracted to UML")
+    }
+
+    private fun confirmDiscardPendingUmlEdits(): Boolean {
+        if (!umlHasPendingEdits) return true
+        val result = Messages.showYesNoDialog(
+            project,
+            "Refresh UML From Code will replace the chat-edited UML with the current code on disk.\n\n" +
+                "Generate Code Diff first if you want to turn the UML changes into code.",
+            "Blueprint - Discard UML Changes?",
+            "Discard UML Changes",
+            "Keep UML",
+            Messages.getWarningIcon(),
+        )
+        return result == Messages.YES
     }
 
     private fun importUml() {
@@ -1243,6 +1263,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         umlEditor.text = text
         umlEditor.caretPosition = 0
+        umlHasPendingEdits = true
         umlStatusLabel.text = "UML: pasted/loaded. Edit or ask chat to refine it."
         appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Create Code Nodes.")
         status("Loaded UML into editor")
@@ -1262,10 +1283,47 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         importUmlText(text, "editable UML")
     }
 
+    private fun runPrimaryProductAction() {
+        when {
+            selectedNodeCanApply() -> applyChanges(null)
+            currentUmlEntityCount() == 0 -> generateProjectUml()
+            else -> generateCodeDiffFromCurrentUml()
+        }
+    }
+
+    private fun selectedNodeCanApply(): Boolean {
+        val node = nodeList.selectedValue ?: return false
+        if (node.executionStatus == ExecutionStatus.APPLIED) return false
+        val exec = registry.getExecution(node.id) ?: return false
+        return exec.patches.isNotEmpty() && reviewAllowsApply(registry.getReview(node.id))
+    }
+
     private fun generateCodeDiffFromCurrentUml() {
         val text = umlEditor.text.trim()
         if (text.isBlank() || !text.contains("classDiagram")) {
+            val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
+            if (existingNodes.isNotEmpty()) {
+                status("Using existing code nodes for diff")
+                logActivity("Generate Code Diff used existing nodes because the UML text was not parseable.")
+                generateFirstRealCodeDiff(existingNodes)
+                return
+            }
             generateProjectUml()
+            return
+        }
+        val parsed = project.service<UmlImportService>().parse(text)
+        if (parsed.entities.isEmpty()) {
+            val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
+            if (existingNodes.isNotEmpty()) {
+                status("Using existing code nodes for diff")
+                logActivity("Generate Code Diff used existing nodes because the UML editor had no parseable entities.")
+                generateFirstRealCodeDiff(existingNodes)
+                return
+            }
+            status("No parseable UML entities")
+            showArtifactTab("Review")
+            reviewSummaryArea.text = "No parseable UML entities. Click Refresh UML From Code, then ask chat for the architecture change again."
+            safetyArea.text = "No diff generated."
             return
         }
         importUmlText(text, "current UML")
@@ -1959,6 +2017,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val review = registry.getReview(n.id)
         val patchCount = if (singlePath == null) exec.patches.size else 1
         if (exec.patches.isEmpty()) return status("No patches to apply")
+        if (!reviewAllowsApply(review)) {
+            val message = reviewBlockMessage(review)
+            safetyArea.text = message
+            showArtifactTab("Review")
+            status("Apply blocked by review")
+            logActivity("Apply blocked for ${n.title.ifBlank { n.id.take(8) }}: ${message.lines().firstOrNull().orEmpty()}")
+            Messages.showWarningDialog(project, message, "Blueprint - Review Blocked Apply")
+            return
+        }
         val reviewLine = review?.let { "Review: ${it.reviewStatus} / ${it.recommendedNextAction}" } ?: "Review: not run"
         val targetLine = singlePath ?: "${exec.patches.size} changed file(s)"
         val displayedPatches = if (singlePath == null) exec.patches else exec.patches.filter { it.path == singlePath }
@@ -1982,6 +2049,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             ExecutionStatus.REVIEW
         }
+        if (n.executionStatus == ExecutionStatus.APPLIED) {
+            umlHasPendingEdits = false
+        }
         registry.update(n)
         refreshArtifactSummary()
         logActivity("Apply finished for ${n.title.ifBlank { n.id.take(8) }}: ${result.applied.size} applied, ${result.skipped.size} skipped.")
@@ -1998,6 +2068,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "Applied ${result.applied.size} file change(s).\n\n${result.applied.joinToString("\n")}",
                 "Blueprint - Apply Complete"
             )
+        }
+    }
+
+    private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
+        review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
+
+    private fun reviewBlockMessage(review: ReviewArtifact?): String {
+        if (review == null) {
+            return "Apply is blocked because review has not run yet.\n\nClick Generate Code Diff so Blueprint can create and review a patch first."
+        }
+        val issues = review.issues.take(3).joinToString("\n") {
+            "- ${it.title.ifBlank { it.category }}: ${it.details.ifBlank { it.suggestedFix }}"
+        }
+        return buildString {
+            append("Apply is blocked because review returned ${review.reviewStatus} / ${review.recommendedNextAction}.")
+            if (review.summary.isNotBlank()) {
+                append("\n\n")
+                append(review.summary)
+            }
+            if (issues.isNotBlank()) {
+                append("\n\nIssues:\n")
+                append(issues)
+            }
+            append("\n\nChange the UML or regenerate the code diff before applying.")
         }
     }
 
@@ -2078,6 +2172,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun loadSelectedIntoForm() {
         val n = nodeList.selectedValue ?: run {
+            applyApprovedButton.isEnabled = false
+            applyApprovedButton.text = "Apply Approved Changes"
             updateOverviewSummary()
             selectedLabel.text = "Selected: none"
             artifactLabel.text = "Artifacts: not planned"
@@ -2128,6 +2224,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val report = graph.analyze()
         val readiness = graph.readinessFor(n)
         updateOverviewSummary(report)
+        val canApply = !exec?.patches.isNullOrEmpty() && reviewAllowsApply(review)
+        applyApprovedButton.isEnabled = canApply
+        applyApprovedButton.text = if (canApply) "Apply Approved Changes" else "Apply Blocked By Review"
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         reviewSummaryArea.text = buildString {
             append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
@@ -2147,6 +2246,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             exec?.status == "PARTIAL" -> "Execution is PARTIAL. Inspect the diff and validation notes before applying."
             exec?.status == "BLOCKED" -> "Execution is BLOCKED. Do not apply until the node is revised."
             review?.reviewStatus == "APPROVE" -> "Review approved. Scope compliance: ${review.scopeCompliance.result}."
+            review != null -> reviewBlockMessage(review)
             else -> "No safety issues reported yet."
         }
         dependencyBlockArea.text = if (readiness.reasons.isEmpty()) {
@@ -2255,12 +2355,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun updateGuide() {
-        if (currentUmlEntityCount() == 0) {
+        when {
+            selectedNodeCanApply() -> {
+                primaryActionButton.text = "Apply Approved Changes"
+                guideLabel.text = "Review approved the generated diff. Apply it to disk, then refresh UML from code."
+            }
+            currentUmlEntityCount() == 0 -> {
             primaryActionButton.text = "Refresh UML From Code"
             guideLabel.text = "Start by reading the current project into an editable UML diagram."
-        } else {
+            }
+            else -> {
             primaryActionButton.text = "Generate Code Diff"
             guideLabel.text = "Change the UML with chat or direct edits, then generate a reviewed code diff."
+            }
         }
     }
 

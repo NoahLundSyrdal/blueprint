@@ -37,8 +37,9 @@ class PythonIRExtractor(private val project: Project) {
         return try {
             val context = project.service<PythonProjectAnalyzer>().analyze()
             val files = collectPythonFiles(base, context, maxDepth)
-            val parsed = files.flatMap { parseFile(base, it) }
+            val parsed = preferGeneratedBlueprintClasses(files.flatMap { parseFile(base, it) }
                 .distinctBy { "${it.relPath}:${it.name}" }
+            )
                 .sortedWith(compareBy<ParsedClass> { it.relPath }.thenBy { it.name })
 
             val classNames = parsed.map { it.name }.toSet()
@@ -283,6 +284,18 @@ class PythonIRExtractor(private val project: Project) {
         val methods: MutableList<ParsedMethod> = mutableListOf(),
     )
 
+    private fun preferGeneratedBlueprintClasses(classes: List<ParsedClass>): List<ParsedClass> {
+        val generatedClassNames = classes
+            .filter { it.isBlueprintGenerated() }
+            .map { it.name }
+            .toSet()
+        if (generatedClassNames.isEmpty()) return classes
+        return classes.filter { it.isBlueprintGenerated() || it.name !in generatedClassNames }
+    }
+
+    private fun ParsedClass.isBlueprintGenerated(): Boolean =
+        relPath.replace('\\', '/').startsWith("blueprint_demo/")
+
     private data class ParsedMethod(
         val name: String,
         val async: Boolean,
@@ -484,9 +497,21 @@ class PythonIRExtractor(private val project: Project) {
                     .filter { path -> !isLikelyGenerated(path.fileName.toString()) }
                     .toList()
             }
-        }
+        } + collectBlueprintGeneratedPythonFiles(base, maxDepth)
         val unique = files.distinct().sorted()
         return if (unique.isNotEmpty()) unique else fallback(base, maxDepth)
+    }
+
+    private fun collectBlueprintGeneratedPythonFiles(base: Path, maxDepth: Int): List<Path> {
+        val generatedRoot = base.resolve("blueprint_demo").normalize()
+        if (!Files.isDirectory(generatedRoot) || !generatedRoot.startsWith(base)) return emptyList()
+        Files.walk(generatedRoot, maxDepth).use { stream ->
+            return stream.filter { Files.isRegularFile(it) }
+                .filter { it.fileName.toString().endsWith(".py") }
+                .filter { path -> !base.relativize(path).any { part -> shouldSkipDir(part.toString()) } }
+                .filter { path -> !isLikelyGenerated(path.fileName.toString()) }
+                .toList()
+        }
     }
 
     private fun fallback(base: Path, maxDepth: Int): List<Path> =

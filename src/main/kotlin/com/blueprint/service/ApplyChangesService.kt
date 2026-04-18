@@ -69,7 +69,13 @@ class ApplyChangesService(private val project: Project) {
                 }
                 try {
                     applyOne(basePath, rel, patch)
-                    applied += rel
+                    val expected = normalizeContent(if (patch.action.equals("delete", ignoreCase = true)) "" else patch.content)
+                    val actual = normalizeContent(readCurrentContent(rel))
+                    if (actual == expected) {
+                        applied += rel
+                    } else {
+                        skipped += rel to "disk content did not match applied patch"
+                    }
                 } catch (t: Throwable) {
                     log.warn("Failed to apply $rel", t)
                     skipped += rel to (t.message ?: t.javaClass.simpleName)
@@ -137,4 +143,7 @@ class ApplyChangesService(private val project: Project) {
         if (!target.startsWith(base) || !Files.isRegularFile(target)) return ""
         return Files.readString(target, StandardCharsets.UTF_8)
     }
+
+    private fun normalizeContent(text: String): String =
+        text.replace("\r\n", "\n").trimEnd()
 }

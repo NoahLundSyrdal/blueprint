@@ -3,11 +3,18 @@ package com.blueprint.service
 import com.blueprint.ir.IRStore
 import com.blueprint.ir.IRToNodesCompiler
 import com.blueprint.ir.UmlIRImporter
+import com.blueprint.model.AcceptanceCriterion
+import com.blueprint.model.AcceptanceCriterionType
 import com.blueprint.model.BlueprintNode
+import com.blueprint.model.FileScope
+import com.blueprint.model.NodeContract
+import com.blueprint.model.NodeType
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import java.nio.charset.StandardCharsets
 import java.util.Locale
+import java.util.UUID
 
 /**
  * UML / Mermaid / architecture-text importer.
@@ -61,6 +68,7 @@ class UmlImportService(private val project: Project) {
         val ir = project.service<UmlIRImporter>().toIR(parsed)
         project.service<IRStore>().save(ir)
         val compiled = project.service<IRToNodesCompiler>().compile(ir)
+        val nodes = aggregateSharedModelNodes(parsed, compiled.nodes)
 
         val summary = buildString {
             appendLine("UML import summary")
@@ -77,14 +85,112 @@ class UmlImportService(private val project: Project) {
             if (compiled.warnings.isNotEmpty()) {
                 compiled.warnings.forEach { appendLine("- $it") }
             }
-            val nodeLine = compiled.nodes.joinToString(", ") { node ->
+            val nodeLine = nodes.joinToString(", ") { node ->
                 "${node.title} [${node.metadata["componentKind"] ?: node.type.name.lowercase()}]"
             }
-            appendLine("Created ${compiled.nodes.size} node(s): $nodeLine")
+            appendLine("Created ${nodes.size} node(s): $nodeLine")
         }.trim()
 
-        return ImportResult(compiled.nodes, parsed, summary)
+        return ImportResult(nodes, parsed, summary)
     }
+
+    private fun aggregateSharedModelNodes(
+        parsed: ParsedUml,
+        compiledNodes: List<BlueprintNode>,
+    ): List<BlueprintNode> {
+        val modelNodes = compiledNodes.filter {
+            it.type == NodeType.SCHEMA && it.metadata["componentKind"] == "model"
+        }
+        if (modelNodes.size <= 1) return compiledNodes
+
+        val sharedModelPath = modelNodes
+            .flatMap { it.fileScope.paths }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+            ?: return compiledNodes
+
+        val modelNodeIds = modelNodes.map { it.id }.toSet()
+        val aggregateId = stableNodeId("uml.aggregate.models.$sharedModelPath.${parsed.entities.joinToString(",") { it.name }}")
+        val aggregateOutputs = (modelNodes.flatMap { it.outputs } + compiledNodes.flatMap { it.inputs })
+            .filter { it.kind == "schema" && it.name.isNotBlank() }
+            .groupBy { it.name }
+            .map { (_, contracts) ->
+                contracts.maxWith(
+                    compareBy<NodeContract> { schemaFieldCount(it.schema) }
+                        .thenBy { it.schema.length }
+                )
+            }
+            .sortedBy { it.name }
+        val aggregate = BlueprintNode(
+            id = aggregateId,
+            type = NodeType.SCHEMA,
+            title = "01 UML models",
+            summary = "Generate the shared models file from the current UML.",
+            description = buildString {
+                appendLine("Generate one coherent Python models module from the full UML.")
+                appendLine()
+                appendLine("Entities:")
+                aggregateOutputs.forEach { output ->
+                    val fields = output.schema.lines().filter { it.isNotBlank() }.joinToString(", ")
+                    appendLine("- ${output.name}: ${fields.ifBlank { "(no fields)" }}")
+                }
+                if (parsed.relationships.isNotEmpty()) {
+                    appendLine()
+                    appendLine("Relationships:")
+                    parsed.relationships.forEach { rel -> appendLine("- ${rel.from} ${rel.label} ${rel.to}") }
+                }
+                appendLine()
+                appendLine("Important: this node owns all UML model classes in $sharedModelPath. It may create or update sibling model classes together.")
+            }.trim(),
+            outputs = aggregateOutputs,
+            fileScope = FileScope(paths = listOf(sharedModelPath)),
+            acceptanceCriteria = listOf(
+                AcceptanceCriterion(
+                    id = "AC1",
+                    type = AcceptanceCriterionType.INTERFACE_CONTRACT,
+                    description = "Generated models represent every UML entity: ${aggregateOutputs.joinToString(", ") { it.name }}.",
+                    verifyWith = "Review the proposed models.py patch against the UML.",
+                ),
+                AcceptanceCriterion(
+                    id = "AC2",
+                    type = AcceptanceCriterionType.INTERFACE_CONTRACT,
+                    description = "Generated models preserve declared fields and relationship intent from the UML.",
+                    verifyWith = "Review class fields and references in the proposed patch.",
+                ),
+                AcceptanceCriterion(
+                    id = "AC3",
+                    type = AcceptanceCriterionType.CODEGEN,
+                    description = "Changes stay inside the shared models file scope.",
+                    verifyWith = "Review changed files.",
+                ),
+            ),
+            metadata = mutableMapOf(
+                "source" to "uml_aggregate",
+                "componentKind" to "model_group",
+                "entityCount" to aggregateOutputs.size.toString(),
+            ),
+        )
+
+        val remapped = compiledNodes
+            .filterNot { it.id in modelNodeIds }
+            .map { node ->
+                node.copy(
+                    dependencies = node.dependencies.map { dep -> if (dep in modelNodeIds) aggregateId else dep }.distinct()
+                )
+            }
+        return listOf(aggregate) + remapped
+    }
+
+    private fun stableNodeId(seed: String): String =
+        UUID.nameUUIDFromBytes(seed.toByteArray(StandardCharsets.UTF_8)).toString()
+
+    private fun schemaFieldCount(schema: String): Int =
+        schema.lines().count { line ->
+            val name = line.substringBefore(":", "").trim()
+            name.matches(Regex("""[A-Za-z_][A-Za-z0-9_]*"""))
+        }
 
     fun parse(rawText: String): ParsedUml {
         val lines = rawText
