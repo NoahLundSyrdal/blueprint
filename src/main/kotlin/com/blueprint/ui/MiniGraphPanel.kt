@@ -39,8 +39,8 @@ class MiniGraphPanel : JPanel() {
     var onNodeSelected: ((String) -> Unit)? = null
 
     init {
-        preferredSize = Dimension(520, 240)
-        minimumSize = Dimension(320, 180)
+        preferredSize = Dimension(760, 300)
+        minimumSize = Dimension(440, 220)
         background = Color(0xFAFAFA)
         toolTipText = ""
         addMouseListener(object : MouseAdapter() {
@@ -92,25 +92,25 @@ class MiniGraphPanel : JPanel() {
         if (nodes.isEmpty()) {
             g.color = Color(0x777777)
             g.font = font.deriveFont(Font.PLAIN, 13f)
-            g.drawString("No graph yet. Use Seed: UML Invite Flow to start the demo.", 18, 32)
+            g.drawString("No graph yet. Click Generate UML or Seed: UML Invite Flow.", 18, 32)
             cards = emptyMap()
             return
         }
 
         val waves = nodes.groupBy { it.wave }.toSortedMap()
-        val cardW = 160f
-        val cardH = 48f
-        val gapX = 52f
-        val gapY = 18f
+        val cardW = 178f
+        val cardH = 54f
+        val gapX = 58f
+        val gapY = 20f
         val startX = 18f
-        val startY = 34f
+        val startY = 38f
         val localCards = mutableMapOf<String, RoundRectangle2D.Float>()
 
         waves.entries.forEachIndexed { waveIndex, (wave, waveNodes) ->
             val x = startX + waveIndex * (cardW + gapX)
             g.color = Color(0x666666)
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString("Wave $wave", x.toInt(), 20)
+            g.drawString("Wave $wave", x.toInt(), 24)
             waveNodes.forEachIndexed { row, node ->
                 val y = startY + row * (cardH + gapY)
                 localCards[node.id] = RoundRectangle2D.Float(x, y, cardW, cardH, 10f, 10f)
@@ -120,8 +120,8 @@ class MiniGraphPanel : JPanel() {
         g.stroke = BasicStroke(1.6f)
         nodes.forEach { node ->
             val to = localCards[node.id] ?: return@forEach
-            node.dependencies.forEach { depId ->
-                val from = localCards[depId] ?: return@forEach
+            for (depId in node.dependencies) {
+                val from = localCards[depId] ?: continue
                 g.color = Color(0x9AA0A6)
                 val x1 = (from.x + from.width).toInt()
                 val y1 = (from.y + from.height / 2).toInt()
@@ -144,10 +144,10 @@ class MiniGraphPanel : JPanel() {
 
             g.color = Color(0x1F1F1F)
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString(node.title.take(22), (card.x + 10).toInt(), (card.y + 19).toInt())
+            g.drawString(node.title.take(24), (card.x + 10).toInt(), (card.y + 20).toInt())
             g.font = font.deriveFont(Font.PLAIN, 11f)
             g.color = Color(0x333333)
-            g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 10).toInt(), (card.y + 38).toInt())
+            g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 10).toInt(), (card.y + 40).toInt())
         }
 
         cards = localCards

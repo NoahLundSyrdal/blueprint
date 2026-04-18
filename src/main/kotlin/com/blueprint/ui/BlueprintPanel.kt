@@ -73,7 +73,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val listModel = DefaultListModel<BlueprintNode>()
     private val nodeList = JBList(listModel).apply {
         selectionMode = ListSelectionModel.SINGLE_SELECTION
-        fixedCellHeight = 28
+        fixedCellHeight = 30
         setCellRenderer { list, value, _, isSelected, _ ->
             JLabel("${statusChip(badgeFor(value))}  ${value.type.name.lowercase()}  ${value.title.ifBlank { "(untitled)" }}").apply {
                 isOpaque = true
@@ -86,7 +86,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private val titleField = JBTextField()
     private val summaryField = JBTextField()
-    private val descField = JBTextArea(4, 40)
+    private val descField = JBTextArea(3, 40)
     private val dependencyChoiceModel = DefaultComboBoxModel<DependencyChoice>()
     private val dependencyPicker = JComboBox(dependencyChoiceModel)
     private val dependencyListModel = DefaultListModel<String>()
@@ -104,9 +104,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
     private val manualDependencyArea = JBTextArea(1, 36)
     private val typeCombo = JComboBox(NodeType.values())
-    private val scopePathsArea = JBTextArea(3, 36)
-    private val scopeGlobsArea = JBTextArea(2, 36)
-    private val scopeDirsArea = JBTextArea(2, 36)
+    private val scopePathsArea = JBTextArea(2, 36)
+    private val scopeGlobsArea = JBTextArea(1, 36)
+    private val scopeDirsArea = JBTextArea(1, 36)
     private val criteriaModel = object : DefaultTableModel(arrayOf("ID", "Type", "Required", "Description", "Verify"), 0) {
         override fun getColumnClass(columnIndex: Int): Class<*> =
             if (columnIndex == 2) java.lang.Boolean::class.java else String::class.java
@@ -182,6 +182,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = BorderFactory.createTitledBorder("Overview")
             add(summaryLabel.apply { foreground = Color(0x333333) })
             add(providerLabel.apply { foreground = providerColor() })
+            add(JLabel("Flow: Generate UML -> Plan -> Execute -> Review -> Apply").apply {
+                foreground = Color(0x555555)
+            })
             add(row("Filter", filterCombo))
             add(JPanel(FlowLayout(FlowLayout.LEFT, 4, 0)).apply {
                 add(JButton("Ready").apply { addActionListener { quickSelect(NodeFilter.READY) } })
@@ -202,7 +205,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JButton("- Remove").apply { addActionListener { removeSelected() } })
         }
         val left = JPanel(BorderLayout()).apply {
-            preferredSize = Dimension(320, 0)
+            preferredSize = Dimension(300, 0)
+            minimumSize = Dimension(260, 0)
             add(overview, BorderLayout.NORTH)
             add(JBScrollPane(nodeList), BorderLayout.CENTER)
             add(leftButtons, BorderLayout.SOUTH)
@@ -250,20 +254,28 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val bottom = JPanel(BorderLayout()).apply {
-            preferredSize = Dimension(0, 280)
+            minimumSize = Dimension(0, 250)
             add(actions, BorderLayout.NORTH)
             add(debugTabs, BorderLayout.CENTER)
         }
 
+        val detailsTabs = JTabbedPane().apply {
+            addTab("Node Details", JBScrollPane(form))
+            addTab("Review / Safety", summary)
+        }
+        val vertical = JSplitPane(JSplitPane.VERTICAL_SPLIT, detailsTabs, bottom).apply {
+            dividerLocation = 420
+            resizeWeight = 0.58
+            isContinuousLayout = true
+        }
         val right = JPanel(BorderLayout()).apply {
-            add(form, BorderLayout.NORTH)
-            add(summary, BorderLayout.CENTER)
-            add(bottom, BorderLayout.SOUTH)
+            add(vertical, BorderLayout.CENTER)
         }
 
         val split = JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right).apply {
-            dividerLocation = 320
+            dividerLocation = 300
             resizeWeight = 0.0
+            isContinuousLayout = true
         }
         add(headerPanel(), BorderLayout.NORTH)
         add(split, BorderLayout.CENTER)
@@ -286,7 +298,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(JButton("+ Criterion").apply { addActionListener { addCriterionRow() } })
                 add(JButton("- Criterion").apply { addActionListener { removeCriterionRow() } })
             }, BorderLayout.SOUTH)
-            preferredSize = Dimension(0, 150)
+            preferredSize = Dimension(0, 120)
         }
 
     private fun headerPanel(): JPanel =
@@ -306,31 +318,32 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
     private fun actionPanel(): JPanel =
-        JPanel(BorderLayout()).apply {
+        JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
-                border = BorderFactory.createTitledBorder("Mode")
                 add(mockMode)
                 add(JLabel(providerText()).apply { foreground = providerColor() })
-            }, BorderLayout.WEST)
+                add(JLabel("  Demo path: UML -> Plan -> Execute -> Review -> Diff -> Apply").apply {
+                    foreground = Color(0x555555)
+                })
+            })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
-                border = BorderFactory.createTitledBorder("Workflow")
                 add(JButton("Save").apply { addActionListener { saveCurrent() } })
                 add(JButton("Generate Plan").apply { addActionListener { generatePlan() } })
                 add(JButton("Execute Node").apply { addActionListener { executeNode() } })
                 add(JButton("Run Ready").apply { addActionListener { runAllReadyNodes() } })
                 add(JButton("Review").apply { addActionListener { review() } })
-            }, BorderLayout.CENTER)
-            add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 2)).apply {
-                border = BorderFactory.createTitledBorder("Inspect / Apply")
                 add(JButton("Preview Waves").apply { addActionListener { previewWaves() } })
                 add(JButton("Python Context").apply { addActionListener { showPythonContext() } })
+            })
+            add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Selected + Dependents").apply { addActionListener { previewSelectedAndDependents() } })
                 add(JButton("Why Blocked?").apply { addActionListener { showWhyBlocked() } })
                 add(JButton("Preview Diff").apply { addActionListener { previewDiff() } })
                 add(JButton("Apply All").apply { addActionListener { applyChanges(null) } })
                 add(JButton("Apply File").apply { addActionListener { applySelectedFile() } })
-            }, BorderLayout.EAST)
+            })
         }
 
     private fun dependencyEditorPanel(): JPanel =
@@ -346,13 +359,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(pickerRow, BorderLayout.NORTH)
             add(JBScrollPane(dependencyList), BorderLayout.CENTER)
             add(row("Manual IDs (fallback)", JBScrollPane(manualDependencyArea)), BorderLayout.SOUTH)
-            preferredSize = Dimension(0, 145)
+            preferredSize = Dimension(0, 118)
         }
 
     private fun row(label: String, component: java.awt.Component): JPanel =
         JPanel(BorderLayout(8, 4)).apply {
             border = BorderFactory.createEmptyBorder(3, 4, 3, 4)
-            add(JLabel(label).apply { preferredSize = Dimension(170, 24) }, BorderLayout.WEST)
+            add(JLabel(label).apply { preferredSize = Dimension(138, 24) }, BorderLayout.WEST)
             add(component, BorderLayout.CENTER)
         }
 
