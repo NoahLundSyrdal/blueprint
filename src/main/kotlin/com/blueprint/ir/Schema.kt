@@ -16,6 +16,7 @@ import com.google.gson.annotations.SerializedName
 data class ArchitectureIR(
     val version: String = "1",
     val project: ProjectMeta = ProjectMeta(),
+    val modules: List<Module> = emptyList(),
     val components: List<Component> = emptyList(),
     val contracts: List<Contract> = emptyList(),
     val dataTypes: List<DataType> = emptyList(),
@@ -110,6 +111,7 @@ data class Operation(
     val raises: List<TypeRef> = emptyList(),
     val concurrency: Concurrency = Concurrency.SYNC,
     val patterns: Set<String> = emptySet(),
+    val sourceRef: SourceRef? = null,
 )
 
 data class Param(
@@ -142,6 +144,7 @@ data class Field(
     val type: TypeRef = TypeRef("Any"),
     val optional: Boolean = false,
     val default: String? = null,
+    val sourceRef: SourceRef? = null,
 )
 
 // ----- Events & registries -----
@@ -169,6 +172,17 @@ enum class Ordering {
 data class Registration(
     val componentId: String,
     val priority: Int? = null,
+)
+
+// ----- Modules -----
+
+data class Module(
+    val id: String,                               // stable id, e.g. "payments"
+    val name: String,                             // display name, e.g. "payments"
+    val path: String,                             // source directory, e.g. "payments/"
+    val componentIds: List<String> = emptyList(), // ids of components in this module
+    val sourceRef: SourceRef? = null,             // e.g. payments/__init__.py
+    val description: String = "",
 )
 
 // ----- Edges -----
