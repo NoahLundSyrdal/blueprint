@@ -1,5 +1,6 @@
 package com.blueprint.ui
 
+import com.blueprint.ir.IRStore
 import com.blueprint.model.AcceptanceCriterion
 import com.blueprint.model.AcceptanceCriterionType
 import com.blueprint.model.BlueprintNode
@@ -313,6 +314,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val advancedMode = JBCheckBox("Advanced")
     private val filterCombo = JComboBox(NodeFilter.values())
     private var umlHasPendingEdits = false
+    private var suppressUmlDocumentEvents = false
     private val activityLog = JBTextArea(6, 40).apply {
         isEditable = false
         lineWrap = true
@@ -366,9 +368,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     init {
         umlEditor.document.addDocumentListener(object : DocumentListener {
-            override fun insertUpdate(e: DocumentEvent) = refreshCanvasFromUml()
-            override fun removeUpdate(e: DocumentEvent) = refreshCanvasFromUml()
-            override fun changedUpdate(e: DocumentEvent) = refreshCanvasFromUml()
+            override fun insertUpdate(e: DocumentEvent) = umlDocumentChanged()
+            override fun removeUpdate(e: DocumentEvent) = umlDocumentChanged()
+            override fun changedUpdate(e: DocumentEvent) = umlDocumentChanged()
         })
         buildUi()
         seedInitialChat()
@@ -1086,9 +1088,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     status("UML unchanged")
                     return@invokeLater
                 }
-                umlEditor.text = nextUml
-                umlEditor.caretPosition = 0
-                umlHasPendingEdits = true
+                setUmlEditorText(nextUml, pendingEdits = true)
                 umlStatusLabel.text = "UML: refined by chat. Create Code Nodes when ready, or keep editing."
                 appendChat("Blueprint", "Updated the UML. Review it in the main canvas, then keep refining or click Create Code Nodes.")
                 updateGuide()
@@ -1199,9 +1199,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!confirmDiscardPendingUmlEdits()) return
         status("Generating UML from Python project...")
         val generated = project.service<PythonUmlGenerator>().generate()
-        umlEditor.text = generated.text
-        umlEditor.caretPosition = 0
-        umlHasPendingEdits = false
+        setUmlEditorText(generated.text, pendingEdits = false)
         umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
         graphArea.text = buildString {
             appendLine("Abstracted Python codebase to editable UML.")
@@ -1261,9 +1259,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             status("No UML text supplied")
             return
         }
-        umlEditor.text = text
-        umlEditor.caretPosition = 0
-        umlHasPendingEdits = true
+        setUmlEditorText(text, pendingEdits = true)
         umlStatusLabel.text = "UML: pasted/loaded. Edit or ask chat to refine it."
         appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Create Code Nodes.")
         status("Loaded UML into editor")
@@ -2150,7 +2146,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (node == null) {
             selectedCanvasId = id
             updateMiniGraph(project.service<DependencyGraphService>().analyze())
-            status("Selected UML entity: $id")
+            status("Selected canvas entity: $id")
             return
         }
         selectedCanvasId = id
@@ -2162,6 +2158,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         loadSelectedIntoForm()
         status("Selected from graph: ${node.title.ifBlank { node.id.take(8) }}")
         logActivity("Graph selected ${node.title.ifBlank { node.id.take(8) }} (${node.id.take(8)}).")
+    }
+
+    private fun setUmlEditorText(text: String, pendingEdits: Boolean) {
+        suppressUmlDocumentEvents = true
+        try {
+            umlEditor.text = text
+            umlEditor.caretPosition = 0
+            umlHasPendingEdits = pendingEdits
+        } finally {
+            suppressUmlDocumentEvents = false
+        }
+        updateMiniGraph(project.service<DependencyGraphService>().analyze())
+        updateGuide()
+    }
+
+    private fun umlDocumentChanged() {
+        if (!suppressUmlDocumentEvents) {
+            umlHasPendingEdits = true
+        }
+        refreshCanvasFromUml()
     }
 
     private fun refreshCanvasFromUml() {
@@ -2277,9 +2293,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun updateMiniGraph(report: DependencyGraphService.GraphReport) {
         val selectedId = nodeList.selectedValue?.id
-        val umlViews = umlCanvasViews(selectedId)
-        if (umlViews.isNotEmpty()) {
-            miniGraph.setGraph(umlViews)
+        val proposalViews = if (umlHasPendingEdits) umlCanvasViews(selectedId) else emptyList()
+        if (proposalViews.isNotEmpty()) {
+            miniGraph.setGraph(proposalViews)
+            return
+        }
+        val codeViews = codeMapViews(selectedId, report)
+        if (codeViews.isNotEmpty()) {
+            miniGraph.setGraph(codeViews)
             return
         }
         val views = registry.all().map { node ->
@@ -2294,9 +2315,37 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 ready = readiness?.ready == true,
                 blocked = hasDependencyBlock(readiness) || badgeFor(node) == "BLOCKED" || badgeFor(node) == "PARTIAL",
                 detail = graphNodeDetail(node, readiness),
+                origin = MiniGraphPanel.NodeOrigin.WORKFLOW,
+                kind = node.type.name.lowercase(),
+                source = node.fileScope.paths.firstOrNull().orEmpty(),
+                preview = readiness?.let { if (it.ready) "ready to run" else it.reasons.firstOrNull().orEmpty() }.orEmpty(),
             )
         }
         miniGraph.setGraph(views)
+    }
+
+    private fun codeMapViews(
+        selectedNodeId: String?,
+        report: DependencyGraphService.GraphReport,
+    ): List<MiniGraphPanel.NodeView> {
+        val ir = project.service<IRStore>().load() ?: return emptyList()
+        val workflowByComponent = registry.all()
+            .mapNotNull { node ->
+                val componentId = node.metadata["componentId"] ?: return@mapNotNull null
+                val readiness = report.readiness[node.id]
+                componentId to CodeMapProjection.WorkflowBadge(
+                    status = badgeFor(node),
+                    ready = readiness?.ready == true,
+                    blocked = hasDependencyBlock(readiness) || badgeFor(node) == "BLOCKED" || badgeFor(node) == "PARTIAL",
+                    selected = node.id == selectedNodeId,
+                )
+            }
+            .toMap()
+        return CodeMapProjection.fromIr(
+            ir = ir,
+            selectedId = selectedCanvasId ?: selectedNodeId,
+            workflowByComponentId = workflowByComponent,
+        )
     }
 
     private fun umlCanvasViews(selectedNodeId: String?): List<MiniGraphPanel.NodeView> {
@@ -2318,12 +2367,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 ready = true,
                 blocked = false,
                 detail = buildString {
-                    append("Editable UML entity")
+                    append("Proposed UML entity")
                     if (entity.fields.isNotEmpty()) {
                         append("\n")
                         append(entity.fields.take(8).joinToString("\n") { "- $it" })
                     }
                 },
+                origin = MiniGraphPanel.NodeOrigin.PROPOSED_UML,
+                kind = "UML entity",
+                preview = entity.fields.take(3).joinToString(", ").ifBlank { "no fields yet" },
             )
         }
     }
