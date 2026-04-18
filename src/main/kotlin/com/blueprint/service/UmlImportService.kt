@@ -1,22 +1,25 @@
 package com.blueprint.service
 
-import com.blueprint.model.AcceptanceCriterion
-import com.blueprint.model.AcceptanceCriterionType
+import com.blueprint.ir.IRStore
+import com.blueprint.ir.IRToNodesCompiler
+import com.blueprint.ir.UmlIRImporter
 import com.blueprint.model.BlueprintNode
-import com.blueprint.model.FileScope
-import com.blueprint.model.NodeContract
-import com.blueprint.model.NodeType
 import com.intellij.openapi.components.Service
+import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import java.util.Locale
 
 /**
- * Lightweight UML/Mermaid/architecture-text importer.
+ * UML / Mermaid / architecture-text importer.
  *
- * This intentionally handles the common demo/product path first:
- * class/entity blocks, simple bullet-field entity blocks, and relationship
- * lines. It creates normal Blueprint nodes instead of introducing a separate
- * graph model, so the existing execution pipeline remains the source of truth.
+ * parse() still produces the lightweight ParsedUml that the UI uses for
+ * live previews. importNodes() now routes through the architecture IR:
+ *
+ *   raw text ─► parse ─► UmlIRImporter.toIR ─► IRStore.save ─► IRToNodesCompiler.compile
+ *
+ * The returned ImportResult shape is preserved so BlueprintPanel continues
+ * to compile. The number of emitted nodes is no longer fixed at 5 — it
+ * scales with the components the IR produces.
  */
 @Service(Service.Level.PROJECT)
 class UmlImportService(private val project: Project) {
@@ -55,93 +58,9 @@ class UmlImportService(private val project: Project) {
             )
         }
 
-        val titleStem = inferTitleStem(parsed.entities)
-        val slug = slugify(titleStem)
-        val packageSlug = slug.replace('-', '_')
-        val schemaPath = "blueprint_demo/imported_$packageSlug/models.py"
-        val apiPath = "blueprint_demo/imported_$packageSlug/service.py"
-        val uiPath = "blueprint_demo/imported_$packageSlug/cli.py"
-        val testPath = "tests/test_${packageSlug}_flow.py"
-        val docsPath = "docs/$slug.md"
-
-        val schema = BlueprintNode(
-            type = NodeType.SCHEMA,
-            title = "01 Imported UML schema contract",
-            summary = "Convert imported UML architecture into the upstream schema contract.",
-            description = schemaDescription(text, parsed),
-            outputs = parsed.entities.map { entity ->
-                NodeContract(
-                    name = entity.name,
-                    kind = "schema",
-                    description = "Imported UML entity with ${entity.fields.size} field(s).",
-                    schema = entity.fields.joinToString("\n"),
-                )
-            },
-            fileScope = FileScope(paths = listOf(schemaPath)),
-            acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Generated schema represents all imported entities: ${parsed.entities.joinToString(", ") { it.name }}."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Generated schema preserves imported fields and relationship intent."),
-                criterion("AC3", AcceptanceCriterionType.CODEGEN, "Generated changes stay inside the schema node file scope.")
-            ),
-            metadata = mutableMapOf(
-                "source" to "uml_import",
-                "entityCount" to parsed.entities.size.toString(),
-                "relationshipCount" to parsed.relationships.size.toString(),
-            )
-        )
-        val backend = BlueprintNode(
-            type = NodeType.BACKEND,
-            title = "02 Python service from schema",
-            summary = "Create Python service behavior from the imported UML schema contract.",
-            description = "Implement Python service behavior that respects the imported schema entities, fields, and relationships.",
-            inputs = schema.outputs,
-            dependencies = listOf(schema.id),
-            fileScope = FileScope(paths = listOf(apiPath)),
-            acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Python service uses the imported schema contract from the schema node."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service behavior reflects the imported relationships."),
-                criterion("AC3", AcceptanceCriterionType.CODEGEN, "Implementation stays inside the declared service file scope.")
-            ),
-            metadata = mutableMapOf("source" to "uml_import")
-        )
-        val frontend = BlueprintNode(
-            type = NodeType.FRONTEND,
-            title = "03 Python CLI for imported model",
-            summary = "Create a Python CLI surface for the imported architecture model.",
-            description = "Add a simple Python CLI that presents and edits the primary imported entities using the service layer.",
-            dependencies = listOf(backend.id),
-            fileScope = FileScope(paths = listOf(uiPath)),
-            acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.UX, "CLI exposes the primary imported entities and their important fields."),
-                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "CLI uses the Python service produced from the imported schema.")
-            ),
-            metadata = mutableMapOf("source" to "uml_import")
-        )
-        val test = BlueprintNode(
-            type = NodeType.TEST,
-            title = "04 Imported contract tests",
-            summary = "Validate schema, service, and CLI behavior from the imported UML contract.",
-            description = "Add focused pytest-style tests around the imported entities, relationships, and generated service/CLI behavior.",
-            dependencies = listOf(backend.id, frontend.id),
-            fileScope = FileScope(paths = listOf(testPath)),
-            acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.TEST, "Tests cover key imported entities and relationship behavior."),
-                criterion("AC2", AcceptanceCriterionType.TEST, "Tests validate the schema/service/CLI contract path.")
-            ),
-            metadata = mutableMapOf("source" to "uml_import")
-        )
-        val docs = BlueprintNode(
-            type = NodeType.DOCS,
-            title = "05 Imported architecture notes",
-            summary = "Document the imported UML architecture and implementation mapping.",
-            description = "Document how the imported UML entities and relationships map to Python schema, service, CLI, and tests.",
-            dependencies = listOf(backend.id, frontend.id),
-            fileScope = FileScope(paths = listOf(docsPath)),
-            acceptanceCriteria = listOf(
-                criterion("AC1", AcceptanceCriterionType.OTHER, "Docs explain imported entities, relationships, Python files, and validation path.")
-            ),
-            metadata = mutableMapOf("source" to "uml_import")
-        )
+        val ir = project.service<UmlIRImporter>().toIR(parsed)
+        project.service<IRStore>().save(ir)
+        val compiled = project.service<IRToNodesCompiler>().compile(ir)
 
         val summary = buildString {
             appendLine("UML import summary")
@@ -155,10 +74,16 @@ class UmlImportService(private val project: Project) {
                 appendLine("Warnings:")
                 parsed.warnings.forEach { appendLine("- $it") }
             }
-            appendLine("Created nodes: Python schema, service, CLI, test, docs.")
+            if (compiled.warnings.isNotEmpty()) {
+                compiled.warnings.forEach { appendLine("- $it") }
+            }
+            val nodeLine = compiled.nodes.joinToString(", ") { node ->
+                "${node.title} [${node.metadata["componentKind"] ?: node.type.name.lowercase()}]"
+            }
+            appendLine("Created ${compiled.nodes.size} node(s): $nodeLine")
         }.trim()
 
-        return ImportResult(listOf(schema, backend, frontend, test, docs), parsed, summary)
+        return ImportResult(compiled.nodes, parsed, summary)
     }
 
     fun parse(rawText: String): ParsedUml {
@@ -276,39 +201,6 @@ class UmlImportService(private val project: Project) {
         return relationships
     }
 
-    private fun schemaDescription(source: String, parsed: ParsedUml): String =
-        buildString {
-            appendLine("Imported UML / architecture source:")
-            appendLine()
-            appendLine(source)
-            appendLine()
-            appendLine("Parsed entities:")
-            parsed.entities.forEach { entity ->
-                appendLine("- ${entity.name}: ${entity.fields.joinToString(", ").ifBlank { "(no fields parsed)" }}")
-            }
-            if (parsed.relationships.isNotEmpty()) {
-                appendLine()
-                appendLine("Parsed relationships:")
-                parsed.relationships.forEach { appendLine("- ${it.from} ${it.label} ${it.to}") }
-            }
-        }.trim()
-
-    private fun inferTitleStem(entities: List<ParsedEntity>): String {
-        val preferred = entities.firstOrNull { it.name.contains("Invite", ignoreCase = true) }
-            ?: entities.first()
-        return preferred.name.replace(Regex("([a-z])([A-Z])"), "$1 $2")
-            .replace('_', ' ')
-            .trim()
-            .lowercase(Locale.US)
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
-    }
-
-    private fun slugify(value: String): String =
-        value.lowercase(Locale.US)
-            .replace(Regex("[^a-z0-9]+"), "-")
-            .trim('-')
-            .ifBlank { "uml-import" }
-
     private fun cleanField(raw: String): String =
         raw.trim()
             .removePrefix("-")
@@ -318,14 +210,6 @@ class UmlImportService(private val project: Project) {
             .substringBefore("//")
             .substringBefore("'")
             .trim()
-
-    private fun criterion(id: String, type: AcceptanceCriterionType, description: String): AcceptanceCriterion =
-        AcceptanceCriterion(
-            id = id,
-            type = type,
-            description = description,
-            verifyWith = "Review generated patch and compare against imported UML contract",
-        )
 
     private fun String.isIgnoredLine(): Boolean {
         if (isBlank()) return false

@@ -27,5 +27,11 @@
         <projectService serviceImplementation="com.blueprint.service.UmlImportService"/>
         <projectService serviceImplementation="com.blueprint.service.PythonProjectAnalyzer"/>
         <projectService serviceImplementation="com.blueprint.service.PythonUmlGenerator"/>
+
+        <projectService serviceImplementation="com.blueprint.ir.IRStore"/>
+        <projectService serviceImplementation="com.blueprint.ir.PythonIRExtractor"/>
+        <projectService serviceImplementation="com.blueprint.ir.MermaidProjector"/>
+        <projectService serviceImplementation="com.blueprint.ir.UmlIRImporter"/>
+        <projectService serviceImplementation="com.blueprint.ir.IRToNodesCompiler"/>
     </extensions>
 </idea-plugin>
