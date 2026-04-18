@@ -158,6 +158,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         lineWrap = true
         wrapStyleWord = true
     }
+    private val umlStatusLabel = JLabel("UML: not generated yet")
+    private val umlEditor = JBTextArea(18, 72).apply {
+        lineWrap = false
+        text = """
+            classDiagram
+            %% Click "Abstract Code to UML" to generate this from the open Python project.
+            %% Then edit it directly or ask chat to refine it.
+        """.trimIndent()
+    }
 
     private val planArea = JBTextArea().apply { isEditable = false }
     private val execArea = JBTextArea().apply { isEditable = false }
@@ -192,7 +201,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = BorderFactory.createTitledBorder("Overview")
             add(summaryLabel.apply { foreground = Color(0x333333) })
             add(providerLabel.apply { foreground = providerColor() })
-            add(JLabel("Flow: Generate UML -> Plan -> Execute -> Review -> Apply").apply {
+            add(JLabel("Flow: Code -> UML -> Chat refine -> Generate code").apply {
                 foreground = Color(0x555555)
             })
             add(row("Filter", filterCombo))
@@ -206,8 +215,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val leftButtons = JPanel(GridLayout(0, 1, 4, 4)).apply {
             border = BorderFactory.createEmptyBorder(6, 6, 6, 6)
             add(JButton("+ Node").apply { addActionListener { addNode() } })
-            add(JButton("Generate UML").apply { addActionListener { generateProjectUml() } })
-            add(JButton("Import UML").apply { addActionListener { importUml() } })
+            add(JButton("Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
+            add(JButton("Paste UML").apply { addActionListener { importUml() } })
+            add(JButton("Generate Code").apply { addActionListener { generateCodeFromUml() } })
             add(JButton("Seed: UML Invite Flow").apply { addActionListener { seedUmlInviteFlow() } })
             add(JButton("Seed: Project Invite Flow").apply { addActionListener { seedInviteFlow() } })
             add(JButton("Seed: Checkout Flow").apply { addActionListener { seedCheckoutFlow() } })
@@ -270,13 +280,31 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(secondaryTabs, BorderLayout.CENTER)
         }
 
-        val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
-            border = BorderFactory.createTitledBorder("UML / Architecture Diagram")
-            add(JLabel("Click a card to select the node. Generate UML from the project, then drive code changes from the diagram.").apply {
+        val umlPanel = JPanel(BorderLayout(6, 6)).apply {
+            border = BorderFactory.createTitledBorder("Editable UML")
+            add(JPanel(BorderLayout()).apply {
+                add(umlStatusLabel.apply { foreground = Color(0x555555) }, BorderLayout.CENTER)
+                add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
+                    add(JButton("Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
+                    add(JButton("Generate Code").apply { addActionListener { generateCodeFromUml() } })
+                }, BorderLayout.EAST)
+            }, BorderLayout.NORTH)
+            add(JBScrollPane(umlEditor), BorderLayout.CENTER)
+        }
+
+        val nodeGraphPanel = JPanel(BorderLayout(6, 6)).apply {
+            border = BorderFactory.createTitledBorder("Generated Code Nodes")
+            add(JLabel("After Generate Code, click a card to plan, execute, review, and apply.").apply {
                 foreground = Color(0x555555)
                 border = BorderFactory.createEmptyBorder(2, 6, 2, 6)
             }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph), BorderLayout.CENTER)
+        }
+
+        val diagramPanel = JSplitPane(JSplitPane.VERTICAL_SPLIT, umlPanel, nodeGraphPanel).apply {
+            dividerLocation = 250
+            resizeWeight = 0.62
+            isContinuousLayout = true
         }
 
         val mainCanvas = JSplitPane(JSplitPane.VERTICAL_SPLIT, diagramPanel, lowerWorkspace).apply {
@@ -331,11 +359,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(JLabel("Blueprint").apply {
                     font = font.deriveFont(java.awt.Font.BOLD, 18f)
                 })
-                add(JLabel("UML-first Python changes: edit architecture, then plan, execute, review, apply.").apply {
+                add(JLabel("Abstract code to UML, refine with chat, generate code when ready. Repeat anytime.").apply {
                     foreground = Color(0x666666)
                 })
             }, BorderLayout.CENTER)
-            add(JLabel("Main canvas: UML diagram. Sidecar: chat and guidance.").apply {
+            add(JLabel("Main canvas: editable UML. Sidecar: OpenAI-assisted architecture chat.").apply {
                 foreground = Color(0x555555)
             }, BorderLayout.EAST)
         }
@@ -359,7 +387,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(mockMode)
                 add(JLabel(providerText()).apply { foreground = providerColor() })
-                add(JLabel("  Demo path: UML -> Plan -> Execute -> Review -> Diff -> Apply").apply {
+                add(JLabel("  Loop: Code -> UML -> Chat -> Generate Code -> Apply -> UML again").apply {
                     foreground = Color(0x555555)
                 })
             })
@@ -416,7 +444,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (message.isBlank()) return
         chatInput.text = ""
         appendChat("You", message)
-        appendChat("Blueprint", chatResponse(message))
+        if (shouldRefineUml(message)) {
+            refineUmlWithChat(message)
+        } else {
+            appendChat("Blueprint", chatResponse(message))
+        }
     }
 
     private fun appendChat(author: String, message: String) {
@@ -430,6 +462,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val ready = graph.readyNodes()
         return when {
+            "generate code" in lower || "code nodes" in lower -> {
+                "When the UML looks right, click Generate Code. Blueprint will turn the current UML into scoped nodes, then you can plan, execute, review, preview the diff, and apply."
+            }
+            "abstract" in lower || "sync" in lower -> {
+                "Click Abstract Code to UML at any time. Blueprint will rescan the Python project and replace the editable UML with the current code architecture."
+            }
             "blocked" in lower || "why" in lower -> {
                 val node = selected ?: return "Select a node in the UML diagram first, then ask why it is blocked."
                 val readiness = graph.readinessFor(node)
@@ -452,63 +490,147 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 changedFileSummary(registry.getExecution(node.id))
             }
             "uml" in lower || "diagram" in lower -> {
-                "The main canvas is the UML/architecture diagram. Click Generate UML to build it from the Python project, or click an existing diagram card to inspect that node."
+                "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add an InvitePolicy entity' or 'make Project own many Invites'. I will rewrite the UML, then you can Generate Code."
             }
             selected != null -> {
                 val readiness = graph.readinessFor(selected)
                 "${selected.title.ifBlank { selected.id.take(8) }} is selected. Status: ${badgeFor(selected)}. " +
                     if (readiness.ready) "It is ready to run." else "It is blocked; ask 'why blocked' for details."
             }
-            else -> "Start with Generate UML. Then click a card in the diagram and ask me what to run next."
+            else -> "Start with Abstract Code to UML. Refine the editable diagram here with chat, then click Generate Code when the architecture is ready."
+        }
+    }
+
+    private fun shouldRefineUml(message: String): Boolean {
+        val lower = message.lowercase()
+        return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field", "uml", "diagram")
+            .any { it in lower } &&
+            !listOf("what next", "why", "blocked", "diff", "changed", "generate code").any { it in lower }
+    }
+
+    private fun refineUmlWithChat(message: String) {
+        status("Refining UML with ${providerText()}...")
+        appendChat("Blueprint", "Refining the editable UML. In live mode this uses the configured OpenAI provider/API key.")
+        val currentUml = umlEditor.text
+        Thread {
+            val result = if (codex.providerMode() == "mock") {
+                CodexClient.Result(mockUmlEdit(currentUml, message), ok = true)
+            } else {
+                codex.sendPromptResult(umlChatPrompt(currentUml, message))
+            }
+            SwingUtilities.invokeLater {
+                if (!result.ok) {
+                    val error = result.error ?: "UML chat request failed"
+                    appendChat("Blueprint", "I could not update the UML: $error")
+                    status("UML chat failed")
+                    return@invokeLater
+                }
+                val nextUml = extractMermaid(result.text)
+                if (!nextUml.contains("classDiagram")) {
+                    appendChat("Blueprint", "The model did not return Mermaid classDiagram text. I left the UML unchanged.")
+                    status("UML unchanged")
+                    return@invokeLater
+                }
+                umlEditor.text = nextUml
+                umlEditor.caretPosition = 0
+                umlStatusLabel.text = "UML: refined by chat. Generate Code when ready, or keep editing."
+                appendChat("Blueprint", "Updated the UML. Review it in the main canvas, then keep refining or click Generate Code.")
+                status("UML refined")
+            }
+        }.start()
+    }
+
+    private fun umlChatPrompt(currentUml: String, message: String): String =
+        """
+        You are Blueprint, an architecture assistant inside PyCharm.
+
+        The user edits a Mermaid UML classDiagram that will later be converted into scoped code-generation nodes.
+        Update the UML according to the user's request.
+
+        Rules:
+        - Return only Mermaid classDiagram text.
+        - Preserve useful existing classes, fields, methods, and relationships unless the user asked to remove them.
+        - Keep names clear and Python-friendly.
+        - Prefer class blocks and simple relationship lines.
+        - Do not include explanations, markdown fences, or prose.
+
+        Current UML:
+        $currentUml
+
+        User request:
+        $message
+        """.trimIndent()
+
+    private fun extractMermaid(text: String): String {
+        val fenced = Regex("""```(?:mermaid)?\s*(classDiagram.*?)(?:```|$)""", RegexOption.DOT_MATCHES_ALL)
+            .find(text)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+        if (!fenced.isNullOrBlank()) return fenced
+        val start = text.indexOf("classDiagram")
+        return if (start >= 0) text.substring(start).trim() else text.trim()
+    }
+
+    private fun mockUmlEdit(currentUml: String, message: String): String {
+        val lower = message.lowercase()
+        val addition = when {
+            "policy" in lower -> """
+
+                class InvitePolicy {
+                  maxAgeDays: int
+                  requiresDomainMatch: bool
+                }
+
+                Invite --> InvitePolicy : uses
+            """.trimIndent()
+            "audit" in lower || "event" in lower -> """
+
+                class AuditEvent {
+                  id: str
+                  actorEmail: str
+                  action: str
+                  createdAt: datetime
+                }
+
+                Project --> AuditEvent : records
+            """.trimIndent()
+            else -> """
+
+                class ArchitectureDecision {
+                  id: str
+                  summary: str
+                  status: str
+                }
+            """.trimIndent()
+        }
+        return if (currentUml.contains(addition.substringAfter("class ").substringBefore(" {"))) {
+            currentUml
+        } else {
+            currentUml.trim() + "\n\n" + addition.trim() + "\n"
         }
     }
 
     private fun generateProjectUml() {
         status("Generating UML from Python project...")
         val generated = project.service<PythonUmlGenerator>().generate()
-        val input = JBTextArea(24, 82).apply {
-            lineWrap = false
-            text = generated.text
-            caretPosition = 0
-        }
-        val summary = buildString {
-            append("Generated from Python project: ")
-            append("${generated.classCount} class(es), ")
-            append("${generated.relationshipCount} relationship(s), ")
-            append("${generated.filesScanned} file(s) scanned.")
+        umlEditor.text = generated.text
+        umlEditor.caretPosition = 0
+        umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
+        graphArea.text = buildString {
+            appendLine("Abstracted Python codebase to editable UML.")
+            appendLine("Classes: ${generated.classCount}")
+            appendLine("Relationships: ${generated.relationshipCount}")
+            appendLine("Files scanned: ${generated.filesScanned}")
             if (generated.warnings.isNotEmpty()) {
-                append(" Review warnings below before importing.")
-            } else {
-                append(" Edit the diagram, then click OK to create Blueprint nodes.")
+                appendLine()
+                appendLine("Warnings:")
+                generated.warnings.forEach { appendLine("- $it") }
             }
-        }
-        val warnings = JBTextArea(3, 82).apply {
-            isEditable = false
-            lineWrap = true
-            wrapStyleWord = true
-            text = generated.warnings.joinToString("\n") { "- $it" }.ifBlank {
-                "No generator warnings."
-            }
-        }
-        val panel = JPanel(BorderLayout(6, 6)).apply {
-            add(JPanel(BorderLayout()).apply {
-                add(JLabel(summary), BorderLayout.NORTH)
-                add(JBScrollPane(warnings), BorderLayout.CENTER)
-            }, BorderLayout.NORTH)
-            add(JBScrollPane(input).apply { preferredSize = Dimension(820, 480) }, BorderLayout.CENTER)
-        }
-        val choice = JOptionPane.showConfirmDialog(
-            this,
-            panel,
-            "Blueprint - Generate Project UML",
-            JOptionPane.OK_CANCEL_OPTION,
-            JOptionPane.PLAIN_MESSAGE,
-        )
-        if (choice != JOptionPane.OK_OPTION) {
-            status("Project UML generation canceled")
-            return
-        }
-        importUmlText(input.text.trim(), "project UML")
+        }.trim()
+        appendChat("Blueprint", "I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Generate Code when ready.")
+        logActivity("Abstracted code to UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s).")
+        status("Code abstracted to UML")
     }
 
     private fun importUml() {
@@ -533,7 +655,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
         if (choice != JOptionPane.OK_OPTION) return
 
-        importUmlText(input.text.trim(), "pasted UML")
+        val text = input.text.trim()
+        if (text.isBlank()) {
+            status("No UML text supplied")
+            return
+        }
+        umlEditor.text = text
+        umlEditor.caretPosition = 0
+        umlStatusLabel.text = "UML: pasted/loaded. Edit or ask chat to refine it."
+        appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Generate Code.")
+        status("Loaded UML into editor")
+    }
+
+    private fun generateCodeFromUml() {
+        val text = umlEditor.text.trim()
+        if (text.isBlank() || !text.contains("classDiagram")) {
+            Messages.showWarningDialog(
+                project,
+                "The UML editor needs Mermaid classDiagram text before Blueprint can generate code nodes.",
+                "Blueprint - Generate Code"
+            )
+            status("No usable UML to generate code")
+            return
+        }
+        importUmlText(text, "editable UML")
     }
 
     private fun importUmlText(text: String, sourceLabel: String) {
