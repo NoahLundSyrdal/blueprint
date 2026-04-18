@@ -171,6 +171,16 @@ class IRPipelineTest {
         val gson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
         val original = ArchitectureIR(
             project = ProjectMeta(name = "gsontest", sourceRoots = listOf("src", "lib")),
+            modules = listOf(
+                Module(
+                    id = "payments",
+                    name = "payments",
+                    path = "payments/",
+                    componentIds = listOf("payments.service"),
+                    sourceRef = SourceRef("payments/__init__.py", 1),
+                    description = "Payments package",
+                ),
+            ),
             components = listOf(
                 Component(
                     id = "payments.service",
@@ -180,12 +190,16 @@ class IRPipelineTest {
                     provides = listOf("payments.Authorizer"),
                     requires = listOf("payments.Gateway"),
                     ownership = Ownership(files = listOf("payments/service.py"), globs = listOf("payments/**.py")),
+                    fields = listOf(
+                        Field("amount", TypeRef("Decimal"), sourceRef = SourceRef("payments/service.py", 15)),
+                    ),
                     operations = listOf(
                         Operation(
                             "authorize",
                             listOf(Param("req", TypeRef("PaymentRequest"))),
                             TypeRef("PaymentResult"),
                             concurrency = Concurrency.ASYNC,
+                            sourceRef = SourceRef("payments/service.py", 22),
                         ),
                     ),
                     forbiddenPatterns = setOf("global_state"),
@@ -231,10 +245,27 @@ class IRPipelineTest {
         assertEquals(listOf("payments/service.py"), c.ownership.files)
         assertEquals(setOf("global_state"), c.forbiddenPatterns)
         assertEquals(1, c.opaqueAnnotations.size)
+        // Field.sourceRef survives round-trip
+        val field = c.fields.single()
+        assertEquals("amount", field.name)
+        assertEquals("payments/service.py", field.sourceRef?.path)
+        assertEquals(15, field.sourceRef?.line)
+        // Operation.sourceRef survives round-trip
+        val op = c.operations.single()
+        assertEquals("authorize", op.name)
+        assertEquals("payments/service.py", op.sourceRef?.path)
+        assertEquals(22, op.sourceRef?.line)
         assertEquals(Concurrency.ASYNC, back.contracts.single().operations.single().concurrency)
         assertEquals(EdgeKind.CALLS, back.edges.single().kind)
         assertEquals("call expression: gateway.authorize", back.edges.single().evidence)
         assertEquals(0.8, back.edges.single().confidence, 0.001)
+        // Module survives round-trip
+        val mod = back.modules.single()
+        assertEquals("payments", mod.id)
+        assertEquals("payments/", mod.path)
+        assertEquals(listOf("payments.service"), mod.componentIds)
+        assertEquals("payments/__init__.py", mod.sourceRef?.path)
+        assertEquals(1, mod.sourceRef?.line)
     }
 
     // ---- Empty IR guard ----
