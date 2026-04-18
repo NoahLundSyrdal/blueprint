@@ -40,6 +40,12 @@ class MiniGraphPanel : JPanel() {
         val PurpleSurface = Color(0x2B2842)
     }
 
+    enum class NodeOrigin {
+        CODE,
+        PROPOSED_UML,
+        WORKFLOW,
+    }
+
     data class NodeView(
         val id: String,
         val title: String,
@@ -50,6 +56,10 @@ class MiniGraphPanel : JPanel() {
         val ready: Boolean,
         val blocked: Boolean,
         val detail: String,
+        val origin: NodeOrigin = NodeOrigin.WORKFLOW,
+        val kind: String = "",
+        val source: String = "",
+        val preview: String = "",
     )
 
     private var nodes: List<NodeView> = emptyList()
@@ -89,7 +99,10 @@ class MiniGraphPanel : JPanel() {
         nodeAt(event.point)?.let { node ->
             "<html><b>${escape(node.title)}</b><br/>" +
                 "ID: ${node.id.take(8)}<br/>" +
+                "Origin: ${node.origin.label()}<br/>" +
                 "Status: ${node.status}<br/>" +
+                node.kind.takeIf { it.isNotBlank() }?.let { "Kind: ${escape(it)}<br/>" }.orEmpty() +
+                node.source.takeIf { it.isNotBlank() }?.let { "Source: ${escape(it)}<br/>" }.orEmpty() +
                 "Wave: ${node.wave}<br/>" +
                 escape(node.detail).replace("\n", "<br/>") +
                 "</html>"
@@ -117,8 +130,8 @@ class MiniGraphPanel : JPanel() {
         }
 
         val waves = nodes.groupBy { it.wave }.toSortedMap()
-        val cardW = 190f
-        val cardH = 60f
+        val cardW = 230f
+        val cardH = 76f
         val gapX = 70f
         val gapY = 24f
         val startX = 24f
@@ -154,19 +167,29 @@ class MiniGraphPanel : JPanel() {
 
         nodes.forEach { node ->
             val card = localCards[node.id] ?: return@forEach
-            val fill = colorFor(node.status, node.ready, node.blocked)
+            val fill = colorFor(node)
             g.color = fill
             g.fill(card)
-            g.color = if (node.selected) Theme.Accent else borderFor(node.status, node.ready, node.blocked)
+            g.color = if (node.selected) Theme.Accent else borderFor(node)
             g.stroke = BasicStroke(if (node.selected) 3.0f else 1.3f)
             g.draw(card)
 
             g.color = Theme.TextStrong
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString(node.title.take(25), (card.x + 12).toInt(), (card.y + 23).toInt())
+            g.drawString(node.title.ellipsize(28), (card.x + 12).toInt(), (card.y + 22).toInt())
+
             g.font = font.deriveFont(Font.PLAIN, 11f)
             g.color = Theme.Muted
-            g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 12).toInt(), (card.y + 45).toInt())
+            val metadata = node.metadataLine()
+            g.drawString(metadata.ellipsize(32), (card.x + 12).toInt(), (card.y + 42).toInt())
+
+            val preview = node.preview.ifBlank { node.detail.lineSequence().drop(1).firstOrNull().orEmpty() }
+            if (preview.isNotBlank()) {
+                g.color = Theme.Muted
+                g.drawString(preview.ellipsize(34), (card.x + 12).toInt(), (card.y + 60).toInt())
+            }
+
+            paintStatusBadge(g, node, card)
 
             g.color = if (node.selected) Theme.Accent else Theme.Muted
             g.drawOval((card.x + card.width - 28).toInt(), (card.y + 10).toInt(), 16, 16)
@@ -197,31 +220,89 @@ class MiniGraphPanel : JPanel() {
         return nodes.firstOrNull { it.id == id }
     }
 
-    private fun colorFor(status: String, ready: Boolean, blocked: Boolean): Color {
-        if (blocked || status == "BLOCKED") return Theme.DangerSurface
-        return when (status) {
-            "UML" -> Theme.Surface
-            "APPLIED" -> Theme.SuccessSurface
-            "REVIEWED" -> Theme.PurpleSurface
-            "EXECUTED" -> Theme.AccentSurface
-            "PLANNED" -> Theme.WarningSurface
-            "PARTIAL" -> Theme.WarningSurface
-            else -> if (ready) Theme.SuccessSurface else Theme.SurfaceSoft
+    private fun paintStatusBadge(g: Graphics2D, node: NodeView, card: RoundRectangle2D.Float) {
+        val label = when {
+            node.origin == NodeOrigin.CODE && node.status == "CODE" -> "code"
+            node.origin == NodeOrigin.PROPOSED_UML -> "proposal"
+            else -> node.status.lowercase()
+        }.ellipsize(12)
+        val width = (label.length * 7 + 14).coerceAtLeast(42)
+        val x = (card.x + card.width - width - 10).toInt()
+        val y = (card.y + card.height - 22).toInt()
+        val pill = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), 16f, 8f, 8f)
+        g.color = badgeFill(node)
+        g.fill(pill)
+        g.color = badgeText(node)
+        g.font = font.deriveFont(Font.PLAIN, 10f)
+        g.drawString(label, x + 7, y + 12)
+    }
+
+    private fun colorFor(node: NodeView): Color {
+        if (node.blocked || node.status == "BLOCKED") return Theme.DangerSurface
+        return when (node.origin) {
+            NodeOrigin.CODE -> Theme.Surface
+            NodeOrigin.PROPOSED_UML -> Theme.PurpleSurface
+            NodeOrigin.WORKFLOW -> when (node.status) {
+                "APPLIED" -> Theme.SuccessSurface
+                "REVIEWED" -> Theme.PurpleSurface
+                "EXECUTED" -> Theme.AccentSurface
+                "PLANNED" -> Theme.WarningSurface
+                "PARTIAL" -> Theme.WarningSurface
+                else -> if (node.ready) Theme.SuccessSurface else Theme.SurfaceSoft
+            }
         }
     }
 
-    private fun borderFor(status: String, ready: Boolean, blocked: Boolean): Color {
-        if (blocked || status == "BLOCKED") return Theme.Danger
-        return when (status) {
-            "UML" -> Theme.Border
-            "APPLIED" -> Theme.Success
-            "PARTIAL" -> Theme.Warning
-            "REVIEWED" -> Theme.Accent
-            "EXECUTED" -> Theme.Accent
-            "PLANNED" -> Theme.Warning
-            else -> if (ready) Theme.Success else Theme.Border
+    private fun borderFor(node: NodeView): Color {
+        if (node.blocked || node.status == "BLOCKED") return Theme.Danger
+        return when (node.origin) {
+            NodeOrigin.CODE -> Theme.Accent
+            NodeOrigin.PROPOSED_UML -> Theme.Warning
+            NodeOrigin.WORKFLOW -> when (node.status) {
+                "APPLIED" -> Theme.Success
+                "PARTIAL" -> Theme.Warning
+                "REVIEWED" -> Theme.Accent
+                "EXECUTED" -> Theme.Accent
+                "PLANNED" -> Theme.Warning
+                else -> if (node.ready) Theme.Success else Theme.Border
+            }
         }
     }
+
+    private fun badgeFill(node: NodeView): Color =
+        when {
+            node.blocked || node.status == "BLOCKED" -> Theme.Danger
+            node.origin == NodeOrigin.CODE -> Theme.AccentSurface
+            node.origin == NodeOrigin.PROPOSED_UML -> Theme.WarningSurface
+            node.status == "APPLIED" -> Theme.SuccessSurface
+            node.status == "PLANNED" || node.status == "PARTIAL" -> Theme.WarningSurface
+            else -> Theme.SurfaceSoft
+        }
+
+    private fun badgeText(node: NodeView): Color =
+        when {
+            node.blocked || node.status == "BLOCKED" -> Theme.TextStrong
+            node.origin == NodeOrigin.CODE -> Theme.Accent
+            node.origin == NodeOrigin.PROPOSED_UML -> Theme.Warning
+            else -> Theme.TextStrong
+        }
+
+    private fun NodeView.metadataLine(): String =
+        when (origin) {
+            NodeOrigin.CODE -> listOf(kind.ifBlank { "code" }, source).filter { it.isNotBlank() }.joinToString("  ")
+            NodeOrigin.PROPOSED_UML -> listOf(kind.ifBlank { "UML proposal" }, "editable").joinToString("  ")
+            NodeOrigin.WORKFLOW -> listOf(kind.ifBlank { "workflow" }, id.take(8)).joinToString("  ")
+        }
+
+    private fun NodeOrigin.label(): String =
+        when (this) {
+            NodeOrigin.CODE -> "Current code"
+            NodeOrigin.PROPOSED_UML -> "Proposed UML"
+            NodeOrigin.WORKFLOW -> "Implementation workflow"
+        }
+
+    private fun String.ellipsize(max: Int): String =
+        if (length <= max) this else take((max - 3).coerceAtLeast(0)) + "..."
 
     private fun escape(text: String): String =
         buildString {
