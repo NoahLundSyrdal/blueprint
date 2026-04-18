@@ -46,6 +46,8 @@ import javax.swing.JTabbedPane
 import javax.swing.JTable
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
+import javax.swing.event.DocumentEvent
+import javax.swing.event.DocumentListener
 import javax.swing.table.DefaultTableModel
 
 private enum class NodeFilter {
@@ -195,8 +197,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             logActivity("Mode changed to ${providerText()}")
         }
     }
+    private var selectedCanvasId: String? = null
 
     init {
+        umlEditor.document.addDocumentListener(object : DocumentListener {
+            override fun insertUpdate(e: DocumentEvent) = refreshCanvasFromUml()
+            override fun removeUpdate(e: DocumentEvent) = refreshCanvasFromUml()
+            override fun changedUpdate(e: DocumentEvent) = refreshCanvasFromUml()
+        })
         buildUi()
         registry.addListener(object : NodeRegistry.Listener {
             override fun changed() = SwingUtilities.invokeLater { refreshList() }
@@ -280,6 +288,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val secondaryTabs = JTabbedPane().apply {
+            addTab("UML Source", JBScrollPane(umlEditor))
             addTab("Node Details", JBScrollPane(form))
             addTab("Review / Safety", summary)
             addTab("Plan JSON", JBScrollPane(planArea))
@@ -294,11 +303,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(secondaryTabs, BorderLayout.CENTER)
         }
 
-        val umlPanel = JPanel(BorderLayout(6, 6)).apply {
-            border = BorderFactory.createTitledBorder("Editable UML")
+        val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
+            border = BorderFactory.createTitledBorder("UML Canvas")
             add(JPanel(BorderLayout()).apply {
                 add(JPanel(GridLayout(0, 1, 2, 2)).apply {
-                    add(JLabel("Abstract the current codebase into UML, refine the design, then create reviewable code nodes.").apply {
+                    add(JLabel("Blueprint").apply {
+                        font = font.deriveFont(java.awt.Font.BOLD, 15f)
+                    })
+                    add(JLabel("Codebase -> UML -> chat refinement -> code nodes -> apply -> UML again").apply {
                         foreground = Color(0x333333)
                     })
                     add(umlStatusLabel.apply { foreground = Color(0x555555) })
@@ -308,27 +320,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(JButton("Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
                 }, BorderLayout.EAST)
             }, BorderLayout.NORTH)
-            add(JBScrollPane(umlEditor), BorderLayout.CENTER)
-        }
-
-        val nodeGraphPanel = JPanel(BorderLayout(6, 6)).apply {
-            border = BorderFactory.createTitledBorder("Generated Code Nodes")
-            add(JLabel("After Create Code Nodes, click a card to plan, execute, review, and apply.").apply {
-                foreground = Color(0x555555)
-                border = BorderFactory.createEmptyBorder(2, 6, 2, 6)
-            }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph), BorderLayout.CENTER)
         }
 
-        val diagramPanel = JSplitPane(JSplitPane.VERTICAL_SPLIT, umlPanel, nodeGraphPanel).apply {
-            dividerLocation = 250
-            resizeWeight = 0.62
-            isContinuousLayout = true
-        }
-
         val mainCanvas = JSplitPane(JSplitPane.VERTICAL_SPLIT, diagramPanel, lowerWorkspace).apply {
-            dividerLocation = 390
-            resizeWeight = 0.66
+            dividerLocation = 520
+            resizeWeight = 0.76
             isContinuousLayout = true
         }
 
@@ -1365,7 +1362,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun selectNodeFromGraph(id: String) {
-        val node = registry.find(id) ?: return
+        val node = registry.find(id)
+        if (node == null) {
+            selectedCanvasId = id
+            updateMiniGraph(project.service<DependencyGraphService>().analyze())
+            status("Selected UML entity: $id")
+            appendChat("Blueprint", "$id selected on the UML canvas. Ask me to refine it, or edit the UML source directly.")
+            return
+        }
+        selectedCanvasId = id
         if (!matchesFilter(node)) {
             filterCombo.selectedItem = NodeFilter.ALL
         }
@@ -1375,6 +1380,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         status("Selected from graph: ${node.title.ifBlank { node.id.take(8) }}")
         appendChat("Blueprint", "${node.title.ifBlank { node.id.take(8) }} selected from the diagram. Ask 'what next?' or 'why blocked?'.")
         logActivity("Graph selected ${node.title.ifBlank { node.id.take(8) }} (${node.id.take(8)}).")
+    }
+
+    private fun refreshCanvasFromUml() {
+        SwingUtilities.invokeLater {
+            updateMiniGraph(project.service<DependencyGraphService>().analyze())
+        }
     }
 
     private fun loadSelectedIntoForm() {
@@ -1478,6 +1489,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun updateMiniGraph(report: DependencyGraphService.GraphReport) {
         val selectedId = nodeList.selectedValue?.id
+        val umlViews = umlCanvasViews(selectedId)
+        if (umlViews.isNotEmpty()) {
+            miniGraph.setGraph(umlViews)
+            return
+        }
         val views = registry.all().map { node ->
             val readiness = report.readiness[node.id]
             MiniGraphPanel.NodeView(
@@ -1493,6 +1509,35 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             )
         }
         miniGraph.setGraph(views)
+    }
+
+    private fun umlCanvasViews(selectedNodeId: String?): List<MiniGraphPanel.NodeView> {
+        val parsed = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
+            ?: return emptyList()
+        if (parsed.entities.isEmpty()) return emptyList()
+        val entityNames = parsed.entities.map { it.name }.toSet()
+        val dependenciesByEntity = parsed.relationships
+            .filter { it.from in entityNames && it.to in entityNames }
+            .groupBy({ it.to }, { it.from })
+        return parsed.entities.mapIndexed { index, entity ->
+            MiniGraphPanel.NodeView(
+                id = entity.name,
+                title = entity.name,
+                status = "UML",
+                wave = index % 3 + 1,
+                dependencies = dependenciesByEntity[entity.name].orEmpty().distinct(),
+                selected = selectedCanvasId == entity.name || selectedNodeId == entity.name,
+                ready = true,
+                blocked = false,
+                detail = buildString {
+                    append("Editable UML entity")
+                    if (entity.fields.isNotEmpty()) {
+                        append("\n")
+                        append(entity.fields.take(8).joinToString("\n") { "- $it" })
+                    }
+                },
+            )
+        }
     }
 
     private fun graphNodeDetail(

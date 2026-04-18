@@ -41,7 +41,7 @@ class MiniGraphPanel : JPanel() {
     init {
         preferredSize = Dimension(900, 420)
         minimumSize = Dimension(520, 300)
-        background = Color(0xFAFAFA)
+        background = Color.WHITE
         toolTipText = ""
         addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
@@ -89,10 +89,11 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun paintGraph(g: Graphics2D) {
+        paintDotGrid(g)
         if (nodes.isEmpty()) {
             g.color = Color(0x777777)
             g.font = font.deriveFont(Font.PLAIN, 13f)
-            g.drawString("No graph yet. Click Generate UML or Seed: UML Invite Flow.", 18, 32)
+            g.drawString("Click Abstract Code to UML to draw this project as architecture.", 24, 38)
             cards = emptyMap()
             return
         }
@@ -148,9 +149,29 @@ class MiniGraphPanel : JPanel() {
             g.font = font.deriveFont(Font.PLAIN, 11f)
             g.color = Color(0x333333)
             g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 12).toInt(), (card.y + 45).toInt())
+
+            g.color = Color(0x222222)
+            g.drawOval((card.x + card.width - 28).toInt(), (card.y + 10).toInt(), 16, 16)
+            val px = (card.x + card.width - 22).toInt()
+            val py = (card.y + 14).toInt()
+            g.fillPolygon(intArrayOf(px, px, px + 7), intArrayOf(py, py + 8, py + 4), 3)
         }
 
         cards = localCards
+    }
+
+    private fun paintDotGrid(g: Graphics2D) {
+        g.color = Color(0xE1E1E1)
+        val step = 28
+        var y = 18
+        while (y < height) {
+            var x = 18
+            while (x < width) {
+                g.fillOval(x, y, 3, 3)
+                x += step
+            }
+            y += step
+        }
     }
 
     private fun nodeAt(point: Point): NodeView? {
@@ -161,6 +182,7 @@ class MiniGraphPanel : JPanel() {
     private fun colorFor(status: String, ready: Boolean, blocked: Boolean): Color {
         if (blocked || status == "BLOCKED") return Color(0xFFE2D6)
         return when (status) {
+            "UML" -> Color.WHITE
             "APPLIED" -> Color(0xD6F4E2)
             "REVIEWED" -> Color(0xE3EDFF)
             "EXECUTED" -> Color(0xEEF3FF)
@@ -173,6 +195,7 @@ class MiniGraphPanel : JPanel() {
     private fun borderFor(status: String, ready: Boolean, blocked: Boolean): Color {
         if (blocked || status == "BLOCKED") return Color(0xD56B45)
         return when (status) {
+            "UML" -> Color(0x202124)
             "APPLIED" -> Color(0x2E7D32)
             "PARTIAL" -> Color(0xC77800)
             "REVIEWED" -> Color(0x557BD8)
