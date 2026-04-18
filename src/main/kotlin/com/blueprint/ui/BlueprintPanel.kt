@@ -2319,6 +2319,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 kind = node.type.name.lowercase(),
                 source = node.fileScope.paths.firstOrNull().orEmpty(),
                 preview = readiness?.let { if (it.ready) "ready to run" else it.reasons.firstOrNull().orEmpty() }.orEmpty(),
+                relationshipHint = if (node.dependencies.isEmpty()) "" else "depends on ${node.dependencies.size} node(s)",
             )
         }
         miniGraph.setGraph(views)
@@ -2353,10 +2354,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             ?: return emptyList()
         if (parsed.entities.isEmpty()) return emptyList()
         val entityNames = parsed.entities.map { it.name }.toSet()
-        val dependenciesByEntity = parsed.relationships
+        val relationshipsByEntity = parsed.relationships
             .filter { it.from in entityNames && it.to in entityNames }
-            .groupBy({ it.to }, { it.from })
+        val dependenciesByEntity = relationshipsByEntity.groupBy({ it.to }, { it.from })
         return parsed.entities.mapIndexed { index, entity ->
+            val fieldLines = entity.fields.filterNot { it.contains("(") && it.contains(")") }
+            val methodLines = entity.fields.filter { it.contains("(") && it.contains(")") }
+            val relationshipHint = relationshipsByEntity
+                .filter { it.from == entity.name || it.to == entity.name }
+                .map { rel -> rel.label.ifBlank { "relates to" } }
+                .distinct()
+                .let { labels ->
+                    if (labels.isEmpty()) "" else "edges: ${relationshipsByEntity.count { it.to == entity.name }} in / ${relationshipsByEntity.count { it.from == entity.name }} out · " +
+                        labels.take(2).joinToString(", ") + if (labels.size > 2) ", +${labels.size - 2}" else ""
+                }
             MiniGraphPanel.NodeView(
                 id = entity.name,
                 title = entity.name,
@@ -2376,6 +2387,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 origin = MiniGraphPanel.NodeOrigin.PROPOSED_UML,
                 kind = "UML entity",
                 preview = entity.fields.take(3).joinToString(", ").ifBlank { "no fields yet" },
+                fields = fieldLines.take(3),
+                fieldOverflowCount = (fieldLines.size - 3).coerceAtLeast(0),
+                methods = methodLines.take(2),
+                methodOverflowCount = (methodLines.size - 2).coerceAtLeast(0),
+                relationshipHint = relationshipHint,
             )
         }
     }

@@ -3,7 +3,11 @@ package com.blueprint.ui
 import com.blueprint.ir.ArchitectureIR
 import com.blueprint.ir.Component
 import com.blueprint.ir.ComponentKind
+import com.blueprint.ir.Edge
+import com.blueprint.ir.EdgeKind
 import com.blueprint.ir.EdgeTargetKind
+import com.blueprint.ir.Field
+import com.blueprint.ir.Operation
 
 /**
  * Pure projection from the recovered architecture IR into the canvas model.
@@ -26,11 +30,14 @@ object CodeMapProjection {
         if (ir.components.isEmpty()) return emptyList()
 
         val componentsById = ir.components.associateBy { it.id }
-        val dependenciesById = ir.edges
+        val componentEdges = ir.edges
             .filter { it.toKind == EdgeTargetKind.COMPONENT }
             .filter { it.from in componentsById && it.to in componentsById }
+        val dependenciesById = componentEdges
             .groupBy({ it.to }, { it.from })
             .mapValues { (_, deps) -> deps.distinct() }
+        val outgoingEdgesById = componentEdges.groupBy { it.from }
+        val incomingEdgesById = componentEdges.groupBy { it.to }
 
         val waveMemo = mutableMapOf<String, Int>()
         fun waveOf(id: String, visiting: Set<String> = emptySet()): Int {
@@ -64,6 +71,14 @@ object CodeMapProjection {
                     kind = component.kind.codeMapLabel(),
                     source = component.primarySource(),
                     preview = previewFor(component),
+                    fields = component.fields.take(3).map { it.cardLabel() },
+                    fieldOverflowCount = (component.fields.size - 3).coerceAtLeast(0),
+                    methods = component.operations.take(2).map { it.cardLabel() },
+                    methodOverflowCount = (component.operations.size - 2).coerceAtLeast(0),
+                    relationshipHint = relationshipHintFor(
+                        incoming = incomingEdgesById[component.id].orEmpty(),
+                        outgoing = outgoingEdgesById[component.id].orEmpty(),
+                    ),
                 )
             }
     }
@@ -97,8 +112,42 @@ object CodeMapProjection {
     }
 
     private fun Component.primarySource(): String =
-        ownership.files.firstOrNull() ?: sourceRef?.path.orEmpty()
+        sourceRef?.let { ref -> ref.line?.let { "${ref.path}:$it" } ?: ref.path }
+            ?: ownership.files.firstOrNull()
+            .orEmpty()
+
+    private fun Field.cardLabel(): String =
+        buildString {
+            append(name)
+            val typeId = type.id.takeIf { it.isNotBlank() && it != "Any" } ?: return@buildString
+            append(": ")
+            append(typeId)
+        }
+
+    private fun Operation.cardLabel(): String =
+        buildString {
+            append(name)
+            append("()")
+        }
+
+    private fun relationshipHintFor(
+        incoming: List<Edge>,
+        outgoing: List<Edge>,
+    ): String {
+        if (incoming.isEmpty() && outgoing.isEmpty()) return ""
+        val hints = (outgoing + incoming)
+            .map { edge -> edge.label.ifBlank { edge.kind.codeMapLabel() } }
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+        val counts = "edges: ${incoming.size} in / ${outgoing.size} out"
+        val labels = if (hints.isEmpty()) "" else hints.take(2).joinToString(", ") + if (hints.size > 2) ", +${hints.size - 2}" else ""
+        return listOf(counts, labels).filter { it.isNotBlank() }.joinToString(" · ")
+    }
 
     private fun ComponentKind.codeMapLabel(): String =
+        name.lowercase().replace('_', ' ')
+
+    private fun EdgeKind.codeMapLabel(): String =
         name.lowercase().replace('_', ' ')
 }
