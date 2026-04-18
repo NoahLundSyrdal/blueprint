@@ -13,9 +13,8 @@ import java.nio.file.Paths
 /**
  * Recovers an ArchitectureIR from a Python project by walking .py files and
  * classifying classes / dataclasses / protocols into components, contracts,
- * and data types. v1 is regex-based; it preserves the existing hackathon
- * parser's latitude and adds decorator/import awareness, async detection,
- * and semantic classification.
+ * functions, and data types. Python's ast module is the primary parser; the
+ * old regex parser is retained only as a fallback when python is unavailable.
  */
 @Service(Service.Level.PROJECT)
 class PythonIRExtractor(private val project: Project) {
@@ -37,7 +36,13 @@ class PythonIRExtractor(private val project: Project) {
         return try {
             val context = project.service<PythonProjectAnalyzer>().analyze()
             val files = collectPythonFiles(base, context, maxDepth)
-            val parsed = preferGeneratedBlueprintClasses(files.flatMap { parseFile(base, it) }
+            val astParsed = PythonAstParser.parse(base, files)
+            val rawParsed = if (astParsed.usedAst) {
+                astParsed.symbols.map { it.toParsedClass() }
+            } else {
+                files.flatMap { parseFile(base, it) }
+            }
+            val parsed = preferGeneratedBlueprintClasses(rawParsed
                 .distinctBy { "${it.relPath}:${it.name}" }
             )
                 .sortedWith(compareBy<ParsedClass> { it.relPath }.thenBy { it.name })
@@ -51,7 +56,9 @@ class PythonIRExtractor(private val project: Project) {
 
             if (!context.isPythonLikely()) warnings += "Python project context is sparse; IR inferred from .py files only."
             if (files.isEmpty()) warnings += "No Python files were found in the current project."
-            if (parsed.isEmpty()) warnings += "No Python classes were found. Add a class or paste UML manually."
+            warnings += astParsed.warnings
+            if (!astParsed.usedAst) warnings += "Using legacy regex parser because AST extraction was not available."
+            if (parsed.isEmpty()) warnings += "No Python classes or module functions were found. Add code or paste UML manually."
 
             parsed.forEach { cls ->
                 val classified = classify(cls)
@@ -60,36 +67,7 @@ class PythonIRExtractor(private val project: Project) {
                 classified.dataType?.let { dataTypes += it }
             }
 
-            // Inheritance edges.
-            parsed.forEach { cls ->
-                cls.bases
-                    .filter { it in classNames && it != cls.name }
-                    .forEach { base ->
-                        edges += Edge(
-                            from = componentIdFor(cls),
-                            to = componentIdFor(base, parsed),
-                            toKind = EdgeTargetKind.COMPONENT,
-                            kind = EdgeKind.EXTENDS,
-                        )
-                    }
-            }
-            // Field-reference edges (contains / references).
-            parsed.forEach { cls ->
-                cls.fields.forEach { (fieldName, type) ->
-                    classNames
-                        .filter { other -> other != cls.name && type.referencesClass(other) }
-                        .forEach { other ->
-                            val label = if (fieldName.endsWith("s", ignoreCase = true)) EdgeKind.CONTAINS else EdgeKind.REFERENCES
-                            edges += Edge(
-                                from = componentIdFor(cls),
-                                to = componentIdFor(other, parsed),
-                                toKind = EdgeTargetKind.COMPONENT,
-                                kind = label,
-                                label = fieldName,
-                            )
-                        }
-                }
-            }
+            edges += recoverEdges(parsed, classNames)
 
             val ir = ArchitectureIR(
                 project = ProjectMeta(
@@ -132,6 +110,34 @@ class PythonIRExtractor(private val project: Project) {
         val ownership = Ownership(files = listOf(cls.relPath))
         val sourceRef = SourceRef(cls.relPath, cls.line)
         val componentId = componentIdFor(cls)
+
+        if (cls.symbolKind == ParsedSymbolKind.FUNCTION) {
+            val operation = cls.function?.toOperation()
+            val kind = when {
+                cls.relPath.contains("/tests/") || cls.relPath.startsWith("tests/") || cls.name.startsWith("test_") -> ComponentKind.TEST
+                decoratorNames.any { it.contains("click.command") || it.contains("click.group") || it.startsWith("cli.") } -> ComponentKind.CLI
+                decoratorNames.any { it.isRouteDecorator() } || cls.routePaths.isNotEmpty() -> ComponentKind.SERVICE
+                cls.name.endsWith("_job") || cls.name.endsWith("_task") || cls.name.endsWith("_worker") -> ComponentKind.JOB
+                else -> ComponentKind.SERVICE
+            }
+            val component = Component(
+                id = componentId,
+                name = cls.name,
+                kind = kind,
+                concurrency = concurrency,
+                ownership = ownership,
+                operations = listOfNotNull(operation),
+                requires = inferRequires(cls),
+                sourceRef = sourceRef,
+                description = buildString {
+                    append("Module function recovered from ${cls.relPath}")
+                    if (cls.routePaths.isNotEmpty()) append(" routes ${cls.routePaths.joinToString(", ")}")
+                },
+                opaqueAnnotations = collectOpaque(cls),
+                tags = setOf("function") + if (cls.routePaths.isNotEmpty()) setOf("route") else emptySet(),
+            )
+            return Classified(component, null, null)
+        }
 
         // Protocol / ABC → PORT + Contract(INTERFACE).
         val isProtocol = "Protocol" in baseSet || cls.bases.any { it.endsWith(".Protocol") }
@@ -202,6 +208,7 @@ class PythonIRExtractor(private val project: Project) {
         val kind = when {
             cls.relPath.contains("/tests/") || cls.relPath.startsWith("tests/") || cls.name.startsWith("Test") -> ComponentKind.TEST
             decoratorNames.any { it.contains("click.command") || it.contains("click.group") || it.startsWith("cli.") } -> ComponentKind.CLI
+            decoratorNames.any { it.isRouteDecorator() } || cls.routePaths.isNotEmpty() -> ComponentKind.SERVICE
             cls.name.endsWith("Registry") || cls.methods.any { it.name == "register" || it.name == "deregister" } -> ComponentKind.REGISTRY
             cls.name.endsWith("Adapter") || cls.name.endsWith("Client") ||
                 cls.name.endsWith("Repository") || cls.name.endsWith("Gateway") ||
@@ -234,11 +241,7 @@ class PythonIRExtractor(private val project: Project) {
     }
 
     private fun inferRequires(cls: ParsedClass): List<String> {
-        // v1: requires list is a best-effort. Constructor-injected typed params
-        // are captured as requires entries keyed by the type name. Wiring to
-        // real contract ids is up to IRToNodesCompiler when it resolves
-        // dependencies across components.
-        val init = cls.methods.firstOrNull { it.name == "__init__" } ?: return emptyList()
+        val init = cls.methods.firstOrNull { it.name == "__init__" } ?: cls.function ?: return emptyList()
         return init.params
             .filter { it.name != "self" }
             .mapNotNull { p ->
@@ -276,13 +279,24 @@ class PythonIRExtractor(private val project: Project) {
 
     private data class ParsedClass(
         val name: String,
+        val symbolKind: ParsedSymbolKind = ParsedSymbolKind.CLASS,
         val bases: List<String>,
         val relPath: String,
         val line: Int,
         val decorators: List<String>,
         val fields: LinkedHashMap<String, String> = linkedMapOf(),
         val methods: MutableList<ParsedMethod> = mutableListOf(),
+        val function: ParsedMethod? = null,
+        val imports: Set<String> = emptySet(),
+        val calls: Set<String> = emptySet(),
+        val references: Set<String> = emptySet(),
+        val routePaths: Set<String> = emptySet(),
     )
+
+    private enum class ParsedSymbolKind {
+        CLASS,
+        FUNCTION,
+    }
 
     private fun preferGeneratedBlueprintClasses(classes: List<ParsedClass>): List<ParsedClass> {
         val generatedClassNames = classes
@@ -353,6 +367,7 @@ class PythonIRExtractor(private val project: Project) {
                 classIndent = indentOf(header.groupValues[1])
                 current = ParsedClass(
                     name = header.groupValues[2],
+                    symbolKind = ParsedSymbolKind.CLASS,
                     bases = parseBases(header.groupValues.getOrElse(3) { "" }),
                     relPath = rel,
                     line = idx + 1,
@@ -478,6 +493,135 @@ class PythonIRExtractor(private val project: Project) {
 
     private fun String.referencesClass(className: String): Boolean =
         Regex("""\b${Regex.escape(className)}\b""").containsMatchIn(this)
+
+    private fun PythonAstParser.Symbol.toParsedClass(): ParsedClass {
+        val parsedMethods = methods.map { it.toParsedMethod() }.toMutableList()
+        val functionMethod = parsedMethods.firstOrNull()
+        return ParsedClass(
+            name = name,
+            symbolKind = if (symbolKind == "FUNCTION") ParsedSymbolKind.FUNCTION else ParsedSymbolKind.CLASS,
+            bases = bases.map { it.substringBefore("[").substringAfterLast(".") }.filter { it.isNotBlank() }.distinct(),
+            relPath = relPath,
+            line = line,
+            decorators = decorators.filter { it.isNotBlank() },
+            fields = fields.fold(linkedMapOf()) { acc, field ->
+                if (field.name.isNotBlank() && !field.name.startsWith("_") && field.name !in IGNORED_FIELDS) {
+                    acc.putIfAbsent(field.name, field.type.ifBlank { "Any" })
+                }
+                acc
+            },
+            methods = if (symbolKind == "FUNCTION") mutableListOf() else parsedMethods,
+            function = if (symbolKind == "FUNCTION") functionMethod else null,
+            imports = imports.filter { it.isNotBlank() }.toSet(),
+            calls = calls.filter { it.isNotBlank() }.toSet(),
+            references = references.filter { it.isNotBlank() }.toSet(),
+            routePaths = routePaths.filter { it.isNotBlank() }.toSet(),
+        )
+    }
+
+    private fun PythonAstParser.MethodDecl.toParsedMethod(): ParsedMethod =
+        ParsedMethod(
+            name = name,
+            async = async,
+            params = params.map { ParsedParam(it.name, it.type, it.default) },
+            returns = returns.ifBlank { "None" },
+            decorators = decorators,
+            line = line,
+        )
+
+    private fun recoverEdges(parsed: List<ParsedClass>, symbolNames: Set<String>): List<Edge> {
+        val edges = mutableListOf<Edge>()
+
+        fun targetId(name: String): String? {
+            val simple = name.substringBefore("[").substringAfterLast(".").trim()
+            if (simple.isBlank() || simple !in symbolNames) return null
+            val target = parsed.firstOrNull { it.name == simple } ?: return null
+            return componentIdFor(target)
+        }
+
+        fun addEdge(
+            source: ParsedClass,
+            targetName: String,
+            kind: EdgeKind,
+            label: String,
+            evidence: String,
+            confidence: Double,
+        ) {
+            val target = targetId(targetName) ?: return
+            val from = componentIdFor(source)
+            if (target == from) return
+            edges += Edge(
+                from = from,
+                to = target,
+                toKind = EdgeTargetKind.COMPONENT,
+                kind = kind,
+                label = label,
+                sourceRef = SourceRef(source.relPath, source.line),
+                evidence = evidence,
+                confidence = confidence,
+            )
+        }
+
+        parsed.forEach { cls ->
+            cls.bases.forEach { base ->
+                addEdge(cls, base, EdgeKind.EXTENDS, "extends", "base class: $base", 1.0)
+            }
+
+            cls.fields.forEach { (fieldName, type) ->
+                symbolNames
+                    .filter { other -> other != cls.name && type.referencesClass(other) }
+                    .forEach { other ->
+                        val kind = if (fieldName.endsWith("s", ignoreCase = true)) EdgeKind.CONTAINS else EdgeKind.REFERENCES
+                        addEdge(cls, other, kind, "$fieldName field", "field annotation/value: $fieldName -> $type", 0.95)
+                    }
+            }
+
+            val callable = cls.methods.firstOrNull { it.name == "__init__" } ?: cls.function
+            callable?.params.orEmpty()
+                .filter { it.name != "self" && it.name != "cls" }
+                .forEach { param ->
+                    addEdge(
+                        cls,
+                        param.type,
+                        EdgeKind.REFERENCES,
+                        "${param.name} constructor param",
+                        "typed parameter: ${param.name}: ${param.type}",
+                        0.9,
+                    )
+                }
+
+            cls.imports.forEach { imported ->
+                addEdge(cls, imported, EdgeKind.REFERENCES, "import", "imported symbol: $imported", 0.65)
+            }
+
+            cls.calls.forEach { call ->
+                val label = if (cls.isTestSymbol()) "tests" else "calls"
+                addEdge(cls, call, EdgeKind.CALLS, label, "call expression: $call", 0.8)
+            }
+
+            cls.references.forEach { ref ->
+                if (ref.firstOrNull()?.isUpperCase() == true) {
+                    addEdge(cls, ref, EdgeKind.REFERENCES, "references", "name reference: $ref", 0.6)
+                }
+            }
+        }
+
+        return edges
+            .groupBy { listOf(it.from, it.to, it.kind.name, it.label).joinToString("|") }
+            .values
+            .map { it.first() }
+    }
+
+    private fun ParsedClass.isTestSymbol(): Boolean =
+        relPath.startsWith("tests/") || relPath.contains("/tests/") || name.startsWith("Test") || name.startsWith("test_")
+
+    private fun String.isRouteDecorator(): Boolean =
+        contains(".route") ||
+            endsWith(".get") ||
+            endsWith(".post") ||
+            endsWith(".put") ||
+            endsWith(".delete") ||
+            endsWith(".patch")
 
     // ---------- filesystem ----------
 

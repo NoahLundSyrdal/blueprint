@@ -179,6 +179,9 @@ data class Edge(
     val toKind: EdgeTargetKind = EdgeTargetKind.COMPONENT,
     val kind: EdgeKind = EdgeKind.CALLS,
     val label: String = "",
+    val sourceRef: SourceRef? = null,
+    val evidence: String = "",
+    val confidence: Double = 1.0,
 )
 
 enum class EdgeKind {
