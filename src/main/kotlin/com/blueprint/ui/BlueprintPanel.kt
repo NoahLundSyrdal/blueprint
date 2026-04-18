@@ -28,30 +28,50 @@ import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import java.awt.BorderLayout
 import java.awt.Color
+import java.awt.Component
+import java.awt.Container
 import java.awt.Dimension
 import java.awt.FlowLayout
+import java.awt.Font
+import java.awt.Graphics
+import java.awt.Graphics2D
 import java.awt.GridLayout
 import java.awt.Insets
+import java.awt.RenderingHints
+import java.awt.event.FocusAdapter
+import java.awt.event.FocusEvent
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import javax.swing.AbstractButton
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
 import javax.swing.DefaultComboBoxModel
 import javax.swing.DefaultListModel
+import javax.swing.DefaultListCellRenderer
 import javax.swing.JButton
+import javax.swing.JCheckBox
 import javax.swing.JComboBox
+import javax.swing.JComponent
 import javax.swing.JLabel
+import javax.swing.JList
 import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JPasswordField
+import javax.swing.JScrollPane
 import javax.swing.JSplitPane
 import javax.swing.JTabbedPane
 import javax.swing.JTable
+import javax.swing.JTextArea
+import javax.swing.JTextField
 import javax.swing.ListSelectionModel
 import javax.swing.SwingUtilities
 import javax.swing.UIManager
+import javax.swing.border.AbstractBorder
+import javax.swing.border.Border
+import javax.swing.border.TitledBorder
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
+import javax.swing.plaf.basic.BasicButtonUI
 import javax.swing.table.DefaultTableModel
 
 private enum class NodeFilter {
@@ -64,6 +84,106 @@ private enum class NodeFilter {
 
 private data class DependencyChoice(val id: String, val label: String) {
     override fun toString(): String = label
+}
+
+private object BlueprintTheme {
+    val Background = Color(0x1E1E1E)
+    val Panel = Color(0x252526)
+    val Surface = Color(0x2A2A2A)
+    val SurfaceHover = Color(0x323337)
+    val SurfacePressed = Color(0x383A40)
+    val Border = Color(0x3C3C3C)
+    val BorderStrong = Color(0x4A4A4A)
+    val Text = Color(0xD4D4D4)
+    val TextStrong = Color(0xFFFFFF)
+    val Muted = Color(0x9DA3AF)
+    val Accent = Color(0x4FC1FF)
+    val AccentHover = Color(0x72CCFF)
+    val AccentPressed = Color(0x2EA7E0)
+    val AccentSurface = Color(0x102F42)
+    val Danger = Color(0xF48771)
+    val DangerSurface = Color(0x3D2420)
+    val Warning = Color(0xDCDCAA)
+    val WarningSurface = Color(0x3A331E)
+    val Success = Color(0x6A9955)
+    val SuccessSurface = Color(0x1F3826)
+    val PurpleSurface = Color(0x2B2842)
+
+    fun font(size: Float = 13f, style: Int = Font.PLAIN): Font =
+        (UIManager.getFont("Label.font") ?: Font("Dialog", Font.PLAIN, size.toInt())).deriveFont(style, size)
+}
+
+private class RoundedLineBorder(
+    private val color: Color,
+    private val radius: Int = 10,
+    private val padding: Insets = Insets(6, 8, 6, 8),
+) : AbstractBorder() {
+    override fun paintBorder(c: Component, g: Graphics, x: Int, y: Int, width: Int, height: Int) {
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = color
+            g2.drawRoundRect(x, y, width - 1, height - 1, radius, radius)
+        } finally {
+            g2.dispose()
+        }
+    }
+
+    override fun getBorderInsets(c: Component, insets: Insets): Insets {
+        insets.top = padding.top
+        insets.left = padding.left
+        insets.bottom = padding.bottom
+        insets.right = padding.right
+        return insets
+    }
+
+    override fun getBorderInsets(c: Component): Insets =
+        Insets(padding.top, padding.left, padding.bottom, padding.right)
+}
+
+private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
+    override fun installDefaults(button: AbstractButton) {
+        super.installDefaults(button)
+        button.isOpaque = false
+        button.isContentAreaFilled = false
+        button.isBorderPainted = false
+        button.isFocusPainted = false
+        button.isRolloverEnabled = true
+        button.margin = Insets(0, 0, 0, 0)
+        button.border = BorderFactory.createEmptyBorder(7, 12, 7, 12)
+        button.font = BlueprintTheme.font(13f, if (primary) Font.BOLD else Font.PLAIN)
+        button.foreground = if (primary) Color(0x061016) else BlueprintTheme.Text
+    }
+
+    override fun paint(g: Graphics, c: JComponent) {
+        val button = c as AbstractButton
+        val model = button.model
+        val fill = when {
+            primary && model.isPressed -> BlueprintTheme.AccentPressed
+            primary && model.isRollover -> BlueprintTheme.AccentHover
+            primary -> BlueprintTheme.Accent
+            model.isPressed -> BlueprintTheme.SurfacePressed
+            model.isRollover -> BlueprintTheme.SurfaceHover
+            else -> BlueprintTheme.Surface
+        }
+        val border = when {
+            primary -> BlueprintTheme.Accent
+            model.isRollover || button.hasFocus() -> BlueprintTheme.Accent
+            else -> BlueprintTheme.BorderStrong
+        }
+
+        val g2 = g.create() as Graphics2D
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+            g2.color = fill
+            g2.fillRoundRect(0, 0, c.width - 1, c.height - 1, 11, 11)
+            g2.color = border
+            g2.drawRoundRect(0, 0, c.width - 1, c.height - 1, 11, 11)
+        } finally {
+            g2.dispose()
+        }
+        super.paint(g, c)
+    }
 }
 
 /**
@@ -79,13 +199,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val listModel = DefaultListModel<BlueprintNode>()
     private val nodeList = JBList(listModel).apply {
         selectionMode = ListSelectionModel.SINGLE_SELECTION
-        fixedCellHeight = 30
+        fixedCellHeight = 36
         setCellRenderer { list, value, _, isSelected, _ ->
             JLabel("${statusChip(badgeFor(value))}  ${value.type.name.lowercase()}  ${value.title.ifBlank { "(untitled)" }}").apply {
                 isOpaque = true
-                border = BorderFactory.createEmptyBorder(4, 8, 4, 8)
-                background = if (isSelected) list.selectionBackground else statusTint(badgeFor(value))
-                foreground = if (isSelected) list.selectionForeground else list.foreground
+                border = BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, if (isSelected) 3 else 0, 1, 0, if (isSelected) BlueprintTheme.Accent else BlueprintTheme.Border),
+                    BorderFactory.createEmptyBorder(6, 8, 6, 8)
+                )
+                background = if (isSelected) BlueprintTheme.AccentSurface else statusTint(badgeFor(value))
+                foreground = if (isSelected) BlueprintTheme.TextStrong else list.foreground
+                font = BlueprintTheme.font(13f, if (isSelected) Font.BOLD else Font.PLAIN)
             }
         }
     }
@@ -103,8 +227,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             JLabel(dependencyLabel(value)).apply {
                 isOpaque = true
                 border = BorderFactory.createEmptyBorder(3, 6, 3, 6)
-                background = if (isSelected) list.selectionBackground else list.background
-                foreground = if (isSelected) list.selectionForeground else list.foreground
+                background = if (isSelected) BlueprintTheme.AccentSurface else list.background
+                foreground = if (isSelected) BlueprintTheme.TextStrong else list.foreground
+                font = BlueprintTheme.font(13f)
             }
         }
     }
@@ -151,6 +276,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val actionProviderLabel = JLabel(providerText())
     private val guideLabel = JLabel("Generate UML, change it with chat, then generate a code diff.")
     private val primaryActionButton = JButton("Generate Code Diff").apply {
+        putClientProperty("blueprint.primary", true)
         addActionListener { generateCodeDiffFromCurrentUml() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
@@ -162,30 +288,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         lineWrap = true
         wrapStyleWord = true
     }
-    private val chatHistory = JBTextArea(12, 46).apply {
-        isEditable = false
-        lineWrap = true
-        wrapStyleWord = true
-        font = UIManager.getFont("Label.font")?.deriveFont(13f) ?: font.deriveFont(13f)
-        margin = Insets(8, 8, 8, 8)
-        text = """
-            Blueprint chat
-
-            I help refine the UML before code generation.
-
-            Try:
-            - explain this UML
-            - add an InvitePolicy entity
-            - what should I generate next?
-
-            Live mode uses OpenAI. Use OPENAI_API_KEY or Set key.
-        """.trimIndent() + "\n"
+    private val chatMessages = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        background = BlueprintTheme.Background
+        border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
+    }
+    private val chatScrollPane = JBScrollPane(chatMessages).apply {
+        border = RoundedLineBorder(BlueprintTheme.Border)
+        viewport.background = BlueprintTheme.Background
+        verticalScrollBar.unitIncrement = 16
     }
     private val chatInput = JBTextArea(3, 46).apply {
         lineWrap = true
         wrapStyleWord = true
-        font = UIManager.getFont("Label.font")?.deriveFont(13f) ?: font.deriveFont(13f)
-        margin = Insets(6, 6, 6, 6)
+        font = BlueprintTheme.font(13f)
+        margin = Insets(8, 8, 8, 8)
     }
     private val umlStatusLabel = JLabel("UML: not generated yet")
     private val umlEditor = JBTextArea(18, 72).apply {
@@ -215,6 +332,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
     private var selectedCanvasId: String? = null
+    private var openAIKeySetMessageShown = false
 
     init {
         umlEditor.document.addDocumentListener(object : DocumentListener {
@@ -223,11 +341,202 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             override fun changedUpdate(e: DocumentEvent) = refreshCanvasFromUml()
         })
         buildUi()
+        seedInitialChat()
         registry.addListener(object : NodeRegistry.Listener {
             override fun changed() = SwingUtilities.invokeLater { refreshList() }
         })
         refreshList()
         logActivity("Blueprint ready. Seed UML Invite Flow, keep mock mode on, then run the first ready node.")
+    }
+
+    private fun applyDarkTheme(component: Component) {
+        when (component) {
+            is JCheckBox -> styleCheckBox(component)
+            is AbstractButton -> styleButton(component)
+            is JPanel -> stylePanel(component)
+            is JLabel -> styleLabel(component)
+            is JTextArea -> styleTextArea(component)
+            is JTextField -> styleTextField(component)
+            is JComboBox<*> -> styleComboBox(component)
+            is JBList<*> -> styleList(component)
+            is JTable -> styleTable(component)
+            is JTabbedPane -> styleTabs(component)
+            is JSplitPane -> styleSplitPane(component)
+            is JScrollPane -> styleScrollPane(component)
+        }
+        if (component is Container) {
+            component.components.forEach { applyDarkTheme(it) }
+        }
+    }
+
+    private fun stylePanel(panel: JPanel) {
+        panel.isOpaque = true
+        panel.background = if (panel === this) BlueprintTheme.Background else BlueprintTheme.Panel
+        val titled = panel.border as? TitledBorder
+        if (titled != null) {
+            panel.background = BlueprintTheme.Surface
+            panel.border = titledBorder(titled.title)
+        }
+    }
+
+    private fun styleLabel(label: JLabel) {
+        val isHeading = label.font?.isBold == true && (label.font?.size ?: 0) >= 15
+        label.foreground = if (isHeading) BlueprintTheme.TextStrong else BlueprintTheme.Muted
+        label.font = if (isHeading) {
+            BlueprintTheme.font(15f, Font.BOLD)
+        } else {
+            BlueprintTheme.font(11f)
+        }
+    }
+
+    private fun styleButton(button: AbstractButton) {
+        val text = button.text.orEmpty()
+        val primary = button.getClientProperty("blueprint.primary") == true ||
+            text.startsWith("Next:") ||
+            text.contains("Create Code Nodes") ||
+            text == "Send"
+        button.setUI(BlueprintButtonUi(primary))
+        button.foreground = if (primary) Color(0x061016) else BlueprintTheme.Text
+    }
+
+    private fun styleCheckBox(checkBox: JCheckBox) {
+        checkBox.isOpaque = false
+        checkBox.foreground = BlueprintTheme.Text
+        checkBox.font = BlueprintTheme.font(13f)
+        checkBox.isFocusPainted = false
+    }
+
+    private fun styleTextArea(area: JTextArea) {
+        area.background = if (area.isEditable) BlueprintTheme.Background else BlueprintTheme.Surface
+        area.foreground = BlueprintTheme.Text
+        area.caretColor = BlueprintTheme.Accent
+        area.selectionColor = BlueprintTheme.AccentSurface
+        area.selectedTextColor = BlueprintTheme.TextStrong
+        area.font = BlueprintTheme.font(13f)
+        area.border = inputBorder(area.hasFocus())
+        area.margin = Insets(6, 8, 6, 8)
+        installFocusBorder(area)
+    }
+
+    private fun styleTextField(field: JTextField) {
+        field.background = BlueprintTheme.Background
+        field.foreground = BlueprintTheme.Text
+        field.caretColor = BlueprintTheme.Accent
+        field.selectionColor = BlueprintTheme.AccentSurface
+        field.selectedTextColor = BlueprintTheme.TextStrong
+        field.font = BlueprintTheme.font(13f)
+        field.border = inputBorder(field.hasFocus())
+        installFocusBorder(field)
+    }
+
+    private fun styleComboBox(combo: JComboBox<*>) {
+        combo.background = BlueprintTheme.Background
+        combo.foreground = BlueprintTheme.Text
+        combo.font = BlueprintTheme.font(13f)
+        combo.border = inputBorder(combo.hasFocus())
+        installFocusBorder(combo)
+        @Suppress("UNCHECKED_CAST")
+        (combo as JComboBox<Any?>).renderer = object : DefaultListCellRenderer() {
+            override fun getListCellRendererComponent(
+                list: JList<*>?,
+                value: Any?,
+                index: Int,
+                isSelected: Boolean,
+                cellHasFocus: Boolean,
+            ): Component {
+                val label = super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus) as JLabel
+                label.background = if (isSelected) BlueprintTheme.AccentSurface else BlueprintTheme.Background
+                label.foreground = if (isSelected) BlueprintTheme.TextStrong else BlueprintTheme.Text
+                label.font = BlueprintTheme.font(13f)
+                label.border = BorderFactory.createEmptyBorder(4, 8, 4, 8)
+                return label
+            }
+        }
+    }
+
+    private fun styleList(list: JBList<*>) {
+        list.background = BlueprintTheme.Background
+        list.foreground = BlueprintTheme.Text
+        list.selectionBackground = BlueprintTheme.AccentSurface
+        list.selectionForeground = BlueprintTheme.TextStrong
+        list.font = BlueprintTheme.font(13f)
+        list.border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+    }
+
+    private fun styleTable(table: JTable) {
+        table.background = BlueprintTheme.Background
+        table.foreground = BlueprintTheme.Text
+        table.selectionBackground = BlueprintTheme.AccentSurface
+        table.selectionForeground = BlueprintTheme.TextStrong
+        table.gridColor = BlueprintTheme.Border
+        table.rowHeight = 28
+        table.font = BlueprintTheme.font(13f)
+        table.border = BorderFactory.createLineBorder(BlueprintTheme.Border)
+        table.tableHeader?.apply {
+            background = BlueprintTheme.Surface
+            foreground = BlueprintTheme.TextStrong
+            font = BlueprintTheme.font(11f, Font.BOLD)
+            border = BorderFactory.createMatteBorder(0, 0, 1, 0, BlueprintTheme.Border)
+        }
+    }
+
+    private fun styleTabs(tabs: JTabbedPane) {
+        tabs.background = BlueprintTheme.Background
+        tabs.foreground = BlueprintTheme.Text
+        tabs.font = BlueprintTheme.font(13f)
+        tabs.border = BorderFactory.createMatteBorder(1, 0, 0, 0, BlueprintTheme.Border)
+        if (tabs.getClientProperty("blueprint.tabStyle") != true) {
+            tabs.putClientProperty("blueprint.tabStyle", true)
+            tabs.addChangeListener { styleTabs(tabs) }
+        }
+        for (i in 0 until tabs.tabCount) {
+            tabs.setBackgroundAt(i, if (i == tabs.selectedIndex) BlueprintTheme.Surface else BlueprintTheme.Background)
+            tabs.setForegroundAt(i, if (i == tabs.selectedIndex) BlueprintTheme.Accent else BlueprintTheme.Muted)
+        }
+    }
+
+    private fun styleSplitPane(splitPane: JSplitPane) {
+        splitPane.background = BlueprintTheme.Background
+        splitPane.border = BorderFactory.createLineBorder(BlueprintTheme.Border)
+        splitPane.dividerSize = 8
+    }
+
+    private fun styleScrollPane(scrollPane: JScrollPane) {
+        scrollPane.border = RoundedLineBorder(BlueprintTheme.Border)
+        scrollPane.background = BlueprintTheme.Background
+        scrollPane.viewport.background = BlueprintTheme.Background
+        scrollPane.verticalScrollBar.background = BlueprintTheme.Background
+        scrollPane.horizontalScrollBar.background = BlueprintTheme.Background
+    }
+
+    private fun titledBorder(title: String): Border {
+        val titled = BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(BlueprintTheme.Border),
+            title,
+        )
+        titled.titleColor = BlueprintTheme.TextStrong
+        titled.titleFont = BlueprintTheme.font(15f, Font.BOLD)
+        return BorderFactory.createCompoundBorder(
+            titled,
+            BorderFactory.createEmptyBorder(8, 8, 8, 8),
+        )
+    }
+
+    private fun inputBorder(focused: Boolean): Border =
+        RoundedLineBorder(if (focused) BlueprintTheme.Accent else BlueprintTheme.Border, 8, Insets(6, 8, 6, 8))
+
+    private fun installFocusBorder(component: JComponent) {
+        if (component.getClientProperty("blueprint.focusBorder") == true) return
+        component.putClientProperty("blueprint.focusBorder", true)
+        component.addFocusListener(object : FocusAdapter() {
+            override fun focusGained(e: FocusEvent) {
+                component.border = inputBorder(true)
+            }
+
+            override fun focusLost(e: FocusEvent) {
+                component.border = inputBorder(false)
+            }
+        })
     }
 
     private fun buildUi() {
@@ -366,6 +675,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         add(headerPanel(), BorderLayout.NORTH)
         add(workspace, BorderLayout.CENTER)
         add(statusLabel, BorderLayout.SOUTH)
+        applyDarkTheme(this)
         SwingUtilities.invokeLater {
             workspace.setDividerLocation((workspace.width - 560).coerceAtLeast(520))
             mainCanvas.setDividerLocation((mainCanvas.height - 380).coerceAtLeast(360))
@@ -412,7 +722,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             preferredSize = Dimension(560, 0)
             minimumSize = Dimension(460, 0)
             border = BorderFactory.createTitledBorder("Architecture Chat")
-            add(JBScrollPane(chatHistory), BorderLayout.CENTER)
+            add(chatScrollPane, BorderLayout.CENTER)
             add(JPanel(BorderLayout(4, 4)).apply {
                 add(JPanel(GridLayout(0, 2, 4, 4)).apply {
                     border = BorderFactory.createEmptyBorder(0, 0, 4, 0)
@@ -448,6 +758,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             )
             add(keyField, BorderLayout.CENTER)
         }
+        applyDarkTheme(panel)
         val choice = JOptionPane.showConfirmDialog(
             this,
             panel,
@@ -464,8 +775,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         codex.setOpenAIKeyOverride(key)
         refreshProviderLabels()
-        if (!chatHistory.text.contains("OpenAI key set for this session.")) {
+        if (!openAIKeySetMessageShown) {
             appendChat("Blueprint", "OpenAI key set for this session. Live chat will use OpenAI unless Offline mock demo is enabled.")
+            openAIKeySetMessageShown = true
         }
         logActivity("OpenAI key set for this session.")
         status("OpenAI key set")
@@ -611,9 +923,67 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         sendChat()
     }
 
+    private fun seedInitialChat() {
+        appendChat(
+            "Blueprint",
+            """
+            I help refine the UML before code generation.
+
+            Try:
+            - explain this UML
+            - add an InvitePolicy entity
+            - what should I generate next?
+
+            Live mode uses OpenAI. Use OPENAI_API_KEY or Set key.
+            """.trimIndent()
+        )
+    }
+
     private fun appendChat(author: String, message: String) {
-        chatHistory.append("\n$author: $message\n")
-        chatHistory.caretPosition = chatHistory.document.length
+        val isUser = author.equals("You", ignoreCase = true)
+        val bubbleColor = if (isUser) BlueprintTheme.AccentSurface else BlueprintTheme.Surface
+        val borderColor = if (isUser) BlueprintTheme.Accent else BlueprintTheme.Border
+        val labelColor = if (isUser) BlueprintTheme.Accent else BlueprintTheme.Muted
+        val displayName = if (isUser) "You" else "Blueprint"
+
+        val bubble = JPanel(BorderLayout(0, 5)).apply {
+            isOpaque = true
+            background = bubbleColor
+            border = BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(borderColor, 1, true),
+                BorderFactory.createEmptyBorder(8, 10, 8, 10)
+            )
+            add(JLabel(displayName).apply {
+                foreground = labelColor
+                font = BlueprintTheme.font(11f, Font.BOLD)
+            }, BorderLayout.NORTH)
+            add(JBTextArea().apply {
+                text = message
+                columns = 34
+                isEditable = false
+                isFocusable = false
+                lineWrap = true
+                wrapStyleWord = true
+                isOpaque = true
+                background = bubbleColor
+                foreground = BlueprintTheme.Text
+                border = BorderFactory.createEmptyBorder()
+                font = BlueprintTheme.font(13f)
+            }, BorderLayout.CENTER)
+        }
+
+        val row = JPanel(BorderLayout()).apply {
+            isOpaque = false
+            border = BorderFactory.createEmptyBorder(4, 0, 4, 0)
+            add(bubble, if (isUser) BorderLayout.EAST else BorderLayout.WEST)
+        }
+        row.maximumSize = Dimension(Int.MAX_VALUE, row.preferredSize.height)
+        chatMessages.add(row)
+        chatMessages.revalidate()
+        chatMessages.repaint()
+        SwingUtilities.invokeLater {
+            chatScrollPane.verticalScrollBar.value = chatScrollPane.verticalScrollBar.maximum
+        }
     }
 
     private fun chatResponse(message: String): String {
@@ -862,6 +1232,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             )
             add(JBScrollPane(input).apply { preferredSize = Dimension(760, 420) }, BorderLayout.CENTER)
         }
+        applyDarkTheme(panel)
         val choice = JOptionPane.showConfirmDialog(
             this,
             panel,
@@ -1793,11 +2164,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             readiness.reasons.joinToString("\n") { "- $it" }
         }
         safetyArea.foreground = if (safetyArea.text.startsWith("-") || safetyArea.text.contains("BLOCKED") || safetyArea.text.contains("PARTIAL")) {
-            Color(160, 70, 20)
+            BlueprintTheme.Warning
         } else {
-            Color(60, 110, 70)
+            BlueprintTheme.Success
         }
-        dependencyBlockArea.foreground = if (readiness.reasons.isEmpty()) Color(60, 110, 70) else Color(160, 70, 20)
+        dependencyBlockArea.foreground = if (readiness.reasons.isEmpty()) BlueprintTheme.Success else BlueprintTheme.Warning
         graphArea.text = buildString {
             append("Selected readiness: ")
             append(if (readiness.ready) "READY" else "BLOCKED")
@@ -1959,13 +2330,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun statusTint(status: String): Color =
         when (status) {
-            "APPLIED" -> Color(0xE7F6ED)
-            "REVIEWED" -> Color(0xEAF1FF)
-            "EXECUTED" -> Color(0xF1F5FF)
-            "PLANNED" -> Color(0xFFF8E6)
-            "BLOCKED" -> Color(0xFFE8E0)
-            "PARTIAL" -> Color(0xFFF0D6)
-            else -> Color(0xF7F7F7)
+            "APPLIED" -> BlueprintTheme.SuccessSurface
+            "REVIEWED" -> BlueprintTheme.PurpleSurface
+            "EXECUTED" -> BlueprintTheme.AccentSurface
+            "PLANNED" -> BlueprintTheme.WarningSurface
+            "BLOCKED" -> BlueprintTheme.DangerSurface
+            "PARTIAL" -> BlueprintTheme.WarningSurface
+            else -> BlueprintTheme.Surface
         }
 
     private fun statusChip(status: String): String =
@@ -1982,9 +2353,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun providerColor(): Color =
         when {
-            codex.providerMode() == "mock" -> Color(0x2E7D32)
-            codex.providerMode() == "openai" && !codex.hasOpenAIKey() -> Color(0xB3261E)
-            else -> Color(0x5F6368)
+            codex.providerMode() == "mock" -> BlueprintTheme.Success
+            codex.providerMode() == "openai" && !codex.hasOpenAIKey() -> BlueprintTheme.Danger
+            else -> BlueprintTheme.Accent
         }
 
     private fun changedFileSummary(exec: com.blueprint.model.ExecutionArtifact?): String {

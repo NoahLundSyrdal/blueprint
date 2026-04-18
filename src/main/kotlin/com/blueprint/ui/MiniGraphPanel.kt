@@ -21,6 +21,24 @@ import javax.swing.JPanel
  * here.
  */
 class MiniGraphPanel : JPanel() {
+    private object Theme {
+        val Background = Color(0x1E1E1E)
+        val Dot = Color(0x2B2B2B)
+        val Surface = Color(0x252526)
+        val SurfaceSoft = Color(0x2A2A2A)
+        val Border = Color(0x3C3C3C)
+        val TextStrong = Color(0xFFFFFF)
+        val Muted = Color(0x9DA3AF)
+        val Accent = Color(0x4FC1FF)
+        val AccentSurface = Color(0x102F42)
+        val Success = Color(0x6A9955)
+        val SuccessSurface = Color(0x1F3826)
+        val Warning = Color(0xDCDCAA)
+        val WarningSurface = Color(0x3A331E)
+        val Danger = Color(0xF48771)
+        val DangerSurface = Color(0x3D2420)
+        val PurpleSurface = Color(0x2B2842)
+    }
 
     data class NodeView(
         val id: String,
@@ -41,7 +59,7 @@ class MiniGraphPanel : JPanel() {
     init {
         preferredSize = Dimension(900, 420)
         minimumSize = Dimension(520, 300)
-        background = Color.WHITE
+        background = Theme.Background
         toolTipText = ""
         addMouseListener(object : MouseAdapter() {
             override fun mouseClicked(e: MouseEvent) {
@@ -91,7 +109,7 @@ class MiniGraphPanel : JPanel() {
     private fun paintGraph(g: Graphics2D) {
         paintDotGrid(g)
         if (nodes.isEmpty()) {
-            g.color = Color(0x777777)
+            g.color = Theme.Muted
             g.font = font.deriveFont(Font.PLAIN, 13f)
             g.drawString("Click Abstract Code to UML to draw this project as architecture.", 24, 38)
             cards = emptyMap()
@@ -109,7 +127,7 @@ class MiniGraphPanel : JPanel() {
 
         waves.entries.forEachIndexed { waveIndex, (wave, waveNodes) ->
             val x = startX + waveIndex * (cardW + gapX)
-            g.color = Color(0x666666)
+            g.color = Theme.TextStrong
             g.font = font.deriveFont(Font.BOLD, 12f)
             g.drawString("Wave $wave", x.toInt(), 28)
             waveNodes.forEachIndexed { row, node ->
@@ -123,7 +141,7 @@ class MiniGraphPanel : JPanel() {
             val to = localCards[node.id] ?: return@forEach
             for (depId in node.dependencies) {
                 val from = localCards[depId] ?: continue
-                g.color = Color(0x9AA0A6)
+                g.color = Theme.Border
                 val x1 = (from.x + from.width).toInt()
                 val y1 = (from.y + from.height / 2).toInt()
                 val x2 = to.x.toInt()
@@ -139,18 +157,18 @@ class MiniGraphPanel : JPanel() {
             val fill = colorFor(node.status, node.ready, node.blocked)
             g.color = fill
             g.fill(card)
-            g.color = if (node.selected) Color(0x1A73E8) else borderFor(node.status, node.ready, node.blocked)
+            g.color = if (node.selected) Theme.Accent else borderFor(node.status, node.ready, node.blocked)
             g.stroke = BasicStroke(if (node.selected) 3.0f else 1.3f)
             g.draw(card)
 
-            g.color = Color(0x1F1F1F)
+            g.color = Theme.TextStrong
             g.font = font.deriveFont(Font.BOLD, 12f)
             g.drawString(node.title.take(25), (card.x + 12).toInt(), (card.y + 23).toInt())
             g.font = font.deriveFont(Font.PLAIN, 11f)
-            g.color = Color(0x333333)
+            g.color = Theme.Muted
             g.drawString("${node.status}  ${node.id.take(8)}", (card.x + 12).toInt(), (card.y + 45).toInt())
 
-            g.color = Color(0x222222)
+            g.color = if (node.selected) Theme.Accent else Theme.Muted
             g.drawOval((card.x + card.width - 28).toInt(), (card.y + 10).toInt(), 16, 16)
             val px = (card.x + card.width - 22).toInt()
             val py = (card.y + 14).toInt()
@@ -161,7 +179,7 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun paintDotGrid(g: Graphics2D) {
-        g.color = Color(0xE1E1E1)
+        g.color = Theme.Dot
         val step = 28
         var y = 18
         while (y < height) {
@@ -180,28 +198,28 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun colorFor(status: String, ready: Boolean, blocked: Boolean): Color {
-        if (blocked || status == "BLOCKED") return Color(0xFFE2D6)
+        if (blocked || status == "BLOCKED") return Theme.DangerSurface
         return when (status) {
-            "UML" -> Color.WHITE
-            "APPLIED" -> Color(0xD6F4E2)
-            "REVIEWED" -> Color(0xE3EDFF)
-            "EXECUTED" -> Color(0xEEF3FF)
-            "PLANNED" -> Color(0xFFF4D6)
-            "PARTIAL" -> Color(0xFFEAC2)
-            else -> if (ready) Color(0xE6F4EA) else Color(0xF1F3F4)
+            "UML" -> Theme.Surface
+            "APPLIED" -> Theme.SuccessSurface
+            "REVIEWED" -> Theme.PurpleSurface
+            "EXECUTED" -> Theme.AccentSurface
+            "PLANNED" -> Theme.WarningSurface
+            "PARTIAL" -> Theme.WarningSurface
+            else -> if (ready) Theme.SuccessSurface else Theme.SurfaceSoft
         }
     }
 
     private fun borderFor(status: String, ready: Boolean, blocked: Boolean): Color {
-        if (blocked || status == "BLOCKED") return Color(0xD56B45)
+        if (blocked || status == "BLOCKED") return Theme.Danger
         return when (status) {
-            "UML" -> Color(0x202124)
-            "APPLIED" -> Color(0x2E7D32)
-            "PARTIAL" -> Color(0xC77800)
-            "REVIEWED" -> Color(0x557BD8)
-            "EXECUTED" -> Color(0x78909C)
-            "PLANNED" -> Color(0xD6A000)
-            else -> if (ready) Color(0x34A853) else Color(0xD0D0D0)
+            "UML" -> Theme.Border
+            "APPLIED" -> Theme.Success
+            "PARTIAL" -> Theme.Warning
+            "REVIEWED" -> Theme.Accent
+            "EXECUTED" -> Theme.Accent
+            "PLANNED" -> Theme.Warning
+            else -> if (ready) Theme.Success else Theme.Border
         }
     }
 
