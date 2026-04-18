@@ -16,6 +16,7 @@ import com.blueprint.service.JsonExtractor
 import com.blueprint.service.NodeExecutionService
 import com.blueprint.service.NodePlanningService
 import com.blueprint.service.NodeRegistry
+import com.blueprint.service.PatchFreshness
 import com.blueprint.service.PythonProjectAnalyzer
 import com.blueprint.service.PythonUmlGenerator
 import com.blueprint.service.ReviewService
@@ -1199,6 +1200,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!confirmDiscardPendingUmlEdits()) return
         status("Generating UML from Python project...")
         val generated = project.service<PythonUmlGenerator>().generate()
+        loadGeneratedUml(generated)
+    }
+
+    private fun loadGeneratedUml(generated: PythonUmlGenerator.GeneratedUml) {
         setUmlEditorText(generated.text, pendingEdits = false)
         umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
         graphArea.text = buildString {
@@ -1434,13 +1439,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun patchChangesDisk(patch: Patch): Boolean {
-        val current = normalizeContent(project.service<ApplyChangesService>().readCurrentContent(patch.path))
-        val proposed = normalizeContent(if (patch.action.equals("delete", ignoreCase = true)) "" else patch.content)
-        return current != proposed
+        val before = project.service<ApplyChangesService>().readCurrentSnapshot(patch.path)
+        val expectedExists = !patch.action.equals("delete", ignoreCase = true)
+        val proposed = PatchFreshness.normalize(if (expectedExists) patch.content else "")
+        return before.exists != expectedExists || PatchFreshness.normalize(before.content) != proposed
     }
-
-    private fun normalizeContent(text: String): String =
-        text.replace("\r\n", "\n").trimEnd()
 
     private fun importUmlText(text: String, sourceLabel: String) {
         if (text.isBlank()) {
@@ -2047,6 +2050,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         if (n.executionStatus == ExecutionStatus.APPLIED) {
             umlHasPendingEdits = false
+            val generated = project.service<PythonUmlGenerator>().generate()
+            loadGeneratedUml(generated)
+            logActivity(
+                "Freshness verified after apply: refreshed UML from disk with " +
+                    "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
+            )
         }
         registry.update(n)
         refreshArtifactSummary()

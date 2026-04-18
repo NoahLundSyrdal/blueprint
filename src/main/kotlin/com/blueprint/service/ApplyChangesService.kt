@@ -13,6 +13,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.nio.charset.StandardCharsets
 
@@ -68,13 +69,19 @@ class ApplyChangesService(private val project: Project) {
                     continue
                 }
                 try {
+                    val before = snapshot(base, rel)
+                    val preflight = PatchFreshness.verify(patch, before, before)
+                    if (preflight.matchesPatch && !preflight.changedDisk) {
+                        skipped += rel to preflight.reason
+                        continue
+                    }
                     applyOne(basePath, rel, patch)
-                    val expected = normalizeContent(if (patch.action.equals("delete", ignoreCase = true)) "" else patch.content)
-                    val actual = normalizeContent(readCurrentContent(rel))
-                    if (actual == expected) {
+                    val after = snapshot(base, rel)
+                    val verification = PatchFreshness.verify(patch, before, after)
+                    if (verification.matchesPatch && verification.changedDisk) {
                         applied += rel
                     } else {
-                        skipped += rel to "disk content did not match applied patch"
+                        skipped += rel to verification.reason.ifBlank { "patch did not change disk" }
                     }
                 } catch (t: Throwable) {
                     log.warn("Failed to apply $rel", t)
@@ -144,6 +151,16 @@ class ApplyChangesService(private val project: Project) {
         return Files.readString(target, StandardCharsets.UTF_8)
     }
 
-    private fun normalizeContent(text: String): String =
-        text.replace("\r\n", "\n").trimEnd()
+    fun readCurrentSnapshot(relPath: String): DiskSnapshot {
+        val basePath = project.basePath ?: return DiskSnapshot(exists = false)
+        val rel = FileScope.normalizeRelativePath(relPath) ?: return DiskSnapshot(exists = false)
+        val base = Paths.get(basePath).normalize()
+        return snapshot(base, rel)
+    }
+
+    private fun snapshot(base: Path, rel: String): DiskSnapshot {
+        val target = base.resolve(rel).normalize()
+        if (!target.startsWith(base) || !Files.isRegularFile(target)) return DiskSnapshot(exists = false)
+        return DiskSnapshot(exists = true, content = Files.readString(target, StandardCharsets.UTF_8))
+    }
 }
