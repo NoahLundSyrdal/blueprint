@@ -32,5 +32,8 @@ tasks {
         sinceBuild.set(providers.gradleProperty("pluginSinceBuild"))
         untilBuild.set(providers.gradleProperty("pluginUntilBuild"))
     }
+    runIde {
+        args(rootProject.layout.projectDirectory.dir("examples/invite_project").asFile.absolutePath)
+    }
     buildSearchableOptions { enabled = false }
 }

@@ -34,6 +34,20 @@ Use JDK 17:
 JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradlew runIde
 ```
 
+For the easiest demo test, use the helper script:
+
+```bash
+./scripts/run-blueprint-pycharm.sh
+```
+
+That launches a PyCharm sandbox with Blueprint installed and opens:
+
+```text
+examples/invite_project
+```
+
+Once PyCharm opens, use `View -> Tool Windows -> Blueprint` if the Blueprint tab is not already visible.
+
 Build:
 
 ```bash
@@ -43,3 +57,17 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradl
 ## Demo Tip
 
 In the Blueprint ToolWindow, enable `Offline mock demo`, then click `Generate UML` or `Seed: UML Invite Flow`.
+
+Recommended smoke test:
+
+1. Run `./scripts/run-blueprint-pycharm.sh`.
+2. In the sandbox PyCharm window, open the `Blueprint` ToolWindow.
+3. Enable `Offline mock demo`.
+4. Click `Generate UML`.
+5. Click OK to import the generated diagram.
+6. Select `01 Imported UML schema contract`.
+7. Click `Generate Plan`.
+8. Click `Execute Node`.
+9. Click `Review`.
+10. Click `Preview Diff`.
+11. Click `Apply All`.
