@@ -148,6 +148,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val summaryLabel = JLabel("Total 0 | Ready 0 | Blocked 0 | Applied 0")
     private val providerLabel = JLabel(providerText())
     private val actionProviderLabel = JLabel(providerText())
+    private val guideLabel = JLabel("Start by abstracting this Python project into UML.")
+    private val primaryActionButton = JButton("Next: Abstract Code to UML").apply {
+        addActionListener { runGuidedNextStep() }
+    }
     private val filterCombo = JComboBox(NodeFilter.values())
     private val activityLog = JBTextArea(6, 40).apply {
         isEditable = false
@@ -456,6 +460,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+            add(JPanel(BorderLayout(8, 2)).apply {
+                border = BorderFactory.createEmptyBorder(2, 4, 6, 4)
+                add(primaryActionButton.apply {
+                    preferredSize = Dimension(260, 40)
+                    font = font.deriveFont(java.awt.Font.BOLD, 13f)
+                }, BorderLayout.WEST)
+                add(guideLabel.apply {
+                    foreground = Color(0x444444)
+                }, BorderLayout.CENTER)
+            })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(mockMode)
                 add(actionProviderLabel.apply { foreground = providerColor() })
@@ -509,6 +523,46 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.add(n)
         selectNode(n.id)
         logActivity("Added node ${n.title}")
+    }
+
+    private fun runGuidedNextStep() {
+        val entityCount = currentUmlEntityCount()
+        if (entityCount == 0) {
+            generateProjectUml()
+            return
+        }
+
+        val allNodes = registry.all()
+        if (allNodes.isEmpty()) {
+            generateCodeFromUml()
+            return
+        }
+
+        val graph = project.service<DependencyGraphService>()
+        val selected = nodeList.selectedValue
+            ?: graph.readyNodes().firstOrNull()
+            ?: allNodes.firstOrNull()
+            ?: return status("No generated nodes yet")
+        if (nodeList.selectedValue?.id != selected.id) {
+            selectNode(selected.id)
+            registry.setSelectedNode(selected.id)
+            loadSelectedIntoForm()
+        }
+
+        when {
+            registry.getPlan(selected.id) == null -> generatePlan()
+            registry.getExecution(selected.id) == null -> executeNode()
+            registry.getReview(selected.id) == null -> review()
+            selected.executionStatus != ExecutionStatus.APPLIED -> applyChanges(null)
+            graph.readyNodes().any { it.id != selected.id } -> {
+                val next = graph.readyNodes().first { it.id != selected.id }
+                selectNode(next.id)
+                registry.setSelectedNode(next.id)
+                status("Selected next ready node")
+            }
+            else -> generateProjectUml()
+        }
+        updateGuide()
     }
 
     private fun sendChat() {
@@ -1456,6 +1510,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         loadSelectedIntoForm()
         refreshArtifactSummary()
+        updateGuide()
     }
 
     private fun selectNode(id: String) {
@@ -1665,7 +1720,47 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val appliedCount = allNodes.count { it.executionStatus == ExecutionStatus.APPLIED }
         summaryLabel.text = "Total ${allNodes.size} | Ready $readyCount | Blocked $blockedCount | Applied $appliedCount"
         refreshProviderLabels()
+        updateGuide()
     }
+
+    private fun updateGuide() {
+        val (buttonText, hint) = guidedNextState()
+        primaryActionButton.text = buttonText
+        guideLabel.text = hint
+    }
+
+    private fun guidedNextState(): Pair<String, String> {
+        val entityCount = currentUmlEntityCount()
+        if (entityCount == 0) {
+            return "Next: Abstract Code to UML" to "Read the current Python project and draw the first UML diagram."
+        }
+
+        val allNodes = registry.all()
+        if (allNodes.isEmpty()) {
+            return "Next: Create Code Nodes" to "Turn the edited UML into reviewable implementation nodes."
+        }
+
+        val graph = project.service<DependencyGraphService>()
+        val selected = nodeList.selectedValue ?: graph.readyNodes().firstOrNull() ?: allNodes.first()
+        val shortTitle = selected.title.ifBlank { selected.id.take(8) }
+        return when {
+            registry.getPlan(selected.id) == null ->
+                "Next: Generate Plan" to "Plan the selected node: $shortTitle."
+            registry.getExecution(selected.id) == null ->
+                "Next: Execute Node" to "Generate scoped patches for: $shortTitle."
+            registry.getReview(selected.id) == null ->
+                "Next: Review Changes" to "Check generated patches before applying."
+            selected.executionStatus != ExecutionStatus.APPLIED ->
+                "Next: Apply Approved Changes" to "Apply reviewed changes for: $shortTitle."
+            graph.readyNodes().any { it.id != selected.id } ->
+                "Next: Select Ready Node" to "Move to the next dependency-ready node."
+            else ->
+                "Next: Refresh UML From Code" to "All current work is applied. Re-abstract the updated codebase."
+        }
+    }
+
+    private fun currentUmlEntityCount(): Int =
+        runCatching { project.service<UmlImportService>().parse(umlEditor.text).entities.size }.getOrDefault(0)
 
     private fun refreshProviderLabels() {
         val text = providerText()
