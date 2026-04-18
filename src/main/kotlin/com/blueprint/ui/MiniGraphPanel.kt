@@ -60,6 +60,11 @@ class MiniGraphPanel : JPanel() {
         val kind: String = "",
         val source: String = "",
         val preview: String = "",
+        val fields: List<String> = emptyList(),
+        val fieldOverflowCount: Int = 0,
+        val methods: List<String> = emptyList(),
+        val methodOverflowCount: Int = 0,
+        val relationshipHint: String = "",
     )
 
     private var nodes: List<NodeView> = emptyList()
@@ -104,6 +109,11 @@ class MiniGraphPanel : JPanel() {
                 node.kind.takeIf { it.isNotBlank() }?.let { "Kind: ${escape(it)}<br/>" }.orEmpty() +
                 node.source.takeIf { it.isNotBlank() }?.let { "Source: ${escape(it)}<br/>" }.orEmpty() +
                 "Wave: ${node.wave}<br/>" +
+                node.summaryLine("Fields", node.fields, node.fieldOverflowCount).takeIf { it.isNotBlank() }
+                    ?.let { "${escape(it)}<br/>" }.orEmpty() +
+                node.summaryLine("Methods", node.methods, node.methodOverflowCount).takeIf { it.isNotBlank() }
+                    ?.let { "${escape(it)}<br/>" }.orEmpty() +
+                node.relationshipHint.takeIf { it.isNotBlank() }?.let { "${escape(it)}<br/>" }.orEmpty() +
                 escape(node.detail).replace("\n", "<br/>") +
                 "</html>"
         }
@@ -130,8 +140,9 @@ class MiniGraphPanel : JPanel() {
         }
 
         val waves = nodes.groupBy { it.wave }.toSortedMap()
-        val cardW = 230f
-        val cardH = 76f
+        val richCards = nodes.any { it.hasRichFacts() }
+        val cardW = if (richCards) 292f else 230f
+        val cardH = if (richCards) 132f else 76f
         val gapX = 70f
         val gapY = 24f
         val startX = 24f
@@ -176,17 +187,44 @@ class MiniGraphPanel : JPanel() {
 
             g.color = Theme.TextStrong
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString(node.title.ellipsize(28), (card.x + 12).toInt(), (card.y + 22).toInt())
+            val textLeft = (card.x + 12).toInt()
+            val titleRightPadding = if (node.kind.isNotBlank()) 96 else 34
+            val textWidth = (card.width - titleRightPadding - 12).toInt().coerceAtLeast(120)
+            g.drawString(node.title.ellipsizeToWidth(g, textWidth), textLeft, (card.y + 22).toInt())
+
+            if (node.kind.isNotBlank()) {
+                paintPill(
+                    g = g,
+                    text = node.kind,
+                    x = (card.x + card.width - 86).toInt(),
+                    y = (card.y + 10).toInt(),
+                    fill = kindBadgeFill(node),
+                    textColor = kindBadgeText(node),
+                )
+            }
 
             g.font = font.deriveFont(Font.PLAIN, 11f)
             g.color = Theme.Muted
             val metadata = node.metadataLine()
-            g.drawString(metadata.ellipsize(32), (card.x + 12).toInt(), (card.y + 42).toInt())
+            g.drawString(metadata.ellipsizeToWidth(g, (card.width - 24).toInt()), textLeft, (card.y + 40).toInt())
 
-            val preview = node.preview.ifBlank { node.detail.lineSequence().drop(1).firstOrNull().orEmpty() }
-            if (preview.isNotBlank()) {
-                g.color = Theme.Muted
-                g.drawString(preview.ellipsize(34), (card.x + 12).toInt(), (card.y + 60).toInt())
+            if (richCards) {
+                val fieldLine = node.summaryLine("fields", node.fields, node.fieldOverflowCount)
+                val methodLine = node.summaryLine("methods", node.methods, node.methodOverflowCount)
+                val relationshipLine = node.relationshipHint.ifBlank {
+                    node.preview.ifBlank { node.detail.lineSequence().drop(1).firstOrNull().orEmpty() }
+                }
+                g.drawString(fieldLine.ellipsizeToWidth(g, (card.width - 24).toInt()), textLeft, (card.y + 60).toInt())
+                g.drawString(methodLine.ellipsizeToWidth(g, (card.width - 24).toInt()), textLeft, (card.y + 78).toInt())
+                if (relationshipLine.isNotBlank()) {
+                    g.drawString(relationshipLine.ellipsizeToWidth(g, (card.width - 24).toInt()), textLeft, (card.y + 96).toInt())
+                }
+            } else {
+                val preview = node.preview.ifBlank { node.detail.lineSequence().drop(1).firstOrNull().orEmpty() }
+                if (preview.isNotBlank()) {
+                    g.color = Theme.Muted
+                    g.drawString(preview.ellipsize(34), textLeft, (card.y + 60).toInt())
+                }
             }
 
             paintStatusBadge(g, node, card)
@@ -235,6 +273,24 @@ class MiniGraphPanel : JPanel() {
         g.color = badgeText(node)
         g.font = font.deriveFont(Font.PLAIN, 10f)
         g.drawString(label, x + 7, y + 12)
+    }
+
+    private fun paintPill(
+        g: Graphics2D,
+        text: String,
+        x: Int,
+        y: Int,
+        fill: Color,
+        textColor: Color,
+    ) {
+        val safeText = text.ellipsize(12)
+        val width = (safeText.length * 7 + 14).coerceAtLeast(42)
+        val pill = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), 16f, 8f, 8f)
+        g.color = fill
+        g.fill(pill)
+        g.color = textColor
+        g.font = font.deriveFont(Font.PLAIN, 10f)
+        g.drawString(safeText, x + 7, y + 12)
     }
 
     private fun colorFor(node: NodeView): Color {
@@ -287,12 +343,35 @@ class MiniGraphPanel : JPanel() {
             else -> Theme.TextStrong
         }
 
+    private fun kindBadgeFill(node: NodeView): Color =
+        when (node.origin) {
+            NodeOrigin.CODE -> Theme.SurfaceSoft
+            NodeOrigin.PROPOSED_UML -> Theme.SurfaceSoft
+            NodeOrigin.WORKFLOW -> Theme.SurfaceSoft
+        }
+
+    private fun kindBadgeText(node: NodeView): Color =
+        when (node.origin) {
+            NodeOrigin.CODE -> Theme.Accent
+            NodeOrigin.PROPOSED_UML -> Theme.Warning
+            NodeOrigin.WORKFLOW -> Theme.TextStrong
+        }
+
     private fun NodeView.metadataLine(): String =
         when (origin) {
             NodeOrigin.CODE -> listOf(kind.ifBlank { "code" }, source).filter { it.isNotBlank() }.joinToString("  ")
             NodeOrigin.PROPOSED_UML -> listOf(kind.ifBlank { "UML proposal" }, "editable").joinToString("  ")
             NodeOrigin.WORKFLOW -> listOf(kind.ifBlank { "workflow" }, id.take(8)).joinToString("  ")
         }
+
+    private fun NodeView.summaryLine(label: String, values: List<String>, overflow: Int): String {
+        if (values.isEmpty()) return "$label: -"
+        val suffix = if (overflow > 0) ", +$overflow" else ""
+        return "$label: ${values.joinToString(", ")}$suffix"
+    }
+
+    private fun NodeView.hasRichFacts(): Boolean =
+        source.isNotBlank() || fields.isNotEmpty() || methods.isNotEmpty() || relationshipHint.isNotBlank()
 
     private fun NodeOrigin.label(): String =
         when (this) {
@@ -303,6 +382,17 @@ class MiniGraphPanel : JPanel() {
 
     private fun String.ellipsize(max: Int): String =
         if (length <= max) this else take((max - 3).coerceAtLeast(0)) + "..."
+
+    private fun String.ellipsizeToWidth(g: Graphics2D, maxWidth: Int): String {
+        if (isEmpty()) return this
+        val metrics = g.fontMetrics
+        if (metrics.stringWidth(this) <= maxWidth) return this
+        var value = this
+        while (value.length > 1 && metrics.stringWidth("$value...") > maxWidth) {
+            value = value.dropLast(1)
+        }
+        return if (value.length == length) value else "$value..."
+    }
 
     private fun escape(text: String): String =
         buildString {

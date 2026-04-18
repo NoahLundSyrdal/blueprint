@@ -27,6 +27,7 @@ class CodeMapProjectionTest {
                     kind = ComponentKind.MODEL,
                     ownership = Ownership(files = listOf("app/models.py")),
                     fields = listOf(Field("id", TypeRef("str")), Field("owner", TypeRef("User"))),
+                    operations = listOf(Operation("rename")),
                 ),
                 Component(
                     id = "models.invite",
@@ -34,6 +35,7 @@ class CodeMapProjectionTest {
                     kind = ComponentKind.MODEL,
                     ownership = Ownership(files = listOf("app/models.py")),
                     fields = listOf(Field("id", TypeRef("str")), Field("project", TypeRef("Project"))),
+                    operations = listOf(Operation("accept"), Operation("revoke")),
                 ),
                 Component(
                     id = "services.invite",
@@ -61,6 +63,10 @@ class CodeMapProjectionTest {
         assertEquals("app/models.py", invite.source)
         assertEquals(listOf("models.project"), invite.dependencies)
         assertTrue(invite.selected)
+        assertEquals(listOf("id: str", "project: Project"), invite.fields)
+        assertEquals(listOf("accept()", "revoke()"), invite.methods)
+        assertTrue(invite.relationshipHint.contains("edges:"))
+        assertTrue(invite.relationshipHint.contains("project"))
         assertTrue(invite.detail.contains("Current code entity"))
         assertTrue(invite.preview.contains("project"))
     }
@@ -95,5 +101,37 @@ class CodeMapProjectionTest {
         assertEquals(MiniGraphPanel.NodeOrigin.CODE, invite.origin)
         assertEquals("APPLIED", invite.status)
         assertTrue(invite.selected)
+    }
+
+    @Test
+    fun `projection exposes truncation counts for crowded cards`() {
+        val ir = ArchitectureIR(
+            components = listOf(
+                Component(
+                    id = "models.bank",
+                    name = "Bank",
+                    kind = ComponentKind.MODEL,
+                    ownership = Ownership(files = listOf("app/models.py")),
+                    fields = listOf(
+                        Field("id", TypeRef("str")),
+                        Field("name", TypeRef("str")),
+                        Field("balance", TypeRef("float")),
+                        Field("currency", TypeRef("str")),
+                    ),
+                    operations = listOf(
+                        Operation("deposit"),
+                        Operation("withdraw"),
+                        Operation("freeze"),
+                    ),
+                ),
+            ),
+        )
+
+        val bank = CodeMapProjection.fromIr(ir, selectedId = null).single()
+
+        assertEquals(listOf("id: str", "name: str", "balance: float"), bank.fields)
+        assertEquals(1, bank.fieldOverflowCount)
+        assertEquals(listOf("deposit()", "withdraw()"), bank.methods)
+        assertEquals(1, bank.methodOverflowCount)
     }
 }
