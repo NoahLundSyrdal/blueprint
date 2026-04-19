@@ -4289,7 +4289,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     ): String = preApplyCommandSummary(context, validationCommand)
 
     private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here." }
+        context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here when you want the result inside Blueprint instead of the app, browser, or terminal." }
             ?: missingRunCommandGuidance(context)
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =
@@ -4570,10 +4570,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             state.resetSuggested ->
                 "The guided demo prompt likely matches code already in the invite demo file. Click Reset Demo Sandbox for a fresh run, or keep your own UML edit instead."
             state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
-                "Expect Invite to show expires_at in the refreshed UML and in the running feature path."
+                "Expect Invite to show expires_at in the refreshed UML and in the running app, browser, or terminal flow."
             state.expectedRelationSource != null && state.expectedRelationTarget != null ->
-                "Expect ${state.expectedRelationSource} to show ${state.expectedEntity} in the refreshed UML and the running app flow."
-            else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app flow."
+                "Expect ${state.expectedRelationSource} to show ${state.expectedEntity} in the refreshed UML and in the running app, browser, or terminal flow."
+            else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app, browser, or terminal flow."
         }
 
     private fun manualDemoWhatToLookForChecklist(state: GuidedInviteScenarioState): String =
@@ -4616,7 +4616,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val whatToLookForChecklist = manualDemoWhatToLookForChecklist(state)
         Messages.showInfoMessage(
             project,
-            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in the changed app.\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
+            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in Blueprint, the launched app, a browser, or terminal output.\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
             "Blueprint - Run Demo Step"
         )
         logActivity("Demo e2e step passed: Run the changed app with $runCommand. Confirmed visible result: $expectedVisibleResult")

@@ -28,7 +28,7 @@ class RunInBlueprintCopyRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("When you want to run the app, start with: \$it or click Run In Blueprint."))
-        assertTrue(source.contains("Run the changed app with: \$it, or click Run In Blueprint to stream it here."))
+        assertTrue(source.contains("Run the changed app with: \$it, or click Run In Blueprint to stream it here when you want the result inside Blueprint instead of the app, browser, or terminal."))
     }
 
     @Test

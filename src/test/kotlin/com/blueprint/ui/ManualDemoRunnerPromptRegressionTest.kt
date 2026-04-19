@@ -12,8 +12,8 @@ class ManualDemoRunnerPromptRegressionTest {
     fun `manual demo runner derives expected visible result from guided prompt state`() {
         assertTrue(source.contains("private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String ="))
         assertTrue(source.contains("state.expectedEntity == \"Invite\" && state.prompt.contains(\"expires_at\")"))
-        assertTrue(source.contains("Expect Invite to show expires_at in the refreshed UML and in the running feature path."))
-        assertTrue(source.contains("Expect \${state.expectedRelationSource} to show \${state.expectedEntity} in the refreshed UML and the running app flow."))
+        assertTrue(source.contains("Expect Invite to show expires_at in the refreshed UML and in the running app, browser, or terminal flow."))
+        assertTrue(source.contains("Expect \${state.expectedRelationSource} to show \${state.expectedEntity} in the refreshed UML and in the running app, browser, or terminal flow."))
         assertTrue(source.contains("val expectedVisibleResult = manualDemoExpectedVisibleResult(state)"))
     }
 
