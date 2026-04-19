@@ -185,13 +185,18 @@ class PythonProjectAnalyzer(private val project: Project) {
         testRoots: List<String>,
     ): List<String> {
         if ("pytest" !in frameworks && testRoots.isEmpty()) return emptyList()
-        val pytest = when (packageManager) {
-            "uv" -> "uv run pytest"
-            "poetry" -> "poetry run pytest"
-            "pipenv" -> "pipenv run pytest"
-            else -> "python -m pytest"
+        val commands = mutableListOf<String>()
+        if ("pytest" in frameworks || configFiles.any { it == "pytest.ini" || it == "setup.cfg" || it == "pyproject.toml" }) {
+            commands += when (packageManager) {
+                "uv" -> "uv run pytest"
+                "poetry" -> "poetry run pytest"
+                "pipenv" -> "pipenv run pytest"
+                else -> "python -m pytest"
+            }
         }
-        val commands = mutableListOf(pytest)
+        if (testRoots.isNotEmpty()) {
+            commands += "python -m unittest discover ${testRoots.first()}"
+        }
         if ("tox.ini" in configFiles) commands += "tox"
         if ("noxfile.py" in configFiles) commands += "nox"
         return commands.distinct()

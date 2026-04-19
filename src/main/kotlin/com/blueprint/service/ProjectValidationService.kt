@@ -165,12 +165,13 @@ class ProjectValidationService(private val project: Project) {
         private val PYTHON_FILE = Regex("""(?:[A-Za-z]:)?[./\\w\\-\\s]+\\.py""")
 
         fun chooseValidationCommand(context: PythonProjectAnalyzer.PythonProjectContext): String? {
-            val inferred = context.testCommands
-                .firstOrNull { it.contains("pytest") }
-                ?: context.testCommands.firstOrNull()
+            val inferred = context.testCommands.firstOrNull()
             if (!inferred.isNullOrBlank()) return inferred
             return when {
-                context.testRoots.isNotEmpty() || context.configFiles.any { it == "pytest.ini" || it == "pyproject.toml" } -> "python -m pytest"
+                context.configFiles.any { it == "tox.ini" } -> "tox"
+                context.configFiles.any { it == "noxfile.py" } -> "nox"
+                context.testRoots.isNotEmpty() -> "python -m unittest discover ${context.testRoots.first()}"
+                context.configFiles.any { it == "pytest.ini" || it == "pyproject.toml" || it == "setup.cfg" } -> "python -m pytest"
                 context.sourceRoots.isNotEmpty() -> IMPORT_COMPILE_VALIDATION_COMMAND
                 else -> null
             }

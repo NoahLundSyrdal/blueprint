@@ -23,7 +23,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertEquals("pyproject", context.packageManager)
         assertTrue(context.frameworks.contains("pytest"))
         assertTrue(context.frameworks.contains("attrs"))
-        assertEquals(listOf("python -m pytest"), context.testCommands)
+        assertEquals(listOf("python -m pytest", "python -m unittest discover tests"), context.testCommands)
     }
 
     @Test
@@ -39,7 +39,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertEquals("pyproject", context.packageManager)
         assertTrue(context.frameworks.contains("fastapi"))
         assertTrue(context.frameworks.contains("pydantic"))
-        assertEquals(listOf("python -m pytest"), context.testCommands)
+        assertEquals(listOf("python -m pytest", "python -m unittest discover tests"), context.testCommands)
     }
 
     @Test
@@ -53,7 +53,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.testRoots.contains("tests"))
         assertEquals("unknown", context.packageManager)
         assertTrue(context.frameworks.contains("flask"))
-        assertEquals(listOf("python -m pytest"), context.testCommands)
+        assertEquals(listOf("python -m pytest", "python -m unittest discover tests"), context.testCommands)
         assertFalse(context.sourceRoots.any { it.contains("site-packages") })
         assertFalse(context.sourceRoots.any { it.contains("build") })
         assertFalse(context.sourceRoots.any { it.contains("vendor") })
@@ -70,7 +70,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.sourceRoots.contains("warehouse") || context.sourceRoots.contains("warehouse/domain"))
         assertTrue(context.testRoots.contains("tests"))
         assertEquals("unknown", context.packageManager)
-        assertEquals(listOf("python -m pytest"), context.testCommands)
+        assertEquals(listOf("python -m unittest discover tests"), context.testCommands)
     }
 
     private fun fakeProject(basePath: Path): Project =
