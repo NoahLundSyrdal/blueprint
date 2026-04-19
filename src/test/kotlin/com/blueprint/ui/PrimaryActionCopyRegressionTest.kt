@@ -23,6 +23,7 @@ class PrimaryActionCopyRegressionTest {
         assertTrue(source.contains("primaryActionButton.text = \"Apply Approved Changes\""))
         assertTrue(source.contains("guideLabel.text = \"Review approved the reviewed code patch. Apply Approved Changes to write it to disk, then Blueprint will validate the project.\""))
         assertTrue(source.contains("updateNextStepBanner(\"Next: Apply Approved Changes\", \"Review approved the current patch, so this is the safe time to write it to disk.\")"))
+        assertTrue(source.contains("\"Next: Review approved\" to \"Wait for review approval so Blueprint can explain why the patch is safe before you apply changes for: \$shortTitle.\""))
     }
 
     @Test
