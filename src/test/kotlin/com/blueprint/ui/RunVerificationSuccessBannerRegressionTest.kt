@@ -15,6 +15,7 @@ class RunVerificationSuccessBannerRegressionTest {
         assertTrue(source.contains("End-to-end success"))
         assertTrue(source.contains("Blueprint completed the full demo path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."))
         assertTrue(source.contains("- Run verified with: \$runCommand"))
+        assertTrue(source.contains("Rerun ready: use Run In Blueprint to rerun \$runCommand after your next approved change"))
         assertTrue(source.contains("- Visible result: \$visibleResult"))
         assertTrue(source.contains("Messages.showInfoMessage(project, banner, \"Blueprint - End-to-End Success\")"))
         assertTrue(source.contains("appendChat(\"Blueprint\", banner)"))

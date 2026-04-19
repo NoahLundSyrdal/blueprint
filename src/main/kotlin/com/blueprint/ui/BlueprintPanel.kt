@@ -4968,11 +4968,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             1 -> "Verify in code: Use Open Changed File to inspect ${changedPaths.first()} in the IDE. This does not apply or refresh anything."
             else -> "Verify in code: Use Open Changed Files to inspect the ${changedPaths.size} changed paths in the IDE. This does not apply or refresh anything."
         }
+        val rerunAction = "Rerun ready: use Run In Blueprint to rerun $runCommand after your next approved change, or rerun the same command in your app, browser, or terminal when you want to confirm the next iteration quickly."
         val nextSteps = listOf(
             "Next steps:",
             "- $inspectAction",
             "- Copy Issue Comment if you want a reusable issue-comment or demo recap.",
             "- $runConfidence",
+            "- $rerunAction",
             "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
             "- Refine the UML again when you are ready for another reviewed code patch.",
         ).joinToString("\n")
@@ -5013,6 +5015,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine("- Run verified with: $runCommand")
             appendLine("- $runConfidence")
             appendLine("- Visible result: $visibleResult")
+            appendLine("- Rerun ready: reuse $runCommand after the next approved change when you want to confirm the next iteration quickly.")
             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
             append(validationSummary.removePrefix("Result summary\n"))
         }.trim()

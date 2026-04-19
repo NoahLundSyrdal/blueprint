@@ -22,6 +22,7 @@ class CopyableRunResultSummaryRegressionTest {
         assertTrue(source.contains("appendLine(\"Copyable issue comment\")"))
         assertTrue(source.contains("appendLine(\"- Run verified with: \$runCommand\")"))
         assertTrue(source.contains("appendLine(\"- Visible result: \$visibleResult\")"))
+        assertTrue(source.contains("appendLine(\"- Rerun ready: reuse \$runCommand after the next approved change when you want to confirm the next iteration quickly.\")"))
         assertTrue(source.contains("appendLine(\"- Changed paths: \${if (changedPaths.isEmpty()) \"none\" else changedPaths.joinToString(\", \")}\")"))
         assertTrue(source.contains("append(validationSummary.removePrefix(\"Result summary\\n\"))"))
     }
