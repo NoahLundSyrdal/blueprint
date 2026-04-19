@@ -1,7 +1,14 @@
 package com.blueprint.service
 
+import com.blueprint.ir.ArchitectureIR
+import com.blueprint.ir.Component
+import com.blueprint.ir.ComponentKind
+import com.blueprint.ir.DataType
+import com.blueprint.ir.Field
 import com.blueprint.ir.IRStore
 import com.blueprint.ir.IRToNodesCompiler
+import com.blueprint.ir.Ownership
+import com.blueprint.ir.SourceRef
 import com.blueprint.ir.UmlIRImporter
 import com.blueprint.model.AcceptanceCriterion
 import com.blueprint.model.AcceptanceCriterionType
@@ -65,9 +72,13 @@ class UmlImportService(private val project: Project) {
             )
         }
 
-        val ir = project.service<UmlIRImporter>().toIR(parsed)
-        project.service<IRStore>().save(ir)
-        val compiled = project.service<IRToNodesCompiler>().compile(ir)
+        val irStore = project.service<IRStore>()
+        val previousCodeIr = irStore.load()
+        val importedIr = project.service<UmlIRImporter>().toIR(parsed)
+        val remappedIr = CodeBackedUmlSourceMapper.remap(importedIr, parsed, previousCodeIr)
+        val executionIr = CodeBackedUmlSourceMapper.changedModelSubset(remappedIr, previousCodeIr)
+        irStore.save(remappedIr)
+        val compiled = project.service<IRToNodesCompiler>().compile(executionIr)
         val nodes = aggregateSharedModelNodes(parsed, compiled.nodes)
 
         val summary = buildString {
@@ -101,86 +112,91 @@ class UmlImportService(private val project: Project) {
         val modelNodes = compiledNodes.filter {
             it.type == NodeType.SCHEMA && it.metadata["componentKind"] == "model"
         }
-        if (modelNodes.size <= 1) return compiledNodes
+        if (modelNodes.isEmpty()) return compiledNodes
 
-        val sharedModelPath = modelNodes
-            .flatMap { it.fileScope.paths }
-            .groupingBy { it }
-            .eachCount()
-            .maxByOrNull { it.value }
-            ?.key
-            ?: return compiledNodes
+        val modelNodesByPath = modelNodes
+            .mapNotNull { node -> node.fileScope.paths.firstOrNull()?.let { it to node } }
+            .groupBy({ it.first }, { it.second })
+        if (modelNodesByPath.isEmpty()) return compiledNodes
 
-        val modelNodeIds = modelNodes.map { it.id }.toSet()
-        val aggregateId = stableNodeId("uml.aggregate.models.$sharedModelPath.${parsed.entities.joinToString(",") { it.name }}")
-        val aggregateOutputs = (modelNodes.flatMap { it.outputs } + compiledNodes.flatMap { it.inputs })
-            .filter { it.kind == "schema" && it.name.isNotBlank() }
-            .groupBy { it.name }
-            .map { (_, contracts) ->
-                contracts.maxWith(
-                    compareBy<NodeContract> { schemaFieldCount(it.schema) }
-                        .thenBy { it.schema.length }
-                )
-            }
-            .sortedBy { it.name }
-        val aggregate = BlueprintNode(
-            id = aggregateId,
-            type = NodeType.SCHEMA,
-            title = "01 UML models",
-            summary = "Generate the shared models file from the current UML.",
-            description = buildString {
-                appendLine("Generate one coherent Python models module from the full UML.")
-                appendLine()
-                appendLine("Entities:")
-                aggregateOutputs.forEach { output ->
-                    val fields = output.schema.lines().filter { it.isNotBlank() }.joinToString(", ")
-                    appendLine("- ${output.name}: ${fields.ifBlank { "(no fields)" }}")
+        val aggregateByPath = modelNodesByPath.mapValues { (sharedModelPath, nodesForPath) ->
+            val aggregateOutputs = nodesForPath
+                .flatMap { it.outputs }
+                .filter { it.kind == "schema" && it.name.isNotBlank() }
+                .groupBy { it.name }
+                .map { (_, contracts) ->
+                    contracts.maxWith(
+                        compareBy<NodeContract> { schemaFieldCount(it.schema) }
+                            .thenBy { it.schema.length }
+                    )
                 }
-                if (parsed.relationships.isNotEmpty()) {
+                .sortedBy { it.name }
+            val aggregateId = stableNodeId("uml.aggregate.models.$sharedModelPath.${aggregateOutputs.joinToString(",") { it.name }}")
+            BlueprintNode(
+                id = aggregateId,
+                type = NodeType.SCHEMA,
+                title = nodesForPath.minByOrNull { it.title }?.title?.replaceAfter(" ", "UML models") ?: "01 UML models",
+                summary = "Generate model changes for $sharedModelPath from the current UML.",
+                description = buildString {
+                    appendLine("Generate coherent Python dataclass changes for the UML models owned by $sharedModelPath.")
                     appendLine()
-                    appendLine("Relationships:")
-                    parsed.relationships.forEach { rel -> appendLine("- ${rel.from} ${rel.label} ${rel.to}") }
-                }
-                appendLine()
-                appendLine("Important: this node owns all UML model classes in $sharedModelPath. It may create or update sibling model classes together.")
-            }.trim(),
-            outputs = aggregateOutputs,
-            fileScope = FileScope(paths = listOf(sharedModelPath)),
-            acceptanceCriteria = listOf(
-                AcceptanceCriterion(
-                    id = "AC1",
-                    type = AcceptanceCriterionType.INTERFACE_CONTRACT,
-                    description = "Generated models represent every UML entity: ${aggregateOutputs.joinToString(", ") { it.name }}.",
-                    verifyWith = "Review the proposed models.py patch against the UML.",
+                    appendLine("Entities:")
+                    aggregateOutputs.forEach { output ->
+                        val fields = output.schema.lines().filter { it.isNotBlank() }.joinToString(", ")
+                        appendLine("- ${output.name}: ${fields.ifBlank { "(no fields)" }}")
+                    }
+                    if (parsed.relationships.isNotEmpty()) {
+                        appendLine()
+                        appendLine("Relationships:")
+                        parsed.relationships.forEach { rel -> appendLine("- ${rel.from} ${rel.label} ${rel.to}") }
+                    }
+                    appendLine()
+                    appendLine("Important: this node owns only the UML model classes mapped to $sharedModelPath.")
+                }.trim(),
+                outputs = aggregateOutputs,
+                fileScope = FileScope(paths = listOf(sharedModelPath)),
+                acceptanceCriteria = listOf(
+                    AcceptanceCriterion(
+                        id = "AC1",
+                        type = AcceptanceCriterionType.INTERFACE_CONTRACT,
+                        description = "Generated models represent mapped UML entities: ${aggregateOutputs.joinToString(", ") { it.name }}.",
+                        verifyWith = "Review the proposed patch against the UML.",
+                    ),
+                    AcceptanceCriterion(
+                        id = "AC2",
+                        type = AcceptanceCriterionType.INTERFACE_CONTRACT,
+                        description = "Generated models preserve declared fields and relationship intent from the UML.",
+                        verifyWith = "Review class fields and references in the proposed patch.",
+                    ),
+                    AcceptanceCriterion(
+                        id = "AC3",
+                        type = AcceptanceCriterionType.CODEGEN,
+                        description = "Changes stay inside $sharedModelPath.",
+                        verifyWith = "Review changed files.",
+                    ),
                 ),
-                AcceptanceCriterion(
-                    id = "AC2",
-                    type = AcceptanceCriterionType.INTERFACE_CONTRACT,
-                    description = "Generated models preserve declared fields and relationship intent from the UML.",
-                    verifyWith = "Review class fields and references in the proposed patch.",
+                metadata = mutableMapOf(
+                    "source" to "uml_aggregate",
+                    "componentKind" to "model_group",
+                    "entityCount" to aggregateOutputs.size.toString(),
                 ),
-                AcceptanceCriterion(
-                    id = "AC3",
-                    type = AcceptanceCriterionType.CODEGEN,
-                    description = "Changes stay inside the shared models file scope.",
-                    verifyWith = "Review changed files.",
-                ),
-            ),
-            metadata = mutableMapOf(
-                "source" to "uml_aggregate",
-                "componentKind" to "model_group",
-                "entityCount" to aggregateOutputs.size.toString(),
-            ),
-        )
+            )
+        }
+        val modelNodeIdsByPath = modelNodesByPath.mapValues { (_, nodesForPath) -> nodesForPath.map { it.id }.toSet() }
+        val replacementByModelNodeId = modelNodeIdsByPath.flatMap { (path, ids) ->
+            ids.map { it to aggregateByPath.getValue(path).id }
+        }.toMap()
+        val modelNodeIds = replacementByModelNodeId.keys
+        val aggregates = aggregateByPath.values.sortedBy { it.fileScope.paths.firstOrNull() ?: "" }
 
         val remapped = compiledNodes
             .filterNot { it.id in modelNodeIds }
             .map { node ->
                 node.copy(
-                    dependencies = node.dependencies.map { dep -> if (dep in modelNodeIds) aggregateId else dep }.distinct()
+                    dependencies = node.dependencies.map { dep -> replacementByModelNodeId[dep] ?: dep }.distinct()
                 )
             }
-        return listOf(aggregate) + remapped
+        return aggregates + remapped
     }
 
     private fun stableNodeId(seed: String): String =
@@ -333,4 +349,166 @@ class UmlImportService(private val project: Project) {
         val lower = lowercase(Locale.US)
         return lower !in setOf("relationships", "relationship", "entities", "entity", "classes", "class")
     }
+}
+
+internal object CodeBackedUmlSourceMapper {
+    fun remap(
+        ir: ArchitectureIR,
+        parsed: UmlImportService.ParsedUml,
+        previousIr: ArchitectureIR?,
+    ): ArchitectureIR {
+        val previousByName = previousCodeBackedModelsByName(previousIr)
+        if (previousByName.isEmpty()) return ir
+
+        val parsedByName = parsed.entities.associateBy { it.name }
+        val components = ir.components.map { component ->
+            if (component.kind != ComponentKind.MODEL) return@map component
+            val path = preferredPathFor(component.name, parsedByName, parsed.relationships, previousByName)
+                ?: return@map component
+            val previous = previousByName[component.name]
+            component.copy(
+                ownership = Ownership(files = listOf(path)),
+                sourceRef = previous?.sourceRef ?: SourceRef(path),
+                description = if (previous == null) {
+                    "UML entity mapped into existing code file $path."
+                } else {
+                    component.description
+                },
+            )
+        }
+
+        return ir.copy(
+            components = components,
+            dataTypes = dataTypesForComponents(ir.dataTypes, components),
+        )
+    }
+
+    fun changedModelSubset(ir: ArchitectureIR, previousIr: ArchitectureIR?): ArchitectureIR {
+        val previousByName = previousCodeBackedModelsByName(previousIr)
+        val codeBackedModels = ir.components.filter { it.kind == ComponentKind.MODEL && it.primaryCodeFile() != null }
+        if (codeBackedModels.isEmpty()) return ir
+
+        val changedModels = codeBackedModels.filter { component ->
+            val previous = previousByName[component.name]
+            previous == null || fieldsDiffer(component.fields, previous.fields)
+        }
+        val changedIds = changedModels.map { it.id }.toSet()
+
+        return ir.copy(
+            components = changedModels,
+            dataTypes = dataTypesForComponents(ir.dataTypes, changedModels),
+            edges = ir.edges.filter { it.from in changedIds && it.to in changedIds },
+            modules = emptyList(),
+            contracts = emptyList(),
+            events = emptyList(),
+            extensionPoints = emptyList(),
+        )
+    }
+
+    private fun preferredPathFor(
+        name: String,
+        parsedByName: Map<String, UmlImportService.ParsedEntity>,
+        relationships: List<UmlImportService.ParsedRelationship>,
+        previousByName: Map<String, Component>,
+    ): String? {
+        previousByName[name]?.primaryCodeFile()?.let { return it }
+
+        relationships.firstNotNullOfOrNull { rel ->
+            when (name) {
+                rel.from -> previousByName[rel.to]?.primaryCodeFile()
+                rel.to -> previousByName[rel.from]?.primaryCodeFile()
+                else -> null
+            }
+        }?.let { return it }
+
+        parsedByName[name]?.fields.orEmpty()
+            .asSequence()
+            .mapNotNull { fieldTypeName(it) }
+            .mapNotNull { previousByName[it]?.primaryCodeFile() }
+            .firstOrNull()
+            ?.let { return it }
+
+        parsedByName.values
+            .asSequence()
+            .filter { entity -> entity.name != name }
+            .filter { entity -> entity.fields.any { fieldTypeName(it) == name } }
+            .mapNotNull { entity -> previousByName[entity.name]?.primaryCodeFile() }
+            .firstOrNull()
+            ?.let { return it }
+
+        return previousByName.values
+            .mapNotNull { it.primaryCodeFile() }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+    }
+
+    private fun previousCodeBackedModelsByName(ir: ArchitectureIR?): Map<String, Component> {
+        ir ?: return emptyMap()
+        return ir.components
+            .filter { it.kind == ComponentKind.MODEL }
+            .groupBy { it.name }
+            .mapNotNull { (name, components) ->
+                val selected = components
+                    .filter { it.primaryCodeFile() != null }
+                    .minByOrNull { sourceRank(it.primaryCodeFile().orEmpty()) }
+                    ?: return@mapNotNull null
+                name to selected
+            }
+            .toMap()
+    }
+
+    private fun dataTypesForComponents(dataTypes: List<DataType>, components: List<Component>): List<DataType> {
+        val componentsByName = components.associateBy { it.name }
+        val existingDataTypes = dataTypes.associateBy { it.name }
+        return components.map { component ->
+            existingDataTypes[component.name]?.copy(
+                id = "${component.id}.data",
+                fields = component.fields,
+                sourceRef = component.sourceRef,
+            ) ?: DataType(
+                id = "${component.id}.data",
+                name = component.name,
+                fields = component.fields,
+                sourceRef = component.sourceRef,
+            )
+        }.filter { it.name in componentsByName }
+    }
+
+    private fun fieldsDiffer(next: List<Field>, previous: List<Field>): Boolean {
+        fun normalized(fields: List<Field>): Map<String, String> =
+            fields.associate { it.name to normalizeType(it.type.id) }
+        return normalized(next) != normalized(previous)
+    }
+
+    private fun fieldTypeName(raw: String): String? {
+        val type = raw.substringAfter(":", "").trim().ifBlank { return null }
+        return Regex("""[A-Z][A-Za-z0-9_]*""").find(type)?.value
+    }
+
+    private fun Component.primaryCodeFile(): String? =
+        ownership.files.firstOrNull { path ->
+            path.isNotBlank() &&
+                !path.startsWith("blueprint_demo/imported_") &&
+                !path.startsWith("tests/") &&
+                !path.contains("/tests/")
+        }
+
+    private fun sourceRank(path: String): String =
+        when {
+            path.startsWith("app/") -> "0:$path"
+            path.startsWith("src/") -> "1:$path"
+            path.startsWith("blueprint_demo/") -> "9:$path"
+            else -> "2:$path"
+        }
+
+    private fun normalizeType(type: String): String =
+        when (type.trim()) {
+            "string" -> "str"
+            "integer" -> "int"
+            "boolean" -> "bool"
+            "decimal" -> "Decimal"
+            else -> type.trim()
+        }
 }

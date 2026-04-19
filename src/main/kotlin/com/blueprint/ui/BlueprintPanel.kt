@@ -237,14 +237,19 @@ private class ChatBubblePanel(
     }
 
     fun relayoutForViewport(viewportWidth: Int) {
-        val bubbleWidth = (viewportWidth * 0.82f).toInt().coerceIn(240, 520)
-        val contentWidth = (bubbleWidth - 32).coerceAtLeast(180)
+        val availableWidth = (viewportWidth - 16).coerceAtLeast(160)
+        val preferredWidth = (viewportWidth * 0.82f).toInt()
+        val bubbleWidth = preferredWidth.coerceIn(160, availableWidth.coerceAtMost(520))
+        val contentWidth = (bubbleWidth - 32).coerceAtLeast(96)
         messageArea.setSize(contentWidth, Int.MAX_VALUE)
         val textSize = messageArea.preferredSize
         messageArea.preferredSize = Dimension(contentWidth, textSize.height)
+        messageArea.minimumSize = Dimension(contentWidth, textSize.height)
+        messageArea.maximumSize = Dimension(contentWidth, textSize.height)
         setSize(bubbleWidth, Int.MAX_VALUE)
         val bubbleSize = super.getPreferredSize()
         preferredSize = Dimension(bubbleWidth, bubbleSize.height)
+        minimumSize = Dimension((160).coerceAtMost(bubbleWidth), bubbleSize.height)
         maximumSize = Dimension(bubbleWidth, bubbleSize.height)
         revalidate()
     }
@@ -2270,7 +2275,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun chatViewportWidth(): Int =
         ((chatScrollPane.viewport.extentSize.width.takeIf { it > 0 }
             ?: chatScrollPane.width.takeIf { it > 0 }
-            ?: 460) - 24).coerceAtLeast(280)
+            ?: 420) - 24).coerceAtLeast(160)
 
     private fun relayoutChatTranscript(scrollToBottom: Boolean = false) {
         val viewportWidth = chatViewportWidth()
