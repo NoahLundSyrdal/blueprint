@@ -2426,7 +2426,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     postApplyVerifyState = listOfNotNull(postApplyVerifyState, summary).joinToString(" ")
                 }
         }
-        umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()}"
+        val refreshStatus = if (context.skippedFiles.isEmpty()) {
+            "UML: complete code-backed UML loaded. ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()}"
+        } else {
+            "UML: partial code-backed UML loaded. ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()} Review the skipped-path guidance if anything looks incomplete."
+        }
+        umlStatusLabel.text = refreshStatus
         scopeReceiptArea.text = buildString {
             appendLine("Current Scope Receipt")
             appendLine("- Included files: ${context.filesAnalyzed.size}")
