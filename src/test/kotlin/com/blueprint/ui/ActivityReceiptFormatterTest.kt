@@ -75,8 +75,8 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Inspected one changed file after apply from the chooser: app/models.py"),
         )
         assertEquals(
-            "Run the changed app with python main.py. Expected visible result: InviteReminder appears on the screen",
-            receiptTextForTest("Demo e2e step passed: Run the changed app with python main.py. Expected visible result: InviteReminder appears on the screen"),
+            "Run the changed app with python main.py. Confirmed visible result: InviteReminder appears on the screen",
+            receiptTextForTest("Demo e2e step passed: Run the changed app with python main.py. Confirmed visible result: InviteReminder appears on the screen"),
         )
         assertEquals(
             "Run the changed app could not start because no run command was inferred.",
