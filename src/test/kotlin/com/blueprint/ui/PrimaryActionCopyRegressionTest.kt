@@ -11,7 +11,8 @@ class PrimaryActionCopyRegressionTest {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("primaryActionButton.text = \"Refresh UML From Code\""))
-        assertTrue(source.contains("guideLabel.text = \"Start by reading the current project into an editable UML diagram.\""))
+        assertTrue(source.contains("guideLabel.text = emptyUmlGuideText()"))
+        assertTrue(source.contains("\"Start by reading the current project into an editable UML diagram.\""))
     }
 
     @Test

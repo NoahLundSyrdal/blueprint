@@ -3509,13 +3509,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 guideLabel.text = "Review approved the reviewed code patch. Apply Approved Changes to write it to disk, then Blueprint will validate the project."
             }
             currentUmlEntityCount() == 0 -> {
-            primaryActionButton.text = "Refresh UML From Code"
-            guideLabel.text = "Start by reading the current project into an editable UML diagram."
+                primaryActionButton.text = "Refresh UML From Code"
+                guideLabel.text = emptyUmlGuideText()
             }
             else -> {
-            primaryActionButton.text = "Generate Code Diff"
-            guideLabel.text = "Change the UML with chat or direct edits, then Generate Code Diff."
+                primaryActionButton.text = "Generate Code Diff"
+                guideLabel.text = "Change the UML with chat or direct edits, then Generate Code Diff."
             }
+        }
+    }
+
+    private fun emptyUmlGuideText(): String {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        return if (context.isPythonLikely()) {
+            "Start by reading the current project into an editable UML diagram."
+        } else {
+            "Blueprint has not found enough Python project structure yet. Open a Python folder or add .py files, then click Refresh UML From Code again."
         }
     }
 
