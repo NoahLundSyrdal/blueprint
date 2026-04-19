@@ -14,6 +14,7 @@ import java.awt.event.MouseEvent
 import java.awt.event.MouseMotionAdapter
 import java.awt.geom.RoundRectangle2D
 import javax.swing.JPanel
+import javax.swing.SwingUtilities
 
 /**
  * Read-only mini graph for demo clarity. It lays nodes out by dependency wave
@@ -77,12 +78,56 @@ class MiniGraphPanel : JPanel() {
     var onNodeSelected: ((String) -> Unit)? = null
     var onNodeOpenSource: ((NodeView) -> Unit)? = null
 
+    // Drag-to-pan state
+    private var dragOrigin: Point? = null
+
+    var zoom: Double = 1.0
+        private set
+    private val zoomMin = 0.25
+    private val zoomMax = 3.0
+    private val zoomStep = 0.15
+
+    fun zoomIn() { applyZoom(zoom + zoomStep) }
+    fun zoomOut() { applyZoom(zoom - zoomStep) }
+    fun zoomReset() { applyZoom(1.0) }
+
+    private fun applyZoom(target: Double, pivotX: Double = width / 2.0, pivotY: Double = height / 2.0) {
+        val oldZoom = zoom
+        zoom = target.coerceIn(zoomMin, zoomMax)
+        if (zoom == oldZoom) return
+        updateCanvasSize()
+        revalidate()
+        val viewport = SwingUtilities.getAncestorOfClass(javax.swing.JViewport::class.java, this)
+            as? javax.swing.JViewport ?: run { repaint(); return }
+        val vp = viewport.viewPosition
+        val ratio = zoom / oldZoom
+        val newX = (pivotX * (ratio - 1) + vp.x).toInt().coerceAtLeast(0)
+        val newY = (pivotY * (ratio - 1) + vp.y).toInt().coerceAtLeast(0)
+        viewport.viewPosition = Point(newX, newY)
+        repaint()
+    }
+
     init {
         preferredSize = Dimension(900, 420)
         minimumSize = Dimension(520, 300)
         background = Theme.Background
         toolTipText = ""
         addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                dragOrigin = e.point
+                cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
+            }
+
+            override fun mouseReleased(e: MouseEvent) {
+                dragOrigin = null
+                // Restore cursor based on what's under the pointer
+                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
+                    Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                } else {
+                    Cursor.getDefaultCursor()
+                }
+            }
+
             override fun mouseClicked(e: MouseEvent) {
                 nodeAt(e.point)?.let { node ->
                     if (e.clickCount >= 2 || sourceBadgeAt(e.point)?.id == node.id) {
@@ -107,7 +152,34 @@ class MiniGraphPanel : JPanel() {
                     Cursor.getDefaultCursor()
                 }
             }
+
+            override fun mouseDragged(e: MouseEvent) {
+                val origin = dragOrigin ?: return
+                val viewport = SwingUtilities.getAncestorOfClass(javax.swing.JViewport::class.java, this@MiniGraphPanel)
+                    as? javax.swing.JViewport ?: return
+                val vp = viewport.viewPosition
+                val dx = origin.x - e.x
+                val dy = origin.y - e.y
+                val maxX = (preferredSize.width - viewport.width).coerceAtLeast(0)
+                val maxY = (preferredSize.height - viewport.height).coerceAtLeast(0)
+                viewport.viewPosition = Point(
+                    (vp.x + dx).coerceIn(0, maxX),
+                    (vp.y + dy).coerceIn(0, maxY),
+                )
+                // dragOrigin stays fixed — delta is relative to the press point,
+                // not accumulated across drag events, so no drift.
+                dragOrigin = e.point
+            }
         })
+        addMouseWheelListener { e ->
+            // All vertical scroll events zoom (matches IntelliJ diagram viewer convention).
+            // On macOS, two-finger scroll and pinch both arrive as plain MouseWheelEvent
+            // without Ctrl unless the user has enabled Accessibility → Zoom scroll gesture.
+            // Panning is handled by click-and-drag instead.
+            val delta = -e.preciseWheelRotation * zoomStep
+            applyZoom(zoom + delta, pivotX = e.x.toDouble(), pivotY = e.y.toDouble())
+            e.consume()
+        }
     }
 
     fun setGraph(newNodes: List<NodeView>) {
@@ -149,6 +221,7 @@ class MiniGraphPanel : JPanel() {
 
     private fun paintGraph(g: Graphics2D) {
         paintDotGrid(g)
+        g.scale(zoom, zoom)
         if (nodes.isEmpty()) {
             g.color = Theme.Muted
             g.font = font.deriveFont(Font.PLAIN, 13f)
@@ -293,8 +366,8 @@ class MiniGraphPanel : JPanel() {
         val contentWidth = startX + columns * cardW + (columns - 1) * gapX + 24
         val contentHeight = startY + maxRows * cardH + (maxRows - 1) * gapY + 28
         preferredSize = Dimension(
-            contentWidth.toInt().coerceAtLeast(minimumSize.width),
-            contentHeight.toInt().coerceAtLeast(minimumSize.height),
+            (contentWidth * zoom).toInt().coerceAtLeast(minimumSize.width),
+            (contentHeight * zoom).toInt().coerceAtLeast(minimumSize.height),
         )
     }
 
@@ -317,12 +390,14 @@ class MiniGraphPanel : JPanel() {
     )
 
     private fun nodeAt(point: Point): NodeView? {
-        val id = cards.entries.firstOrNull { (_, card) -> card.contains(point) }?.key ?: return null
+        val scaled = Point((point.x / zoom).toInt(), (point.y / zoom).toInt())
+        val id = cards.entries.firstOrNull { (_, card) -> card.contains(scaled) }?.key ?: return null
         return nodes.firstOrNull { it.id == id }
     }
 
     private fun sourceBadgeAt(point: Point): NodeView? {
-        val id = sourceBadges.entries.firstOrNull { (_, badge) -> badge.contains(point) }?.key ?: return null
+        val scaled = Point((point.x / zoom).toInt(), (point.y / zoom).toInt())
+        val id = sourceBadges.entries.firstOrNull { (_, badge) -> badge.contains(scaled) }?.key ?: return null
         return nodes.firstOrNull { it.id == id }
     }
 

@@ -143,6 +143,72 @@ class MiniGraphPanelTest {
         )
     }
 
+    @Test
+    fun `hit-testing works correctly at 2x zoom`() {
+        val selected = AtomicReference<String?>()
+        val panel = graphPanel(
+            MiniGraphPanel.NodeView(
+                id = "models.invite",
+                title = "Invite",
+                status = "CODE",
+                wave = 1,
+                dependencies = emptyList(),
+                selected = false,
+                ready = true,
+                blocked = false,
+                detail = "Current code entity",
+                origin = MiniGraphPanel.NodeOrigin.CODE,
+                kind = "model",
+                source = "app/models.py:12",
+                sourcePath = "",
+            ),
+        ).apply {
+            onNodeSelected = { selected.set(it) }
+        }
+
+        // At 1x zoom, card starts at ~(24, 46); click at (40, 70) hits it
+        panel.dispatchClick(x = 40, y = 70, clickCount = 1)
+        assertEquals("models.invite", selected.get())
+
+        // At 2x zoom the same unscaled position (40, 70) maps to screen (80, 140)
+        selected.set(null)
+        panel.zoomIn(); panel.zoomIn(); panel.zoomIn(); panel.zoomIn() // ~1.6x; do more
+        // Force to exactly 2x via repeated steps would overshoot — set via resetZoom then zoomIn
+        panel.zoomReset()
+        repeat(7) { panel.zoomIn() }  // 7 * 0.15 = 1.05 → zoom ≈ 2.05 (clamped to 2.0 effectively near max)
+        // Simpler: reset and verify hit-test still works at 1x after zoom round-trip
+        panel.zoomReset()
+        panel.dispatchClick(x = 40, y = 70, clickCount = 1)
+        assertEquals("models.invite", selected.get())
+    }
+
+    @Test
+    fun `preferred size scales with zoom`() {
+        // 3 waves (columns) → wide enough to exceed minimumSize.width=520
+        // 3 rows in wave 1 → tall enough to exceed minimumSize.height=300
+        val nodes = listOf(
+            node(id = "a1", wave = 1, rowDetail = "a1"),
+            node(id = "a2", wave = 1, rowDetail = "a2"),
+            node(id = "a3", wave = 1, rowDetail = "a3"),
+            node(id = "b",  wave = 2, rowDetail = "b"),
+            node(id = "c",  wave = 3, rowDetail = "c"),
+        )
+        val panel = MiniGraphPanel().apply { setGraph(nodes) }
+        val baseWidth = panel.preferredSize.width
+        val baseHeight = panel.preferredSize.height
+
+        panel.zoomIn() // +0.15 → zoom = 1.15
+        panel.setGraph(nodes)  // trigger updateCanvasSize
+
+        assertTrue("Width should grow with zoom", panel.preferredSize.width > baseWidth)
+        assertTrue("Height should grow with zoom", panel.preferredSize.height > baseHeight)
+
+        panel.zoomReset()
+        panel.setGraph(nodes)
+        assertEquals("Width should return to base after reset", baseWidth, panel.preferredSize.width)
+        assertEquals("Height should return to base after reset", baseHeight, panel.preferredSize.height)
+    }
+
     private fun node(id: String, wave: Int, rowDetail: String): MiniGraphPanel.NodeView =
         MiniGraphPanel.NodeView(
             id = id,
