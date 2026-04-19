@@ -3329,7 +3329,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "Apply Blocked By Review"
         }
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
-        reviewSummaryArea.text = buildReviewSummary(exec, reviewFreshness)
+        reviewSummaryArea.text = buildReviewSummary(exec, review, reviewFreshness)
 
         val issues = buildList {
             if (plan != null) addAll(JsonExtractor.planIssues(plan))
@@ -3705,17 +3705,46 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
     }
 
-    private fun buildReviewSummary(exec: ExecutionArtifact?, freshness: ReviewFreshnessState): String {
+    private fun buildReviewSummary(
+        exec: ExecutionArtifact?,
+        review: ReviewArtifact?,
+        freshness: ReviewFreshnessState,
+    ): String {
         val summary = PatchChangeSummary.reviewSummary(exec)
         val scopeSentence = reviewScopeSentence(exec)
+        val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
             appendLine("Diff status: ${freshness.badge}")
             appendLine(freshness.warning)
+            approvalSentence?.let {
+                appendLine()
+                appendLine(it)
+            }
             appendLine()
             appendLine(scopeSentence)
             appendLine()
             append(summary)
         }.trim()
+    }
+    private fun reviewApprovalSentence(exec: ExecutionArtifact?, review: ReviewArtifact?): String? {
+        if (!reviewAllowsApply(review)) return null
+        val changePhrase = PatchChangeSummary.semanticChangeLines(exec).take(2).ifEmpty { listOf("the reviewed code patch") }
+            .joinToString(" and ")
+        val acceptedEvidence = review?.acceptanceReview.orEmpty()
+            .filter { it.result.uppercase() == "PASS" }
+            .flatMap { it.evidence }
+            .map { it.trim().trimEnd('.') }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(1)
+            .firstOrNull()
+        val scopeReason = when (review?.scopeCompliance?.result?.uppercase()) {
+            "PASS" -> "stays within the selected files"
+            "PARTIAL" -> "mostly stays within the selected files"
+            else -> "was reviewed for scope"
+        }
+        val evidenceReason = acceptedEvidence?.let { " It also matches the requested UML because $it." }.orEmpty()
+        return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported.$evidenceReason"
     }
 
     private fun reviewScopeSentence(exec: ExecutionArtifact?): String {
