@@ -160,11 +160,21 @@ object PythonModelModuleRenderer {
         val existingByName = existingFields.associateBy { it.name }
         return spec.copy(
             fields = spec.fields.map { field ->
-                val existing = existingByName[field.name] ?: return@map field
+                val existing = existingByName[field.name] ?: return@map backwardsCompatibleNewField(field)
                 if (existing.type != field.type) return@map field
                 field.copy(defaultExpression = existing.defaultExpression)
             },
         )
+    }
+
+    private fun backwardsCompatibleNewField(field: ModelField): ModelField {
+        if (field.defaultExpression != null) return field
+        if (field.type.contains("Optional[") || field.type.contains("| None")) return field
+        val referencesModelType = typeIdentifiers(field.type).any {
+            it.firstOrNull()?.isUpperCase() == true && it !in nonModelReferenceTypeNames
+        }
+        if (!referencesModelType) return field
+        return field.copy(type = "Optional[${field.type}]", defaultExpression = "None")
     }
 
     private fun preservedClassBody(bodyLines: List<String>): List<String> {
@@ -433,6 +443,10 @@ object PythonModelModuleRenderer {
     private val TOP_LEVEL_FIELD = Regex("""^    [A-Za-z_][A-Za-z0-9_]*\s*:\s*[^#=]+(?:=.*)?$""")
     private val builtinTypeNames = setOf(
         "str", "int", "float", "bool", "bytes", "list", "dict", "set", "tuple", "None", "True", "False",
+    )
+    private val nonModelReferenceTypeNames = setOf(
+        "Any", "Decimal", "UUID", "Date", "Datetime", "Time", "Timedelta", "List", "Dict", "Set", "Tuple", "Union",
+        "Optional",
     )
 
     private const val AST_CLASS_SCRIPT = """

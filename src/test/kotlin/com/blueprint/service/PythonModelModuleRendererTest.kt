@@ -109,6 +109,56 @@ class PythonModelModuleRendererTest {
     }
 
     @Test
+    fun `merge makes new relationship fields optional so existing constructors keep working`() {
+        val existing = """
+            from dataclasses import dataclass
+
+            from app.company import CarCompany
+
+
+            @dataclass
+            class VehicleModel:
+                id: str
+                name: str
+                segment: str
+                company: CarCompany
+
+                def display_name(self) -> str:
+                    return f"{self.company.name} {self.name}"
+        """.trimIndent()
+
+        val result = PythonModelModuleRenderer.renderWithReport(
+            listOf(
+                NodeContract(
+                    name = "VehicleModel",
+                    kind = "schema",
+                    schema = """
+                        id: str
+                        name: str
+                        segment: str
+                        company: CarCompany
+                        warranty_policy: WarrantyPolicy
+                    """.trimIndent(),
+                ),
+                NodeContract(
+                    name = "WarrantyPolicy",
+                    kind = "schema",
+                    schema = """
+                        months: int
+                        provider: str
+                    """.trimIndent(),
+                ),
+            ),
+            existingContent = existing,
+        )
+
+        assertTrue(result.content, result.content.contains("from typing import Optional\n"))
+        assertTrue(result.content, result.content.contains("class WarrantyPolicy:"))
+        assertTrue(result.content, result.content.contains("warranty_policy: Optional[WarrantyPolicy] = None"))
+        assertTrue(result.content, result.content.contains("def display_name(self) -> str:"))
+    }
+
+    @Test
     fun `merge preserves unrelated top level code`() {
         val existing = """
             from dataclasses import dataclass
