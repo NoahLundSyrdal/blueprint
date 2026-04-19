@@ -1,0 +1,7 @@
+[project]
+name = "random-flat-tool"
+version = "0.1.0"
+dependencies = ["attrs>=23.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

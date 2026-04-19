@@ -7,31 +7,78 @@ import org.junit.Test
 
 class ProjectValidationServiceTest {
     @Test
-    fun `prefers inferred pytest command`() {
+    fun `prefers analyzer command ordering`() {
         val context = context(
             testCommands = listOf("python -m unittest discover tests", "python -m pytest"),
             testRoots = listOf("tests"),
         )
 
-        assertEquals("python -m pytest", ProjectValidationService.chooseValidationCommand(context))
+        assertEquals("python -m unittest discover tests", ProjectValidationService.chooseValidationCommand(context))
     }
 
     @Test
-    fun `falls back to pytest when tests exist but analyzer has no command`() {
+    fun `falls back to unittest discover when tests exist but analyzer has no command`() {
         val context = context(
             testCommands = emptyList(),
             testRoots = listOf("tests"),
+        )
+
+        assertEquals("python -m unittest discover tests", ProjectValidationService.chooseValidationCommand(context))
+    }
+
+    @Test
+    fun `falls back to tox or nox before generic runners when configured`() {
+        assertEquals(
+            "tox",
+            ProjectValidationService.chooseValidationCommand(
+                context(testCommands = emptyList(), testRoots = listOf("tests"), configFiles = listOf("tox.ini")),
+            ),
+        )
+        assertEquals(
+            "nox",
+            ProjectValidationService.chooseValidationCommand(
+                context(testCommands = emptyList(), testRoots = listOf("tests"), configFiles = listOf("noxfile.py")),
+            ),
+        )
+    }
+
+    @Test
+    fun `falls back to pytest for setup cfg projects without discovered tests`() {
+        val context = context(
+            testCommands = emptyList(),
+            testRoots = emptyList(),
+            configFiles = listOf("setup.cfg"),
         )
 
         assertEquals("python -m pytest", ProjectValidationService.chooseValidationCommand(context))
     }
 
     @Test
-    fun `returns no command for projects without tests`() {
+    fun `falls back to import compile validation for source only projects`() {
         val context = context(
             testCommands = emptyList(),
             testRoots = emptyList(),
             configFiles = emptyList(),
+        )
+
+        val command = ProjectValidationService.chooseValidationCommand(context)
+
+        assertTrue(command!!.contains("compileall.compile_dir"))
+    }
+
+    @Test
+    fun `returns no command for projects without sources or tests`() {
+        val context = PythonProjectAnalyzer.PythonProjectContext(
+            basePath = "/tmp/project",
+            configFiles = emptyList(),
+            sourceRoots = emptyList(),
+            testRoots = emptyList(),
+            packageManager = "unknown",
+            frameworks = emptyList(),
+            testCommands = emptyList(),
+            runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
+            notes = emptyList(),
         )
 
         assertNull(ProjectValidationService.chooseValidationCommand(context))
@@ -85,6 +132,8 @@ class ProjectValidationServiceTest {
             packageManager = "pyproject",
             frameworks = listOf("pytest"),
             testCommands = testCommands,
+            runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
             notes = emptyList(),
         )
 }

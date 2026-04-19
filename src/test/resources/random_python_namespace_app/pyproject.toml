@@ -1,0 +1,4 @@
+[project]
+name = "random-namespace-app"
+version = "0.1.0"
+dependencies = ["pydantic>=2.0", "fastapi>=0.110"]

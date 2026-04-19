@@ -22,14 +22,29 @@ class ProjectValidationService(private val project: Project) {
         val relatedFiles: List<String> = emptyList(),
         val durationMillis: Long = 0,
         val reason: String = "",
+        val mode: Mode = Mode.STANDARD,
     ) {
         enum class Status { PASS, FAIL, SKIPPED }
 
+        enum class Mode { STANDARD, FALLBACK }
+
         fun summaryLine(): String =
             when (status) {
-                Status.PASS -> "Validation passed: $command"
-                Status.FAIL -> "Validation failed: $command"
+                Status.PASS -> validationLabel("passed")
+                Status.FAIL -> validationLabel("failed")
                 Status.SKIPPED -> "Validation skipped: $reason"
+            }
+
+        fun detailLabel(): String =
+            when (mode) {
+                Mode.STANDARD -> "Validation"
+                Mode.FALLBACK -> "Fallback validation"
+            }
+
+        private fun validationLabel(outcome: String): String =
+            when (mode) {
+                Mode.STANDARD -> "Validation $outcome: $command"
+                Mode.FALLBACK -> "Fallback validation $outcome: $command"
             }
     }
 
@@ -71,6 +86,7 @@ class ProjectValidationService(private val project: Project) {
                         appendLine("pytest was not available; Blueprint ran its built-in test-function fallback.")
                         append(fallback.output.trim())
                     }.trim(),
+                    mode = ValidationResult.Mode.FALLBACK,
                 )
             } else {
                 primary
@@ -85,6 +101,7 @@ class ProjectValidationService(private val project: Project) {
                     relatedFiles = relatedFiles(basePath, patches, ""),
                     durationMillis = finalRun.durationMillis,
                     reason = "timeout",
+                    mode = finalRun.mode,
                 )
             }
             ValidationResult(
@@ -95,6 +112,7 @@ class ProjectValidationService(private val project: Project) {
                 relatedFiles = relatedFiles(basePath, patches, finalRun.output),
                 durationMillis = finalRun.durationMillis,
                 reason = if (finalRun.exitCode == 0) "" else "exit ${finalRun.exitCode}",
+                mode = finalRun.mode,
             )
         } catch (t: Throwable) {
             log.warn("Project validation failed to run", t)
@@ -159,20 +177,22 @@ class ProjectValidationService(private val project: Project) {
         val output: String,
         val durationMillis: Long,
         val timedOut: Boolean,
+        val mode: ValidationResult.Mode = ValidationResult.Mode.STANDARD,
     )
 
     companion object {
-        private val PYTHON_FILE = Regex("""(?:[A-Za-z]:)?[./\w\-\s]+\.py""")
+        private val PYTHON_FILE = Regex("""(?:[A-Za-z]:)?[./\\w\\-\\s]+\\.py""")
 
         fun chooseValidationCommand(context: PythonProjectAnalyzer.PythonProjectContext): String? {
-            val inferred = context.testCommands
-                .firstOrNull { it.contains("pytest") }
-                ?: context.testCommands.firstOrNull()
+            val inferred = context.testCommands.firstOrNull()
             if (!inferred.isNullOrBlank()) return inferred
-            return if (context.testRoots.isNotEmpty() || context.configFiles.any { it == "pytest.ini" || it == "pyproject.toml" }) {
-                "python -m pytest"
-            } else {
-                null
+            return when {
+                context.configFiles.any { it == "tox.ini" } -> "tox"
+                context.configFiles.any { it == "noxfile.py" } -> "nox"
+                context.testRoots.isNotEmpty() -> "python -m unittest discover ${context.testRoots.first()}"
+                context.configFiles.any { it == "pytest.ini" || it == "pyproject.toml" || it == "setup.cfg" } -> "python -m pytest"
+                context.sourceRoots.isNotEmpty() -> IMPORT_COMPILE_VALIDATION_COMMAND
+                else -> null
             }
         }
 
@@ -196,8 +216,7 @@ class ProjectValidationService(private val project: Project) {
                     lower.startsWith("===") ||
                     lower.startsWith("___")
             }
-            val lines = (if (interesting.isNotEmpty()) interesting else cleaned.takeLast(maxLines))
-                .take(maxLines)
+            val lines = (if (interesting.isNotEmpty()) interesting else cleaned.takeLast(maxLines)).take(maxLines)
             val excerpt = lines.joinToString("\n")
             return if (excerpt.length <= maxChars) excerpt else excerpt.take(maxChars).trimEnd() + "\n..."
         }
@@ -247,6 +266,42 @@ class ProjectValidationService(private val project: Project) {
                 print(f"{failures} failed, {ran - failures} passed via Blueprint fallback runner")
                 sys.exit(1)
             print(f"{ran} passed via Blueprint fallback runner")
+            PY
+        """.trimIndent()
+
+        private val IMPORT_COMPILE_VALIDATION_COMMAND = """
+            python - <<'PY'
+            import compileall
+            import pathlib
+            import sys
+
+            root = pathlib.Path.cwd()
+            source_roots = [p for p in [root / "app", root / "src"] if p.exists()]
+            if not source_roots:
+                source_roots = [
+                    path.parent for path in root.rglob("*.py")
+                    if ".venv" not in path.parts and "venv" not in path.parts and "site-packages" not in path.parts
+                ]
+            checked = []
+            failures = []
+
+            for candidate in source_roots:
+                if not candidate.exists() or not candidate.is_dir():
+                    continue
+                if candidate in checked:
+                    continue
+                checked.append(candidate)
+                ok = compileall.compile_dir(str(candidate), quiet=1, force=False)
+                if not ok:
+                    failures.append(str(candidate.relative_to(root) if candidate != root else candidate))
+
+            if not checked:
+                print("No Python source roots found for import/compile validation.")
+                sys.exit(5)
+            if failures:
+                print("Import/compile validation failed for: " + ", ".join(failures))
+                sys.exit(1)
+            print("Import/compile validation passed for: " + ", ".join(str(path.relative_to(root) if path != root else path) for path in checked))
             PY
         """.trimIndent()
     }

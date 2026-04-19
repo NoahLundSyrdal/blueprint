@@ -18,6 +18,11 @@ import java.util.Locale
 @Service(Service.Level.PROJECT)
 class PythonProjectAnalyzer(private val project: Project) {
 
+    data class SkippedFile(
+        val path: String,
+        val reason: String,
+    )
+
     data class PythonProjectContext(
         val basePath: String,
         val configFiles: List<String>,
@@ -26,13 +31,82 @@ class PythonProjectAnalyzer(private val project: Project) {
         val packageManager: String,
         val frameworks: List<String>,
         val testCommands: List<String>,
+        val runCommands: List<String>,
+        val runEntryCandidates: List<String>,
         val notes: List<String>,
+        val filesAnalyzed: List<String> = emptyList(),
+        val skippedFiles: List<SkippedFile> = emptyList(),
     ) {
         fun isPythonLikely(): Boolean =
             configFiles.isNotEmpty() || sourceRoots.isNotEmpty() || testRoots.isNotEmpty()
 
+        /**
+         * Returns a short plain-English checklist for the Python context panel.
+         */
+        fun summaryChecklist(): String =
+            buildString {
+                appendLine("Python quick checklist")
+                appendLine("- Source roots: ${sourceRoots.joinToString(", ").ifBlank { "No Python source roots detected yet." }}")
+                appendLine("- Validation command: ${testCommands.firstOrNull() ?: "No validation command inferred yet."}")
+                appendLine("- Run command: ${runCommands.firstOrNull() ?: "No run command inferred yet."}")
+                appendLine("- Run entry candidates: ${runEntryCandidates.joinToString(", ").ifBlank { "No entry files identified yet." }}")
+                appendLine("- Scope summary: ${scopeSummaryLine()}")
+            }.trim()
+
+        /**
+         * Returns a concise plain-English scope summary for the current Python folder.
+         */
+        fun scopeSummaryLine(): String =
+            buildString {
+                append("${filesAnalyzed.size} Python file")
+                if (filesAnalyzed.size != 1) append('s')
+                append(" analyzed")
+                if (skippedFiles.isNotEmpty()) {
+                    append(", ${skippedFiles.size} skipped")
+                }
+                val topReasons = skippedFiles.groupingBy { it.reason }.eachCount()
+                    .entries.sortedByDescending { it.value }
+                    .take(2)
+                    .joinToString(", ") { "${it.value} ${it.key}" }
+                if (topReasons.isNotBlank()) {
+                    append(" (${topReasons})")
+                }
+            }
+
+        /**
+         * Returns a multi-line human-readable scope receipt for onboarding and refresh UI.
+         */
+        fun scopeReceipt(): String =
+            buildString {
+                appendLine("Scope summary")
+                appendLine("- Files analyzed: ${filesAnalyzed.size}")
+                appendLine("- Files skipped: ${skippedFiles.size}")
+                if (skippedFiles.isNotEmpty()) {
+                    val topReasons = skippedFiles.groupingBy { it.reason }.eachCount()
+                        .entries.sortedByDescending { it.value }
+                        .take(2)
+                        .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+                    appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code ($topReasons). Blueprint still built the current UML from the Python files it could read. Inspect the skipped paths below if anything looks incomplete, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff.")
+                }
+                if (filesAnalyzed.isNotEmpty()) {
+                    appendLine("- Included paths:")
+                    filesAnalyzed.take(6).forEach { appendLine("  - $it") }
+                    if (filesAnalyzed.size > 6) appendLine("  - …and ${filesAnalyzed.size - 6} more")
+                }
+                if (skippedFiles.isNotEmpty()) {
+                    appendLine("- Skipped paths:")
+                    skippedFiles.take(6).forEach { appendLine("  - ${it.path} — ${it.reason}") }
+                    if (skippedFiles.size > 6) appendLine("  - …and ${skippedFiles.size - 6} more")
+                }
+            }.trim()
+
+        /**
+         * Returns the structured Python project context used in the context panel and prompts.
+         */
         fun promptContext(): String =
             buildString {
+                appendLine(summaryChecklist())
+                appendLine()
                 appendLine("PYTHON_PROJECT_CONTEXT")
                 appendLine("isPythonLikely: ${isPythonLikely()}")
                 appendLine("packageManager: $packageManager")
@@ -41,6 +115,16 @@ class PythonProjectAnalyzer(private val project: Project) {
                 appendLine("testRoots: ${testRoots.joinToString(", ").ifBlank { "(none found)" }}")
                 appendLine("frameworkHints: ${frameworks.joinToString(", ").ifBlank { "(none found)" }}")
                 appendLine("suggestedTestCommands: ${testCommands.joinToString(" && ").ifBlank { "(none inferred)" }}")
+                appendLine("suggestedRunCommands: ${runCommands.joinToString(" && ").ifBlank { "(none inferred)" }}")
+                appendLine("runEntryCandidates: ${runEntryCandidates.joinToString(", ").ifBlank { "(none identified)" }}")
+                appendLine("scopeSummary: ${scopeSummaryLine()}")
+                if (filesAnalyzed.isNotEmpty()) {
+                    appendLine("filesAnalyzed: ${filesAnalyzed.joinToString(", ")}")
+                }
+                if (skippedFiles.isNotEmpty()) {
+                    appendLine("skippedFiles:")
+                    skippedFiles.forEach { appendLine("- ${it.path}: ${it.reason}") }
+                }
                 if (notes.isNotEmpty()) {
                     appendLine("notes:")
                     notes.forEach { appendLine("- $it") }
@@ -70,15 +154,24 @@ class PythonProjectAnalyzer(private val project: Project) {
             val frameworks = detectFrameworks(text, base)
             val packageManager = detectPackageManager(configFiles, text)
             val testCommands = inferTestCommands(packageManager, configFiles, frameworks, testRoots)
+            val runEntryCandidates = inferRunEntryCandidates(base, sourceRoots, frameworks)
+            val runCommands = inferRunCommands(base, sourceRoots, frameworks)
+            val scopeScan = scanProjectScope(base, sourceRoots, maxDepth)
             val notes = buildList {
                 if ("pytest" !in frameworks && testRoots.isNotEmpty()) {
-                    add("Test roots exist but pytest dependency was not detected; verify test runner before generating tests.")
+                    add("Test roots exist but pytest dependency was not detected; Blueprint will validate with a built-in fallback or import/compile checks if needed.")
                 }
                 if (sourceRoots.isEmpty()) {
-                    add("No package roots with __init__.py were detected; generated Python file scopes should be explicit.")
+                    add("No Python source roots were detected; open a folder with .py files, src/, app/, or package directories so Blueprint can map code to UML.")
                 }
                 if (configFiles.isEmpty()) {
                     add("No pyproject/setup/requirements files were detected; infer dependencies from local files only.")
+                }
+                if (sourceRoots.size > 6) {
+                    add("Multiple Python source roots were detected. Review the generated UML and scope changes to the relevant package before applying.")
+                }
+                if (scopeScan.skipped.isNotEmpty()) {
+                    add("Scope summary: ${scopeScan.filesAnalyzed.size} Python files analyzed, ${scopeScan.skipped.size} skipped. Review skipped paths if the UML looks incomplete.")
                 }
             }
             PythonProjectContext(
@@ -89,7 +182,11 @@ class PythonProjectAnalyzer(private val project: Project) {
                 packageManager = packageManager,
                 frameworks = frameworks,
                 testCommands = testCommands,
+                runCommands = runCommands,
+                runEntryCandidates = runEntryCandidates,
                 notes = notes,
+                filesAnalyzed = scopeScan.filesAnalyzed,
+                skippedFiles = scopeScan.skipped,
             )
         } catch (t: Throwable) {
             log.warn("Failed analyzing Python project", t)
@@ -97,22 +194,32 @@ class PythonProjectAnalyzer(private val project: Project) {
         }
     }
 
+    private data class ScopeScan(
+        val filesAnalyzed: List<String>,
+        val skipped: List<SkippedFile>,
+    )
+
     private fun detectConfigFiles(base: Path): List<String> =
         knownConfigFiles.filter { Files.isRegularFile(base.resolve(it)) }
 
     private fun detectSourceRoots(base: Path, maxDepth: Int): List<String> {
         val roots = mutableSetOf<String>()
-        val src = base.resolve("src")
-        if (Files.isDirectory(src)) {
-            Files.list(src).use { stream ->
-                stream.filter { Files.isDirectory(it) && Files.isRegularFile(it.resolve("__init__.py")) }
+        if (baseHasTopLevelPythonFiles(base)) roots += "."
+        listOf("src", "app").forEach { rootName ->
+            val root = base.resolve(rootName)
+            if (!Files.isDirectory(root)) return@forEach
+            roots += rootName
+            Files.list(root).use { stream ->
+                stream.filter { Files.isDirectory(it) }
+                    .filter { !shouldSkipDir(it.fileName.toString()) }
+                    .filter { containsPythonSources(it, maxDepth = 2) }
                     .forEach { roots += base.relativize(it).toString().replace('\\', '/') }
             }
         }
         Files.list(base).use { stream ->
             stream.filter { Files.isDirectory(it) }
                 .filter { !shouldSkipDir(it.fileName.toString()) }
-                .filter { Files.isRegularFile(it.resolve("__init__.py")) }
+                .filter { containsPythonSources(it, maxDepth = 2) }
                 .forEach { roots += base.relativize(it).toString().replace('\\', '/') }
         }
         walkPythonFiles(base, maxDepth)
@@ -149,6 +256,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             "django" to listOf("django", "django-admin", "manage.py"),
             "flask" to listOf("flask", "from flask", "import flask"),
             "pydantic" to listOf("pydantic", "basemodel"),
+            "attrs" to listOf("attrs", "import attr", "from attr", "from attrs", "@define", "@attr.s"),
             "sqlalchemy" to listOf("sqlalchemy", "declarative_base"),
             "typer" to listOf("typer", "import typer"),
             "click" to listOf("click", "import click"),
@@ -176,16 +284,183 @@ class PythonProjectAnalyzer(private val project: Project) {
         testRoots: List<String>,
     ): List<String> {
         if ("pytest" !in frameworks && testRoots.isEmpty()) return emptyList()
-        val pytest = when (packageManager) {
-            "uv" -> "uv run pytest"
-            "poetry" -> "poetry run pytest"
-            "pipenv" -> "pipenv run pytest"
-            else -> "python -m pytest"
+        val commands = mutableListOf<String>()
+        if ("pytest" in frameworks || configFiles.any { it == "pytest.ini" || it == "setup.cfg" || it == "pyproject.toml" }) {
+            commands += when (packageManager) {
+                "uv" -> "uv run pytest"
+                "poetry" -> "poetry run pytest"
+                "pipenv" -> "pipenv run pytest"
+                else -> "python -m pytest"
+            }
         }
-        val commands = mutableListOf(pytest)
+        if (testRoots.isNotEmpty()) {
+            commands += "python -m unittest discover ${testRoots.first()}"
+        }
         if ("tox.ini" in configFiles) commands += "tox"
         if ("noxfile.py" in configFiles) commands += "nox"
         return commands.distinct()
+    }
+
+    private fun inferRunCommands(base: Path, sourceRoots: List<String>, frameworks: List<String>): List<String> {
+        val commands = linkedSetOf<String>()
+        val candidates = inferRunCandidates(base, sourceRoots, frameworks)
+        val packageRunCommand = preferredPackageRunCommand(base, candidates.candidatePackages, candidates.detectedPackage)
+
+        candidates.fastApiPath?.let { path ->
+            val fastApiModule = inferFrameworkModule(base, path, candidates.sourcePackages, "server")
+            if (fastApiModule != null) {
+                commands += "uvicorn $fastApiModule:app --reload"
+            }
+            commands += "python ${inferPreferredPythonPath(base, path, candidates.sourcePackages, "server")}"
+        }
+        if ("flask" in frameworks) {
+            candidates.detectedPackage?.let { commands += "flask --app ${it.replace('/', '.')}.api run" }
+            if (commands.none { it.startsWith("flask --app ") }) {
+                candidates.flaskPath?.let { path ->
+                    commands += "flask --app ${inferFrameworkModule(base, path, candidates.sourcePackages, "api") ?: moduleName(path)} run"
+                }
+            }
+        }
+        candidates.streamlitPath?.let { path -> commands += "streamlit run $path" }
+        candidates.appLikePath?.let { commands += "python $it" }
+        if (commands.isEmpty()) {
+            candidates.mainGuardPath?.let { commands += "python $it" }
+            packageRunCommand?.let { commands += it }
+        }
+        if (commands.isEmpty()) {
+            packageRunCommand?.let { commands += it }
+        }
+        return commands.toList()
+    }
+
+    private fun inferRunEntryCandidates(base: Path, sourceRoots: List<String>, frameworks: List<String>): List<String> {
+        val candidates = inferRunCandidates(base, sourceRoots, frameworks)
+        return buildList {
+            candidates.fastApiPath?.let { add(it) }
+            candidates.flaskPath?.let { add(it) }
+            candidates.streamlitPath?.let { add(it) }
+            candidates.appLikePath?.let { add(it) }
+            candidates.relPaths.firstOrNull { it == "main.py" || it.endsWith("/main.py") }?.let { add(it) }
+            candidates.relPaths.firstOrNull { it == "__main__.py" || it.endsWith("/__main__.py") }?.let { add(it) }
+            candidates.mainGuardPath?.let { add(it) }
+        }.distinct()
+    }
+
+    private fun inferRunCandidates(base: Path, sourceRoots: List<String>, frameworks: List<String>): RunCandidates {
+        val pythonFiles = walkPythonFiles(base, 4)
+        val relPaths = pythonFiles.map { base.relativize(it).toString().replace('\\', '/') }
+        val sourcePackages = sourceRoots.filter { it != "." }
+        val candidatePackages = sourcePackages.filterNot { it == "src" || it == "app" || it == "test" || it == "tests" }
+        val detectedPackage = candidatePackages.firstOrNull() ?: sourcePackages.firstOrNull { it != "src" && it != "app" }
+        val appLikePath = relPaths.firstOrNull { it == "app.py" || it.endsWith("/app.py") || it == "main.py" || it.endsWith("/main.py") }
+        val mainGuardPath = relPaths.firstOrNull { hasMainGuard(base.resolve(it)) }
+        val fastApiPath = if ("fastapi" in frameworks) {
+            relPaths.firstOrNull {
+                hasAnyText(base.resolve(it), listOf("FastAPI(", "fastapi.FastAPI(", "APIRouter(", "from fastapi import"))
+            }
+        } else {
+            null
+        }
+        val flaskPath = if ("flask" in frameworks) {
+            relPaths.firstOrNull {
+                hasAnyText(base.resolve(it), listOf("Flask(", "flask.Flask(", "Blueprint(", "from flask import"))
+            }
+        } else {
+            null
+        }
+        val streamlitPath = relPaths.firstOrNull { hasAnyText(base.resolve(it), listOf("streamlit.", "import streamlit")) }
+        return RunCandidates(
+            relPaths = relPaths,
+            sourcePackages = sourcePackages,
+            candidatePackages = candidatePackages,
+            detectedPackage = detectedPackage,
+            appLikePath = appLikePath,
+            mainGuardPath = mainGuardPath,
+            fastApiPath = fastApiPath,
+            flaskPath = flaskPath,
+            streamlitPath = streamlitPath,
+        )
+    }
+
+    private data class RunCandidates(
+        val relPaths: List<String>,
+        val sourcePackages: List<String>,
+        val candidatePackages: List<String>,
+        val detectedPackage: String?,
+        val appLikePath: String?,
+        val mainGuardPath: String?,
+        val fastApiPath: String?,
+        val flaskPath: String?,
+        val streamlitPath: String?,
+    )
+
+    private fun preferredPackageRunCommand(base: Path, candidatePackages: List<String>, detectedPackage: String?): String? {
+        val preferredPackage = candidatePackages.firstOrNull { isImportablePackage(base.resolve(it)) }
+            ?: candidatePackages.firstOrNull()
+            ?: detectedPackage
+            ?: return null
+        val moduleName = packageModuleName(preferredPackage) ?: return null
+        return "python -m $moduleName"
+    }
+
+    private fun packageModuleName(packagePath: String): String? =
+        packagePath.trim('/').replace('/', '.').takeIf { it.isNotBlank() }
+
+    private fun hasMainGuard(path: Path): Boolean =
+        hasAnyText(path, listOf("if __name__ == '__main__':", "if __name__ == \"__main__\":"))
+
+    private fun hasAnyText(path: Path, needles: List<String>): Boolean {
+        val text = readSmall(path, 20_000)
+        return text.isNotBlank() && needles.any { text.contains(it) }
+    }
+
+    private fun moduleName(path: String): String =
+        path.removeSuffix(".py").replace('/', '.')
+
+    private fun inferFrameworkModule(base: Path, path: String, sourcePackages: List<String>, preferredLeaf: String): String? {
+        val normalizedPath = path.removeSuffix(".py")
+        val parent = normalizedPath.substringBeforeLast('/', "")
+        val sourcePackage = sourcePackages.firstOrNull { candidate ->
+            normalizedPath == candidate || normalizedPath.startsWith("$candidate/")
+        } ?: return moduleName(path)
+        val relativeToSource = normalizedPath.removePrefix(sourcePackage).removePrefix("/")
+        val preferredModule = preferredModulePath(base, sourcePackage, parent, preferredLeaf)
+        return when {
+            relativeToSource.isBlank() -> sourcePackage.replace('/', '.')
+            preferredModule != null -> preferredModule.replace('/', '.')
+            else -> moduleName(path)
+        }
+    }
+
+    private fun inferPreferredPythonPath(base: Path, path: String, sourcePackages: List<String>, preferredLeaf: String): String {
+        val sourcePackage = sourcePackages.firstOrNull { candidate ->
+            path == "$candidate.py" || path.startsWith("$candidate/")
+        } ?: return path
+        val parent = path.removeSuffix(".py").substringBeforeLast('/', "")
+        val preferredModule = preferredModulePath(base, sourcePackage, parent, preferredLeaf) ?: return path
+        return "$preferredModule.py"
+    }
+
+    private fun preferredModulePath(base: Path, sourcePackage: String, parent: String, preferredLeaf: String): String? {
+        val parentDir = if (parent.isBlank()) base else base.resolve(parent)
+        if (Files.isRegularFile(parentDir.resolve("$preferredLeaf.py"))) {
+            return listOf(parent, preferredLeaf).filter { it.isNotBlank() }.joinToString("/")
+        }
+        val sourceDir = base.resolve(sourcePackage)
+        if (Files.isRegularFile(sourceDir.resolve("$preferredLeaf.py"))) {
+            return listOf(sourcePackage, preferredLeaf).joinToString("/")
+        }
+        if (parent.isNotBlank()) {
+            return listOf(parent, preferredLeaf).joinToString("/")
+        }
+        return if (sourcePackage.isNotBlank()) listOf(sourcePackage, preferredLeaf).joinToString("/") else null
+    }
+
+    private fun isImportablePackage(path: Path): Boolean {
+        if (!Files.isDirectory(path)) return false
+        return Files.isRegularFile(path.resolve("__main__.py")) ||
+            Files.isRegularFile(path.resolve("__init__.py")) ||
+            containsPythonSources(path, maxDepth = 2)
     }
 
     private fun walkPythonFiles(base: Path, maxDepth: Int): List<Path> {
@@ -199,6 +474,34 @@ class PythonProjectAnalyzer(private val project: Project) {
         }
     }
 
+    private fun scanProjectScope(base: Path, sourceRoots: List<String>, maxDepth: Int): ScopeScan {
+        if (!Files.isDirectory(base)) return ScopeScan(emptyList(), emptyList())
+        val analyzed = mutableSetOf<String>()
+        val skipped = mutableListOf<SkippedFile>()
+        val includedRoots = sourceRoots.mapNotNull { root ->
+            when {
+                root == "." || root.isBlank() -> base
+                else -> base.resolve(root).normalize().takeIf { Files.isDirectory(it) && it.startsWith(base) }
+            }
+        }.ifEmpty { listOf(base) }
+
+        Files.walk(base, maxDepth).use { stream ->
+            stream.filter { Files.isRegularFile(it) }.forEach { path ->
+                val relPath = base.relativize(path).toString().replace('\\', '/')
+                val fileName = path.fileName.toString()
+                val isPython = fileName.endsWith(".py")
+                when {
+                    !isPython -> Unit
+                    base.relativize(path).any { shouldSkipDir(it.toString()) } -> skipped += SkippedFile(relPath, "ignored build or virtual-env path")
+                    isLikelyGenerated(fileName) -> skipped += SkippedFile(relPath, "generated Python file")
+                    includedRoots.none { path.startsWith(it) } -> skipped += SkippedFile(relPath, "outside inferred Python scope")
+                    else -> analyzed += relPath
+                }
+            }
+        }
+        return ScopeScan(analyzed.toList().sorted(), skipped.distinctBy { "${it.path}:${it.reason}" }.sortedBy { it.path })
+    }
+
     private fun nearestPackageRoot(base: Path, file: Path): String? {
         var current = file.parent ?: return null
         var lastPackage: Path? = null
@@ -210,8 +513,47 @@ class PythonProjectAnalyzer(private val project: Project) {
                 break
             }
         }
-        return lastPackage?.let { base.relativize(it).toString().replace('\\', '/') }
+        if (lastPackage != null) {
+            return base.relativize(lastPackage).toString().replace('\\', '/')
+        }
+        return namespaceSourceRoot(base, file)
     }
+
+    private fun namespaceSourceRoot(base: Path, file: Path): String? {
+        val parent = file.parent ?: return null
+        if (parent == base) return null
+        val relative = runCatching { base.relativize(parent) }.getOrNull() ?: return null
+        val parts = relative.map { it.toString() }
+        if (parts.isEmpty()) return null
+        val first = parts.first()
+        return when (first) {
+            "src", "app" -> first
+            "test", "tests" -> null
+            else -> first
+        }
+    }
+
+    private fun baseHasTopLevelPythonFiles(base: Path): Boolean {
+        Files.list(base).use { stream ->
+            return stream.anyMatch { path ->
+                Files.isRegularFile(path) && path.fileName.toString().endsWith(".py")
+            }
+        }
+    }
+
+    private fun containsPythonSources(dir: Path, maxDepth: Int): Boolean {
+        if (!Files.isDirectory(dir)) return false
+        Files.walk(dir, maxDepth).use { stream ->
+            return stream.anyMatch { path ->
+                Files.isRegularFile(path) &&
+                    path.fileName.toString().endsWith(".py") &&
+                    !baseRelativeParts(dir, path).any { shouldSkipDir(it) }
+            }
+        }
+    }
+
+    private fun baseRelativeParts(base: Path, path: Path): List<String> =
+        runCatching { base.relativize(path).map { it.toString() }.toList() }.getOrDefault(emptyList())
 
     private fun readSmall(path: Path, maxChars: Int): String =
         try {
@@ -230,11 +572,16 @@ class PythonProjectAnalyzer(private val project: Project) {
             packageManager = "unknown",
             frameworks = emptyList(),
             testCommands = emptyList(),
+            runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
             notes = emptyList(),
         )
 
     private fun shouldSkipDir(name: String): Boolean =
         name in skippedDirectories || name.startsWith(".")
+
+    private fun isLikelyGenerated(fileName: String): Boolean =
+        fileName.endsWith("_pb2.py") || fileName.endsWith("_pb2_grpc.py")
 
     private companion object {
         val knownConfigFiles = listOf(
@@ -242,6 +589,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             "setup.py",
             "setup.cfg",
             "requirements.txt",
+            "requirements.in",
             "requirements-dev.txt",
             "dev-requirements.txt",
             "poetry.lock",
@@ -263,8 +611,10 @@ class PythonProjectAnalyzer(private val project: Project) {
             "__pycache__",
             "build",
             "dist",
+            "generated",
             "node_modules",
             "site-packages",
+            "vendor",
             "venv",
         )
     }

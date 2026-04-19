@@ -4,6 +4,7 @@ import com.blueprint.ir.IRStore
 import com.blueprint.model.AcceptanceCriterion
 import com.blueprint.model.AcceptanceCriterionType
 import com.blueprint.model.BlueprintNode
+import com.blueprint.model.ExecutionArtifact
 import com.blueprint.model.ExecutionStatus
 import com.blueprint.model.FileScope
 import com.blueprint.model.NodeType
@@ -17,6 +18,7 @@ import com.blueprint.service.NodeExecutionService
 import com.blueprint.service.NodePlanningService
 import com.blueprint.service.NodeRegistry
 import com.blueprint.service.PatchFreshness
+import com.blueprint.service.ProjectRunService
 import com.blueprint.service.ProjectValidationService
 import com.blueprint.service.PythonProjectAnalyzer
 import com.blueprint.service.PythonUmlGenerator
@@ -36,6 +38,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -54,8 +57,11 @@ import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.swing.AbstractButton
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
@@ -73,6 +79,7 @@ import javax.swing.JPanel
 import javax.swing.JPasswordField
 import javax.swing.JScrollPane
 import javax.swing.Scrollable
+import javax.swing.JSeparator
 import javax.swing.JSplitPane
 import javax.swing.SwingConstants
 import javax.swing.JTabbedPane
@@ -243,38 +250,501 @@ private class ChatBubblePanel(
     }
 }
 
-internal data class GuidedInviteScenarioState(
+internal data class FirstRunChecklistState(
     val codeMapReady: Boolean,
-    val umlDraftReady: Boolean,
     val reviewedDiffReady: Boolean,
+    val reviewApprovedReady: Boolean,
     val appliedReady: Boolean,
     val refreshedCodeMapReady: Boolean,
+    val runCommand: String?,
+    val runEntryCandidates: List<String> = emptyList(),
+    val validationCommand: String?,
+    val validationReady: Boolean,
+    val validationPassed: Boolean,
+    val runVerified: Boolean,
+    val skippedFiles: List<PythonProjectAnalyzer.SkippedFile> = emptyList(),
+) {
+    /**
+     * Returns the first-run checklist for any Python folder in plain product language.
+     */
+    fun checklistText(): String {
+        val currentStep = when {
+            !codeMapReady -> 1
+            !reviewedDiffReady -> 2
+            !reviewApprovedReady -> 3
+            !appliedReady -> 4
+            !refreshedCodeMapReady -> 5
+            !runVerified -> 6
+            else -> 6
+        }
+        val validationLine = when {
+            !appliedReady && validationCommand.isNullOrBlank() ->
+                "Validation readiness: not inferred yet. Blueprint will validate after apply if it can infer a command; otherwise verify manually after Apply Approved Changes."
+            !appliedReady ->
+                "Validation readiness: ready. Blueprint will validate after apply with: $validationCommand"
+            validationPassed && validationCommand.isNullOrBlank() ->
+                "Validation readiness: passed after apply. Blueprint did not need a separate validation command."
+            validationPassed ->
+                "Validation readiness: passed after apply with: $validationCommand"
+            validationReady && validationCommand.isNullOrBlank() ->
+                "Validation readiness: ran after apply. Review the result before you continue."
+            validationReady ->
+                "Validation readiness: ran after apply with: $validationCommand. Review the result before you continue."
+            validationCommand.isNullOrBlank() ->
+                "Validation readiness: not inferred. After Apply Approved Changes, verify manually or run your preferred checks."
+            else ->
+                "Validation readiness: ready to run after apply with: $validationCommand"
+        }
+        val runLine = when {
+            runCommand.isNullOrBlank() ->
+                missingRunCommandChecklist(runEntryCandidates)
+            runVerified ->
+                "Run verified with: $runCommand"
+            else ->
+                "Run the changed app with: $runCommand"
+        }
+        val skippedLine = skippedFilesSummaryLine()
+        val resetAdviceLine = when {
+            appliedReady && !refreshedCodeMapReady ->
+                "Freshness: Blueprint already applied the reviewed code patch. Refresh UML From Code to verify the current code-backed UML before you keep going."
+            refreshedCodeMapReady ->
+                "Freshness: the code-backed UML is refreshed from the current files on disk."
+            else -> null
+        }
+        val runReadinessLine = runReadinessSummary(runCommand, runEntryCandidates, runVerified)
+        val runDecisionLine = runDecisionSummary(runCommand, runEntryCandidates, runVerified)
+        val readinessLine = readinessSummary(runCommand, runEntryCandidates, validationCommand, validationReady, validationPassed, runVerified)
+        return buildList {
+            add("First-run checklist:")
+            resetAdviceLine?.let { add(it) }
+            add(readinessLine)
+            add(runReadinessLine)
+            add(runDecisionLine)
+            add("${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.")
+            skippedLine?.let { add(it) }
+            add("${markerForStep(2, currentStep, reviewedDiffReady)} Generate Code Diff -> create a reviewed code patch from your UML edits.")
+            add("${markerForStep(3, currentStep, reviewApprovedReady)} Review approved -> confirm Blueprint says the reviewed code patch is safe to apply.")
+            add("${markerForStep(4, currentStep, appliedReady)} Apply Approved Changes -> write the approved code patch to disk.")
+            add("${markerForStep(5, currentStep, refreshedCodeMapReady)} Refresh UML From Code -> verify the code-backed UML after apply.")
+            add("${markerForStep(6, currentStep, runVerified)} Run the changed app -> $runLine")
+            add("")
+            add("Validation:")
+            add("- $validationLine")
+        }.joinToString("\n")
+    }
+
+    private fun skippedFilesSummaryLine(): String? {
+        if (skippedFiles.isEmpty()) return null
+        val reasonSummary = skippedFiles.groupingBy { it.reason }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .take(2)
+            .joinToString(", ") { (reason, count) ->
+                if (count == 1) reason else "$count $reason"
+            }
+        val examplePaths = skippedFiles.take(2).joinToString(", ") { it.path }
+        return "- Scope note: ${skippedFiles.size} Python path${if (skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($reasonSummary). Blueprint still built the current UML from the Python files it could read, so inspect skipped paths like $examplePaths if anything looks incomplete. Fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
+    }
+
+    private fun markerForStep(step: Int, currentStep: Int, done: Boolean): String =
+        when {
+            done -> "[done]"
+            step == currentStep -> "[next]"
+            else -> "[wait]"
+        }
+}
+
+private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
+    val candidates = runEntryCandidates.take(3)
+    val candidateReason = when {
+        candidates.isEmpty() ->
+            "Blueprint inferred this as the best default run command from the current Python project structure."
+        candidates.firstOrNull() == runCommand.removePrefix("python ") ->
+            "Blueprint inferred this as the best default run command because $runCommand maps directly to the strongest likely entry file ${candidates.first()}."
+        else ->
+            "Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as ${candidates.joinToString(", ")}."
+    }
+    val alternatives = runCommandAlternatives(runEntryCandidates)
+    return buildString {
+        append("Run decision: ")
+        append(candidateReason)
+        append(" Recommended command: $runCommand.")
+        alternatives?.let { append(" $it") }
+    }
+}
+
+private fun verifiedRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
+    val candidates = runEntryCandidates.take(3)
+    val confidence = when {
+        candidates.isEmpty() ->
+            "Run decision: Blueprint verified $runCommand and did not detect competing entry files, so it remains the recommended default."
+        candidates.size == 1 ->
+            "Run decision: Blueprint verified $runCommand against the strongest entry file signal (${candidates.first()}), so it remains the recommended default."
+        else ->
+            "Run decision: Blueprint verified $runCommand against the strongest entry-file signals (${candidates.joinToString(", ")}), so it remains the recommended default for now."
+    }
+    val alternatives = runCommandAlternatives(runEntryCandidates)
+    return buildString {
+        append(confidence)
+        alternatives?.let { append(" $it") }
+    }
+}
+
+private fun runReadinessSummary(runCommand: String?, runEntryCandidates: List<String>, runVerified: Boolean = false): String = when {
+    !runCommand.isNullOrBlank() && runVerified -> "Run readiness: verified. Blueprint verified $runCommand for this project."
+    !runCommand.isNullOrBlank() -> "Run readiness: ready. Blueprint inferred $runCommand for this project."
+    runEntryCandidates.isEmpty() -> "Run readiness: no runnable Python entrypoint inferred yet."
+    else -> "Run readiness: likely entry files found, but no single safe default command yet."
+}
+
+private fun validationReadinessLabel(
+    validationCommand: String?,
+    validationReady: Boolean,
+    validationPassed: Boolean,
+): String = when {
+    validationPassed && validationCommand.isNullOrBlank() -> "passed after apply"
+    validationPassed -> "passed after apply"
+    validationReady && validationCommand.isNullOrBlank() -> "ran after apply"
+    validationReady -> "ran after apply"
+    validationCommand.isNullOrBlank() -> "not inferred"
+    else -> "ready"
+}
+
+private fun readinessSummary(
+    runCommand: String?,
+    runEntryCandidates: List<String>,
+    validationCommand: String?,
+    validationReady: Boolean,
+    validationPassed: Boolean,
+    runVerified: Boolean = false,
+): String {
+    val runStatus = when {
+        !runCommand.isNullOrBlank() && runVerified -> "verified"
+        !runCommand.isNullOrBlank() -> "ready"
+        runEntryCandidates.isEmpty() -> "not inferred"
+        else -> "partial"
+    }
+    val validationStatus = validationReadinessLabel(validationCommand, validationReady, validationPassed)
+    return "Blueprint readiness: run $runStatus; validation $validationStatus."
+}
+
+private fun runDecisionSummary(runCommand: String?, runEntryCandidates: List<String>, runVerified: Boolean = false): String = when {
+    !runCommand.isNullOrBlank() && runVerified -> verifiedRunCommandReason(runCommand, runEntryCandidates)
+    !runCommand.isNullOrBlank() -> inferredRunCommandReason(runCommand, runEntryCandidates)
+    else -> missingRunCommandChecklist(runEntryCandidates)
+}
+
+private fun runCommandAlternatives(runEntryCandidates: List<String>): String? {
+    val alternatives = runEntryCandidates.drop(1).take(2)
+    if (alternatives.isEmpty()) return null
+    return if (alternatives.size == 1) {
+        "Other likely entry file: ${alternatives.first()}."
+    } else {
+        "Other likely entry files: ${alternatives.joinToString(", ")}."
+    }
+}
+
+private fun manualVerificationNextStep(runEntryCandidates: List<String>): String =
+    if (runEntryCandidates.isEmpty()) {
+        "Next: Refresh UML From Code, then inspect a likely entry file manually if needed."
+    } else {
+        "Next: Open Likely Entry File, run the best candidate manually, confirm the feature, then Refresh UML From Code if you changed folders."
+    }
+
+private fun manualVerificationTooltip(hasLikelyEntryFiles: Boolean): String =
+    if (hasLikelyEntryFiles) {
+        "No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, run it manually, confirm the feature, then Refresh UML From Code if you changed folders."
+    } else {
+        "No run command was inferred yet. Refresh UML From Code, inspect a likely entry file manually, run it, and confirm the feature."
+    }
+
+private fun validationFailureRecoveryMessage(reviewFreshnessBadge: String?): String = when (reviewFreshnessBadge) {
+    "STALE" ->
+        "Validation failed after apply. The reviewed code patch is stale now, so Generate Code Diff again after you adjust the UML or code. Inspect the related file manually first if you need to understand the failure."
+    "FRESH" ->
+        "Validation failed after apply. Inspect the related file manually first. If you change the UML or code, Generate Code Diff again before you continue."
+    else ->
+        "Validation failed after apply. Inspect the related file manually first. If the fix changes the UML or code, Generate Code Diff again before you continue."
+}
+
+private fun validationFailureNextStepDetail(reviewFreshnessBadge: String?): String = when (reviewFreshnessBadge) {
+    "STALE" -> "Validation failed after apply, and the reviewed code patch is stale now, so Generate Code Diff again after you adjust the UML or code."
+    "FRESH" -> "Validation failed after apply. Inspect the related file manually first, then Generate Code Diff again if you changed the UML or code."
+    else -> "Validation failed after apply. Inspect the related file manually first, then Generate Code Diff again if the fix changed the UML or code."
+}
+
+private data class RefreshExplanation(
+    val summary: String,
+    val detail: String,
 )
 
+private fun refreshScopeSummary(context: PythonProjectAnalyzer.PythonProjectContext): String {
+    if (context.skippedFiles.isEmpty()) return "Refresh scope: no Python paths were skipped."
+    val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
+        .entries.sortedByDescending { it.value }
+        .take(2)
+        .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+    val examplePaths = context.skippedFiles.take(2).joinToString(", ") { it.path }
+    return "Refresh scope: ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
+}
+
+private fun refreshExplanation(
+    generated: PythonUmlGenerator.GeneratedUml,
+    context: PythonProjectAnalyzer.PythonProjectContext,
+    highlightMessage: String?,
+    verifyState: String?,
+): RefreshExplanation {
+    val scopeDetail = if (context.skippedFiles.isEmpty()) {
+        "Refresh UML From Code reloaded ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), and ${generated.filesScanned} file(s) from the current Python folder."
+    } else {
+        "Refresh UML From Code reloaded ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), and ${generated.filesScanned} readable file(s) from the current Python folder while skipping ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) "" else "s"}."
+    }
+    val changedEntityDetail = highlightMessage?.takeIf { it.isNotBlank() }
+        ?: verifyState?.takeIf { it.isNotBlank() }
+        ?: "Blueprint refreshed the code-backed UML from the current files on disk."
+    return RefreshExplanation(
+        summary = "$scopeDetail ${context.scopeSummaryLine().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }}",
+        detail = "$changedEntityDetail ${refreshScopeSummary(context)}",
+    )
+}
+
+private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
+    val candidates = runEntryCandidates.take(4)
+    val candidateList = candidates.joinToString(", ")
+    val strongestCandidate = candidates.firstOrNull()
+    val otherCandidates = candidates.drop(1)
+    val projectShape = when {
+        candidates.any { it.endsWith("app.py") || it.endsWith("main.py") } ->
+            "Project shape hint: this looks most like an app or CLI entry flow, so verify the feature in the running output or UI."
+        candidates.any { it.endsWith("__main__.py") } ->
+            "Project shape hint: this looks most like a package-style app entry, so verify the feature from the package entrypoint output."
+        candidates.isNotEmpty() ->
+            "Project shape hint: Blueprint found Python files but no obvious app launcher, so verify from the strongest likely entry file first."
+        else ->
+            "Project shape hint: Blueprint has not found a likely app launcher yet, so inspect the project root for the main entry path."
+    }
+    return if (candidates.isEmpty()) {
+        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:\n1. Refresh UML From Code after you pick the Python folder you want to verify.\n2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root.\n3. Open the best candidate and run it from the IDE or terminal.\n4. Confirm the changed feature exists.\n5. $projectShape\n6. Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
+    } else {
+        buildString {
+            append("Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command.")
+            strongestCandidate?.let { append(" Strongest candidate right now: $it.") }
+            if (otherCandidates.isNotEmpty()) {
+                append(" Other strong candidates: ${otherCandidates.joinToString(", ")}.")
+            }
+            append(" Try this fallback:\n")
+            append("1. Open Likely Entry File to inspect the best candidate.\n")
+            append("2. If that is not the right launcher, try one of these likely entry files: $candidateList\n")
+            append("3. Run the best candidate from the IDE or terminal.\n")
+            append("4. Confirm the changed feature exists in the running app or CLI output.\n")
+            append("5. $projectShape\n")
+            append("6. Refresh UML From Code again if you switch to a different Python folder or app root.")
+        }
+    }
+}
+
+internal data class GuidedInviteScenarioState(
+    val codeMapReady: Boolean,
+    val prompt: String,
+    val expectedEntity: String,
+    val expectedRelationSource: String?,
+    val expectedRelationTarget: String?,
+    val resetSuggested: Boolean,
+    val resetPath: String,
+    val umlDraftReady: Boolean,
+    val reviewedDiffReady: Boolean,
+    val reviewApprovedReady: Boolean,
+    val appliedReady: Boolean,
+    val refreshedCodeMapReady: Boolean,
+    val runVerified: Boolean,
+    val promptReady: Boolean,
+    val runCommand: String?,
+) {
+    fun demoReceiptText(): String {
+        val runLine = when {
+            runCommand.isNullOrBlank() -> "[wait] Run the changed app -> wait for an inferred run command, then verify the feature manually."
+            runVerified -> "[pass] Run the changed app -> verified with: $runCommand"
+            refreshedCodeMapReady -> "[next] Run the changed app -> use: $runCommand"
+            else -> "[wait] Run the changed app -> use: $runCommand after Refresh UML From Code."
+        }
+        val tryChangeLine = when {
+            !codeMapReady -> "[wait] Try This Change -> load the current code map first."
+            promptReady || umlDraftReady -> "[pass] Try This Change -> loaded fresh prompt for the current code map: $prompt"
+            else -> "[next] Try This Change -> load a fresh prompt for the current code map."
+        }
+        return listOf(
+            "Demo receipt:",
+            if (codeMapReady) "[pass] Refresh UML From Code -> expected visible result: current code map is loaded." else "[next] Refresh UML From Code -> expected visible result: current code map is loaded.",
+            tryChangeLine,
+            if (reviewedDiffReady) "[pass] Generate Code Diff -> expected visible result: reviewed code patch is ready." else if (umlDraftReady) "[next] Generate Code Diff -> expected visible result: reviewed code patch is ready." else "[wait] Generate Code Diff -> expected visible result: reviewed code patch is ready.",
+            if (reviewApprovedReady) "[pass] Review approved -> expected visible result: Apply Approved Changes is unlocked." else if (reviewedDiffReady) "[next] Review approved -> expected visible result: Apply Approved Changes is unlocked." else "[wait] Review approved -> expected visible result: Apply Approved Changes is unlocked.",
+            if (appliedReady) "[pass] Apply Approved Changes -> expected visible result: code files are written to disk." else if (reviewApprovedReady) "[next] Apply Approved Changes -> expected visible result: code files are written to disk." else "[wait] Apply Approved Changes -> expected visible result: code files are written to disk.",
+            if (refreshedCodeMapReady) "[pass] Refresh UML From Code again -> expected visible result: code-backed UML reflects the applied change." else if (appliedReady) "[next] Refresh UML From Code again -> expected visible result: code-backed UML reflects the applied change." else "[wait] Refresh UML From Code again -> expected visible result: code-backed UML reflects the applied change.",
+            runLine,
+        ).joinToString("\n")
+    }
+}
+
 internal object GuidedInviteScenario {
-    const val PROMPT = "add an InvitePolicy entity"
     const val PATCH_PATH = "blueprint_demo/imported_invite/models.py"
+    private const val BASELINE_RESOURCE = "/guided_demo/invite_project_imported_invite_models.py"
+    private val promptPlans = listOf(
+        PromptPlan(
+            prompt = "add an InvitePolicy entity",
+            expectedEntity = "InvitePolicy",
+            relationSource = "Invite",
+            relationTarget = "InvitePolicy",
+        ),
+        PromptPlan(
+            prompt = "add an InviteReminder entity",
+            expectedEntity = "InviteReminder",
+            relationSource = "Invite",
+            relationTarget = "InviteReminder",
+        ),
+        PromptPlan(
+            prompt = "add an expires_at field to Invite",
+            expectedEntity = "Invite",
+            expectedField = "expires_at",
+        ),
+    )
+
+    data class PromptPlan(
+        val prompt: String,
+        val expectedEntity: String,
+        val relationSource: String? = null,
+        val relationTarget: String? = null,
+        val expectedField: String? = null,
+    )
 
     fun matchesProject(projectName: String, basePath: String?): Boolean {
         val normalizedPath = basePath.orEmpty().replace('\\', '/')
         return projectName == "invite_project" || normalizedPath.endsWith("/examples/invite_project")
     }
 
+    fun importedInviteFile(projectBasePath: String?): File =
+        projectBasePath?.let { File(it, PATCH_PATH) } ?: File(PATCH_PATH)
+
+    fun baselineText(): String =
+        GuidedInviteScenario::class.java.getResourceAsStream(BASELINE_RESOURCE)?.use { input ->
+            input.readBytes().toString(StandardCharsets.UTF_8)
+        } ?: error("Missing guided invite baseline resource: $BASELINE_RESOURCE")
+
+    fun resetImportedInviteFile(projectBasePath: String?): Boolean {
+        val target = importedInviteFile(projectBasePath)
+        val parent = target.parentFile ?: return false
+        if (!parent.exists() && !parent.mkdirs()) return false
+        target.writeText(baselineText())
+        return true
+    }
+
+    fun needsReset(projectBasePath: String?): Boolean {
+        val target = importedInviteFile(projectBasePath)
+        if (!target.isFile) return false
+        return runCatching { target.readText() == baselineText() }.getOrDefault(false).not()
+    }
+
+    fun pickPrompt(componentNames: Set<String>, entityNames: Set<String>, inviteFields: List<String>): PromptPlan? =
+        promptPlans.firstOrNull { plan ->
+            when {
+                plan.expectedField != null -> plan.expectedField !in inviteFields
+                plan.expectedEntity !in componentNames && plan.expectedEntity !in entityNames -> true
+                else -> false
+            }
+        }
+
     fun checklistText(state: GuidedInviteScenarioState): String {
+        val runStep = when {
+            state.runCommand.isNullOrBlank() -> "Run the changed app -> ${missingRunCommandChecklist(emptyList())}"
+            state.runVerified -> "Run the changed app -> pass. Verified with: ${state.runCommand}"
+            else -> "Run the changed app -> start with: ${state.runCommand}; verify the new feature appears."
+        }
+        val freshnessLine = if (state.resetSuggested) {
+            "Freshness: this guided prompt already appears in ${state.resetPath}, so Reset Demo Sandbox is recommended to remove that existing change before a predictable fresh demo run."
+        } else {
+            "Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state. That keeps the suggested change aligned with what Refresh UML From Code just found, not an older canned demo step."
+        }
+        val promptStateLine = when {
+            !state.codeMapReady -> "Prompt state: Refresh UML From Code first so Blueprint can choose a fresh demo prompt for the current sandbox."
+            state.promptReady || state.umlDraftReady -> "Prompt state: the suggested guided prompt is fresh for the current code map because it was chosen from the latest Refresh UML From Code result."
+            else -> "Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change because Blueprint will choose it from the latest Refresh UML From Code result."
+        }
+        if (state.resetSuggested) {
+            return listOf(
+                "Demo prompt scenario:",
+                freshnessLine,
+                promptStateLine,
+                "[done] Refresh UML From Code -> current code map is loaded.",
+                if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
+                "[done] Guided demo changes already exist in this sandbox.",
+                "[next] Reset Demo Sandbox is optional but recommended here because ${state.resetPath} already contains the guided change and reset restores the baseline invite demo file for a predictable fresh demo run.",
+                "[next] If you skip reset, make a different UML-backed change instead of reusing the guided change that is already on disk.",
+                "[next] After reset, click Try This Change to load a fresh prompt for the clean sandbox.",
+                "[wait] Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.",
+                "[wait] Blueprint reviews the fresh code patch before apply.",
+                "[wait] Apply Approved Changes -> blocked until review approves the fresh reviewed code patch.",
+                "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
+                "[wait] $runStep",
+                "",
+                "Your own change:",
+                "[next] Edit the UML directly or ask chat for a different architecture change, then Generate Code Diff.",
+            ).joinToString("\n")
+        }
+        if (!state.codeMapReady) {
+            return listOf(
+                "Demo prompt scenario:",
+                freshnessLine,
+                promptStateLine,
+                "[next] Refresh UML From Code -> load the current code map first so Blueprint can choose a fresh demo change.",
+                "[wait] Try This Change -> load a fresh prompt for the current code map.",
+                "[wait] Generate Code Diff -> available after the UML draft is updated.",
+                "[wait] Blueprint reviews the code patch before apply.",
+                "[wait] Apply Approved Changes -> blocked until review approves the reviewed code patch.",
+                "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
+                "[wait] $runStep",
+                "",
+                "Your own change:",
+                "[next] You can skip the demo path and ask chat for a different architecture change after the first UML refresh.",
+            ).joinToString("\n")
+        }
         val currentStep = when {
             !state.codeMapReady -> 1
             !state.umlDraftReady -> 2
             !state.reviewedDiffReady -> 3
-            !state.appliedReady -> 4
-            !state.refreshedCodeMapReady -> 5
-            else -> 0
+            !state.reviewApprovedReady -> 4
+            !state.appliedReady -> 5
+            !state.refreshedCodeMapReady -> 6
+            !state.runVerified -> 7
+            else -> 7
+        }
+        val expectedResult = when {
+            state.expectedRelationSource != null && state.expectedRelationTarget != null ->
+                "expect ${state.expectedEntity} linked from ${state.expectedRelationSource} in the UML draft."
+            state.expectedEntity == "Invite" ->
+                "expect Invite to include ${state.prompt.substringAfter("add an ").substringBefore(" field")} in the UML draft."
+            else -> "expect ${state.expectedEntity} in the UML draft."
+        }
+        val refreshedResult = when {
+            state.expectedEntity == "Invite" ->
+                "expect the refreshed current code map to include ${state.prompt.substringAfter("add an ").substringBefore(" field")} on Invite."
+            else -> "expect ${state.expectedEntity} to appear in the refreshed current code map."
         }
         return listOf(
-            "${stepMarker(1, currentStep, state.codeMapReady)} Abstract Code to UML -> expect Project, User, and Invite in the current code map.",
-            "${stepMarker(2, currentStep, state.umlDraftReady)} Use demo prompt: \"$PROMPT\" -> expect InvitePolicy linked from Invite in the UML draft.",
-            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
-            "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk.",
-            "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> expect InvitePolicy to appear in the refreshed current code map.",
+            "Demo prompt scenario:",
+            freshnessLine,
+            promptStateLine,
+            "${stepMarker(1, currentStep, state.codeMapReady)} Refresh UML From Code -> expect Project, User, and Invite in the current code map.",
+            if (state.promptReady) {
+                "${stepMarker(2, currentStep, state.umlDraftReady)} Try This Change: \"${state.prompt}\" -> loaded fresh prompt for the current code map; $expectedResult"
+            } else {
+                "${stepMarker(2, currentStep, false)} Try This Change -> use the button to load the fresh prompt into chat first."
+            },
+            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed code patch for $PATCH_PATH.",
+            "${stepMarker(4, currentStep, state.reviewApprovedReady)} Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked.",
+            "${stepMarker(5, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
+            "${stepMarker(6, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
+            "${stepMarker(7, currentStep, state.runVerified)} $runStep",
+            "",
+            "Your own change:",
+            "[next] Edit the UML directly or ask chat for a different architecture change when you are not following the demo prompt.",
         ).joinToString("\n")
     }
 
@@ -284,6 +754,407 @@ internal object GuidedInviteScenario {
             step == currentStep -> "[next]"
             else -> "[wait]"
         }
+}
+
+private const val POST_APPLY_NEXT_STEP_LINE = "Next: Refresh UML From Code to verify the updated code-backed UML."
+private const val POST_APPLY_VERIFY_TOOLTIP = "After apply, Blueprint already refreshed the code-backed UML once. Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."
+private const val POST_APPLY_VERIFY_STATE = "Blueprint automatically refreshed the code-backed UML from disk after apply."
+private const val POST_APPLY_REFRESH_NOTE = "Blueprint already refreshed the code-backed UML automatically after apply. Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."
+private const val POST_APPLY_VERIFY_PROMPT = "Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."
+private const val POST_APPLY_VERIFY_HEADING = "Refresh UML From Code verification:"
+private const val POST_APPLY_VERIFY_RELOADED_LINE = "- Blueprint already reloaded the changed code into the UML automatically after apply."
+private const val POST_APPLY_VERIFIED_RECEIPT = "Verified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Blueprint already refreshed the code-backed UML automatically after apply.\n- Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote."
+
+private fun postApplyVerifyChecklist(summaryLine: String, validationSummary: String, changedPaths: List<String>, verificationSummaryLine: String, refreshNote: String): String =
+    buildString {
+        appendLine(POST_APPLY_VERIFY_HEADING)
+        appendLine(POST_APPLY_VERIFY_RELOADED_LINE)
+        appendLine("- $POST_APPLY_VERIFY_PROMPT")
+        appendLine("- $summaryLine")
+        appendLine("- $validationSummary")
+        if (changedPaths.isEmpty()) {
+            appendLine("- Written paths: none.")
+        } else {
+            appendLine("- Written paths:")
+            changedPaths.forEach { appendLine("  - $it") }
+        }
+        appendLine("- $verificationSummaryLine")
+        appendLine("- $refreshNote")
+    }.trim()
+
+internal data class PostApplyInlineSummary(
+    val changedPaths: List<String>,
+    val summaryLine: String,
+    val receiptSummary: String,
+    val validationDetailsText: String,
+    val validationAndPathsLine: String,
+    val nextStepLine: String,
+    val verifyChecklist: String,
+    val copyableResultSummary: String,
+) {
+    /**
+     * Builds the persisted review-panel text shown after apply completes.
+     */
+    fun reviewPanelText(exec: ExecutionArtifact?): String =
+        buildString {
+            appendLine(summaryLine)
+            appendLine(receiptSummary)
+            appendLine(resultDetailsSection())
+            appendLine()
+            appendLine(PatchChangeSummary.applySummary(exec, changedPaths))
+            appendLine(verifyChecklist)
+            append("\n")
+            append(POST_APPLY_VERIFIED_RECEIPT)
+        }.trim()
+
+    private fun resultDetailsSection(): String =
+        validationAndPathsLine.removePrefix(receiptSummary).trimStart('\n')
+}
+
+internal data class GenerateDiffGuideSummary(
+    val guideText: String,
+    val nextStepDetail: String,
+    val commandSummary: String,
+)
+
+internal object PatchChangeSummary {
+    /**
+     * Builds the review-tab summary shown before apply from the reviewed patch content.
+     */
+    fun reviewSummary(exec: ExecutionArtifact?): String {
+        if (exec == null) return "What changed?\n- No reviewed code patch yet."
+        if (exec.patches.isEmpty()) {
+            return buildSummary(
+                heading = "What changed?",
+                semanticHeading = "Plain-English summary before apply:",
+                semanticChanges = listOf("No code changes needed"),
+                diffGuidance = noOpDiffGuidance(),
+                changedFilesText = "Changed files: none.",
+            )
+        }
+        val semanticChanges = semanticChanges(exec.patches, exec.summary)
+        return buildSummary(
+            heading = "What changed?",
+            semanticHeading = "Plain-English summary before apply:",
+            semanticChanges = semanticChanges,
+            changedFilesText = changedFilesSummary(exec),
+        )
+    }
+
+    /**
+     * Returns compact change lines for the whole reviewed patch or a filtered set of changed paths.
+     */
+    fun semanticChangeLines(exec: ExecutionArtifact?, changedPaths: Collection<String>? = null): List<String> {
+        if (exec == null) return emptyList()
+        val changedPathSet = changedPaths?.toSet()
+        val filtered = if (changedPathSet == null) exec.patches else exec.patches.filter { it.path in changedPathSet }
+        return semanticChanges(filtered, exec.summary)
+    }
+
+    /**
+     * Builds the apply-success summary from only the paths that were actually written to disk.
+     */
+    fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
+        if (exec == null || appliedPaths.isEmpty()) return noOpApplySummary()
+        val appliedPathSet = appliedPaths.toSet()
+        val changedFiles = exec.patches.filter { it.path in appliedPathSet }
+        if (changedFiles.isEmpty()) return noOpApplySummary()
+        val semanticChanges = semanticChanges(changedFiles, exec.summary)
+        return buildSummary(
+            heading = "What changed?",
+            semanticHeading = "Plain-English summary after apply:",
+            semanticChanges = semanticChanges,
+            changedFilesText = changedFilesSummary(changedFiles),
+        )
+    }
+
+    /**
+     * Returns a short human-readable summary of which files the reviewed patch touches.
+     */
+    fun changedFilesSummary(exec: ExecutionArtifact?): String =
+        when {
+            exec == null -> "Changed files: none yet."
+            exec.patches.isEmpty() -> "Changed files: none."
+            else -> changedFilesSummary(exec.patches)
+        }
+
+    private fun buildSummary(
+        heading: String,
+        semanticHeading: String,
+        semanticChanges: List<String>,
+        changedFilesText: String,
+        diffGuidance: String? = null,
+    ): String =
+        buildString {
+            appendLine(heading)
+            appendLine(semanticHeading)
+            semanticChanges.forEach { appendLine("- $it") }
+            diffGuidance?.let {
+                appendLine()
+                appendLine(it)
+            }
+            appendLine()
+            appendLine(changedFilesText)
+        }.trim()
+
+    private fun changedFilesSummary(patches: List<Patch>): String =
+        buildString {
+            appendLine("Changed files (${patches.size}):")
+            patches.forEach { appendLine("- ${fileActionLabel(it.action)} ${it.path}") }
+        }.trim()
+
+    private fun noOpApplySummary(): String =
+        buildSummary(
+            heading = "What changed?",
+            semanticHeading = "Plain-English summary after apply:",
+            semanticChanges = listOf("No code changes needed"),
+            diffGuidance = noOpDiffGuidance(),
+            changedFilesText = "Changed files: none.",
+        )
+
+    private fun noOpDiffGuidance(): String =
+        "Blueprint compared the current UML-backed request against the code on disk. Refresh UML From Code to verify the current code, or refine the UML and try a different change."
+
+    private fun fileActionLabel(action: String): String =
+        when (action.lowercase()) {
+            "create" -> "create"
+            "delete" -> "delete"
+            else -> "update"
+        }
+
+    private fun semanticChanges(patches: List<Patch>, fallbackSummary: String): List<String> {
+        val changes = patches
+            .asSequence()
+            .flatMap { patch -> patchSemanticChanges(patch).asSequence() }
+            .distinct()
+            .toList()
+        return if (changes.isEmpty()) {
+            fallbackSummary.takeIf { it.isNotBlank() }?.let { listOf(it) } ?: listOf("Reviewed code patch is ready.")
+        } else {
+            changes
+        }
+    }
+
+    private fun patchSemanticChanges(patch: Patch): List<String> {
+        val changedLines = meaningfulChangedLines(patch)
+        if (changedLines.isEmpty()) return listOf(fallbackPatchSummary(patch))
+        val classChanges = linkedMapOf<String, MutableList<String>>()
+        val moduleChanges = mutableListOf<String>()
+        var currentClass: String? = null
+        for (line in changedLines) {
+            val trimmed = line.trim()
+            val className = Regex("^class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(trimmed)?.groupValues?.get(1)
+            if (className != null) {
+                currentClass = className
+                classChanges.getOrPut(className) { mutableListOf() }
+                continue
+            }
+            fieldSummary(trimmed)?.let { field ->
+                val owner = currentClass
+                if (owner == null) {
+                    moduleChanges += field
+                } else {
+                    classChanges.getOrPut(owner) { mutableListOf() }.add(field)
+                }
+            }
+        }
+        val action = patch.action.lowercase()
+        val summaries = buildList {
+            addAll(classChanges.entries.flatMap { (name, fields) -> summarizeClassChange(name, fields.distinct(), action) })
+            moduleChanges.distinct().forEach { add(summarizeModuleChange(patch, it)) }
+        }
+        return if (summaries.isNotEmpty()) summaries else listOf(fallbackPatchSummary(patch))
+    }
+    private fun summarizeClassChange(name: String, fields: List<String>, action: String): List<String> =
+        when {
+            action == "create" && fields.isEmpty() -> listOf("Added class $name")
+            action == "create" -> listOf("Added class $name") + fields.map { "$name + $it" }
+            fields.isEmpty() -> listOf("Updated class $name")
+            else -> fields.map { "$name + $it" }
+        }
+
+    private fun meaningfulChangedLines(patch: Patch): List<String> {
+        val lines = patch.content.replace("\r\n", "\n").replace("\r", "\n").lines()
+        val diffLike = lines.any { it.startsWith("@@") || it.startsWith("+++") || it.startsWith("---") }
+        if (!diffLike) return lines.filter { it.isNotBlank() }
+        val changed = mutableListOf<String>()
+        lines.forEach { line ->
+            when {
+                line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@") -> Unit
+                line.startsWith("+") && !line.startsWith("+++") -> changed += line.removePrefix("+")
+                line.startsWith(" ") -> {
+                    val context = line.removePrefix(" ")
+                    if (context.trimStart().startsWith("class ")) changed += context
+                }
+            }
+        }
+        return changed.filter { it.isNotBlank() }
+    }
+
+    private fun fieldSummary(line: String): String? {
+        val fieldMatch = Regex("^([A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*([^=#]+)").find(line) ?: return null
+        val name = fieldMatch.groupValues[1]
+        if (name == "return") return null
+        return "$name: ${fieldMatch.groupValues[2].trim()}"
+    }
+
+    private fun summarizeModuleChange(patch: Patch, field: String): String {
+        val target = patch.path.substringAfterLast('/').ifBlank { patch.path }
+        return "$target + $field"
+    }
+
+    private fun fallbackPatchSummary(patch: Patch): String {
+        val target = patch.path.substringAfterLast('/').ifBlank { patch.path }
+        return when (patch.action.lowercase()) {
+            "create" -> "$target created"
+            "delete" -> "$target deleted"
+            else -> "$target updated"
+        }
+    }
+}
+internal object ReviewExplanation {
+    fun summary(
+        nodeTitle: String,
+        exec: ExecutionArtifact?,
+        review: ReviewArtifact?,
+        readiness: DependencyGraphService.NodeReadiness?,
+        validation: ProjectValidationService.ValidationResult?,
+        validationCommand: String?,
+    ): String {
+        if (review == null) return "Review not run yet. Generate Code Diff first so Blueprint can review the patch before apply."
+        return details(nodeTitle, exec, review, readiness, validation, validationCommand).joinToString("\n")
+    }
+
+    fun statusLine(nodeTitle: String, exec: ExecutionArtifact?, review: ReviewArtifact?): String {
+        if (review == null) return "Review not run yet."
+        val shortTitle = nodeTitle.ifBlank { "this change" }
+        val changePhrase = changePhrase(exec)
+        return if (review.reviewStatus.uppercase() == "APPROVE") {
+            val scopeReason = when (review.scopeCompliance.result.uppercase()) {
+                "PASS" -> "stays within the selected files"
+                "PARTIAL" -> "mostly stays within the selected files"
+                else -> "was reviewed for scope"
+            }
+            val acceptanceReason = review.acceptanceReviewLine()?.removePrefix("Acceptance: ")
+                ?.let { " It also matches the requested UML because $it." }
+                .orEmpty()
+            "Review approved $shortTitle because $changePhrase $scopeReason and ${compactApprovalReason(review)} That is why Apply Approved Changes is safe now.$acceptanceReason"
+        } else {
+            "Review blocked $shortTitle because ${blockerLine(review)} Fix: ${fixLine(review)}"
+        }
+    }
+
+    fun details(
+        nodeTitle: String,
+        exec: ExecutionArtifact?,
+        review: ReviewArtifact,
+        readiness: DependencyGraphService.NodeReadiness?,
+        validation: ProjectValidationService.ValidationResult?,
+        validationCommand: String?,
+    ): List<String> {
+        val shortTitle = nodeTitle.ifBlank { "this change" }
+        val changePhrase = changePhrase(exec)
+        val scopeLine = when (review.scopeCompliance.result.uppercase()) {
+            "PASS" -> "Scope: stays within the selected files."
+            "PARTIAL" -> "Scope: mostly in scope, but review found scope concerns."
+            else -> "Scope: review found out-of-scope changes."
+        }
+        val dependencyLine = if (readiness?.ready == false) {
+            "Dependency status: blocked by ${readiness.reasons.firstOrNull().orEmpty()}."
+        } else {
+            "Dependency status: ready."
+        }
+        val validationLine = when (validation?.status) {
+            ProjectValidationService.ValidationResult.Status.PASS -> "${validation.detailLabel()} status: passed after apply."
+            ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                if (validation.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                    "Validation status: skipped after apply because no validation command was inferred."
+                } else {
+                    "Validation status: skipped after apply."
+                }
+            }
+            ProjectValidationService.ValidationResult.Status.FAIL -> "${validation.detailLabel()} status: failed after apply."
+            null -> "Validation status: will run after apply if Blueprint can infer a command."
+        }
+        val validationCommandLine = validationCommand?.let { "Validation after apply: $it" }
+            ?: "Validation after apply: Blueprint could not infer a validation command, so validation will be skipped unless you run checks manually."
+        val lines = mutableListOf<String>()
+        if (review.reviewStatus.uppercase() == "APPROVE") {
+            lines += "Why is it safe to apply?"
+            lines += "- What changed: $changePhrase stays aligned with $shortTitle."
+            lines += "- Why it is safe: review found no blocking scope or safety issues, so Apply Approved Changes is safe now."
+            review.acceptanceReviewLine()?.let { lines += "- $it" }
+            lines += "- ${safetyLine(review)}"
+        } else {
+            lines += "Why is it blocked?"
+            lines += "- Not approved because ${blockerLine(review)}"
+            lines += "- Fix: ${fixLine(review)}"
+            review.acceptanceReviewLine()?.let { lines += "- $it" }
+            lines += "- ${safetyLine(review)}"
+        }
+        lines += "- $scopeLine"
+        lines += "- $dependencyLine"
+        lines += "- $validationCommandLine"
+        lines += "- $validationLine"
+        return lines
+    }
+
+    private fun changePhrase(exec: ExecutionArtifact?): String {
+        val semanticChanges = PatchChangeSummary.semanticChangeLines(exec).take(2)
+        return if (semanticChanges.isEmpty()) {
+            "the reviewed code patch"
+        } else {
+            semanticChanges.joinToString(" and ")
+        }
+    }
+
+    private fun blockerLine(review: ReviewArtifact): String =
+        review.issues.firstOrNull()?.details?.ifBlank { null }
+            ?: review.summary.ifBlank { "review found a blocker in the generated patch." }
+
+    private fun fixLine(review: ReviewArtifact): String =
+        review.issues.firstOrNull()?.suggestedFix?.ifBlank { null }
+            ?: review.followUpChecks.firstOrNull()
+            ?: "adjust the UML or regenerate the patch and review again."
+
+    private fun compactApprovalReason(review: ReviewArtifact): String =
+        review.positiveSignals.firstOrNull()?.trim()?.trimEnd('.')?.let {
+            "$it."
+        } ?: "No blocking safety issues were reported."
+
+    private fun safetyLine(review: ReviewArtifact): String =
+        when {
+            review.positiveSignals.isNotEmpty() -> "Safety: ${review.positiveSignals.take(2).joinToString(" ")}"
+            review.issues.isEmpty() -> "Safety: No concrete safety issues were reported."
+            else -> "Safety: ${review.issues.take(2).joinToString(" ") { it.title.ifBlank { it.category } }}"
+        }
+
+    private fun ReviewArtifact.acceptanceReviewLine(): String? {
+        val accepted = acceptanceReview.filter { it.result.uppercase() == "PASS" }
+        if (accepted.isNotEmpty()) {
+            val evidence = accepted
+                .flatMap { it.evidence }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .take(2)
+            return if (evidence.isEmpty()) {
+                "Acceptance: requested UML changes are covered by the reviewed patch."
+            } else {
+                "Acceptance: ${evidence.joinToString(" ")}"
+            }
+        }
+        val concerns = acceptanceReview
+            .filter { it.result.uppercase() == "PARTIAL" || it.result.uppercase() == "FAIL" }
+            .flatMap { reviewItem ->
+                reviewItem.issues.ifEmpty { listOf(reviewItem.criterion) }
+            }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(2)
+        return if (concerns.isEmpty()) null else "Acceptance: ${concerns.joinToString(" ")}"
+    }
 }
 
 private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
@@ -345,6 +1216,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private var restoredFromSession = false
     private var restoredAt: Long = 0L
     private var refreshingList = false
+    private var primaryActionBusy = false
 
     private val listModel = DefaultListModel<BlueprintNode>()
     private val nodeList = JBList(listModel).apply {
@@ -400,10 +1272,28 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val statusLabel = JLabel("No node selected")
     private val selectedLabel = JLabel("Selected: none")
     private val artifactLabel = JLabel("Artifacts: not planned")
+    private val groundingSummaryArea = JBTextArea(4, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+    }
     private val reviewSummaryArea = JBTextArea(3, 40).apply {
         isEditable = false
         lineWrap = true
         wrapStyleWord = true
+    }
+    private val changedFilesPanel = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        isOpaque = false
+    }
+    private val changedFilesScrollPane = JBScrollPane(changedFilesPanel).apply {
+        border = BorderFactory.createEmptyBorder()
+        viewport.isOpaque = false
+        viewport.background = BlueprintTheme.Panel
+        isOpaque = false
+        preferredSize = Dimension(0, 110)
+        minimumSize = Dimension(0, 80)
     }
     private val safetyArea = JBTextArea(4, 40).apply {
         isEditable = false
@@ -424,7 +1314,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val summaryLabel = JLabel("Total 0 | Ready 0 | Blocked 0 | Applied 0")
     private val providerLabel = JLabel(providerText())
     private val actionProviderLabel = JLabel(providerText())
-    private val guideLabel = JLabel("Generate UML, change it with chat, then generate a code diff.")
+    private val guideLabel = JLabel("Start by reading the current project into an editable UML diagram.")
+    private val nextStepTitleLabel = JLabel("Next: Refresh UML From Code")
+    private val nextStepDetailLabel = JLabel("Read the current Python project and draw the first UML diagram.")
+    private val staleDiffBannerLabel = JLabel().apply {
+        isVisible = false
+    }
     private val firstRunScenarioArea = JBTextArea(5, 40).apply {
         isEditable = false
         isFocusable = false
@@ -432,17 +1327,108 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         wrapStyleWord = true
         rows = 5
     }
-    private val firstRunPromptButton = JButton("Use Demo Prompt").apply {
-        addActionListener { sendSuggestedChat(GuidedInviteScenario.PROMPT) }
+    private val demoReceiptArea = JBTextArea(6, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        rows = 6
+    }
+    private val firstRunPromptButton = JButton("Try This Change").apply {
+        addActionListener {
+            val state = currentInviteFirstRunScenarioState()
+            if (state.resetSuggested) {
+                if (GuidedInviteScenario.resetImportedInviteFile(project.basePath)) {
+                    appendChat(
+                        "Blueprint",
+                        "Reset Demo Sandbox restored ${state.resetPath} to the baseline invite demo file and removed the guided change that was already there. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make a different UML-backed change instead."
+                    )
+                    logActivity("Demo e2e step passed: Reset invite demo sandbox at ${state.resetPath}.")
+                    status("Invite demo sandbox reset")
+                    refreshFirstRunScenario()
+                } else {
+                    Messages.showWarningDialog(
+                        project,
+                        "Blueprint could not reset ${state.resetPath} to the baseline invite demo file. Restore it manually, then click Refresh UML From Code.",
+                        "Blueprint - Reset Demo Path"
+                    )
+                }
+            } else {
+                chatInput.text = state.prompt
+                appendChat("Blueprint", "Fresh prompt loaded for the current sandbox: \"${state.prompt}\". Send it as-is, or edit it before Generate Code Diff.")
+                logActivity("Demo e2e step passed: Try This Change prepared \"${state.prompt}\".")
+                status("Fresh demo prompt loaded")
+                refreshFirstRunScenario()
+            }
+        }
+    }
+    private val runDemoButton = JButton("Run Demo Step").apply { addActionListener { runDemoVerificationStep() } }
+    private val runChecklistActionButton = JButton("Run The Changed App").apply {
+        isEnabled = false
+        toolTipText = "Run the inferred project command from the first-run checklist when one is available."
+        addActionListener { runFromChecklist() }
+    }
+    private val runAppButton = JButton("Run In Blueprint").apply { addActionListener { toggleRunInBlueprint() } }
+    private val runStatusNoteLabel = JLabel().apply {
+        foreground = BlueprintTheme.Muted
+        font = BlueprintTheme.font(12f)
+    }
+    private val manualRunFallbackCard = RoundedSurfacePanel(BorderLayout(0, 6), BlueprintTheme.WarningSurface, BlueprintTheme.Warning).apply {
+        border = BorderFactory.createCompoundBorder(
+            RoundedLineBorder(BlueprintTheme.Warning, radius = 16, padding = Insets(10, 12, 10, 12)),
+            BorderFactory.createEmptyBorder(4, 4, 4, 4)
+        )
+        isVisible = false
+        add(JLabel("Manual run fallback").apply {
+            foreground = BlueprintTheme.Warning
+            font = BlueprintTheme.font(12f, Font.BOLD)
+        }, BorderLayout.NORTH)
+        add(JBTextArea().apply {
+            isEditable = false
+            isFocusable = false
+            lineWrap = true
+            wrapStyleWord = true
+            isOpaque = false
+            foreground = BlueprintTheme.Text
+            border = BorderFactory.createEmptyBorder()
+            font = BlueprintTheme.font(12f)
+            text = missingRunCommandChecklist(emptyList())
+        }, BorderLayout.CENTER)
+    }
+    private val runOutputArea = JBTextArea(8, 40).apply {
+        isEditable = false
+        lineWrap = true
+        wrapStyleWord = false
+        text = runOutputIdleHint()
     }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
         addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
+    private val verifyInUmlButton = JButton("Refresh UML From Code").apply {
+        isEnabled = false
+        toolTipText = POST_APPLY_VERIFY_TOOLTIP
+        addActionListener { refreshUmlAfterApplyVerification() }
+    }
+    private val openLikelyEntryFileButton = JButton("Open Likely Entry File").apply {
+        isEnabled = false
+        toolTipText = "Open a likely app entry file when Blueprint cannot infer a run command. This does not run or apply anything."
+        addActionListener { openLikelyEntryFile() }
+    }
+    private val openAppliedFilesButton = JButton("Open Changed Files").apply {
+        isEnabled = false
+        toolTipText = "Optional after verification: open the file(s) Blueprint last wrote to disk to inspect what changed."
+        addActionListener { openAppliedFiles() }
+    }
     private val undoLastApplyButton = JButton("Undo Last Apply").apply {
         isEnabled = false
         addActionListener { undoChanges() }
+    }
+    private val copyRunSummaryButton = JButton("Copy Issue Comment").apply {
+        isEnabled = false
+        toolTipText = "Copy an issue-comment-ready recap after run verification or manual verification prep."
+        addActionListener { copyRunResultSummary() }
     }
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
     private val advancedMode = JBCheckBox("Advanced")
@@ -480,17 +1466,27 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
     private val umlStatusLabel = JLabel("UML: not generated yet")
     private val modeBannerLabel = JLabel("Viewing: current code map")
+    private val scopeReceiptArea = JBTextArea(5, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        rows = 3
+        text = "Scope receipt will appear here after Refresh UML From Code."
+    }
     private val umlEditor = JBTextArea(18, 72).apply {
         lineWrap = false
         text = """
             classDiagram
             %% Start here:
-            %% 1. Click "Abstract Code to UML" to read this Python project.
+            %% 1. Click "Refresh UML From Code" to read this Python project.
             %% 2. Edit the UML directly or ask chat to refine it.
-            %% 3. Click "Create Code Nodes" when the design is ready.
+            %% 3. Click "Generate Code Diff" when the design is ready.
+            %% 4. Click "Apply Approved Changes" after review says the patch is safe.
+            %% 5. Click "Refresh UML From Code" to verify the updated code-backed UML.
             %%
             %% This loop can run anytime:
-            %% codebase -> UML -> chat refinement -> code nodes -> apply -> UML again
+            %% codebase -> UML -> chat refinement -> Generate Code Diff -> Apply Approved Changes -> Refresh UML From Code
         """.trimIndent()
     }
 
@@ -499,6 +1495,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val reviewArea = JBTextArea().apply { isEditable = false }
     private val secondaryTabs = JTabbedPane()
     private val validationResults = mutableMapOf<String, ProjectValidationService.ValidationResult>()
+    private val lastReviewedUmlByNodeId = mutableMapOf<String, String>()
+    private val reviewedAtByNodeId = mutableMapOf<String, Instant>()
+    private var refreshedAfterApply = false
+    private var postApplyChangedPaths: List<String> = emptyList()
+    private var postApplyHighlightMessage: String? = null
+    private var postApplyVerifyState: String? = null
+    private var postApplyInlineSummary: PostApplyInlineSummary? = null
+    private var completedRunReceiptCycle = false
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -588,7 +1592,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val text = button.text.orEmpty()
         val primary = button.getClientProperty("blueprint.primary") == true ||
             text.startsWith("Next:") ||
-            text.contains("Create Code Nodes") ||
+            text.contains("Generate Code Diff") ||
             text == "Send"
         button.setUI(BlueprintButtonUi(primary))
         button.foreground = if (primary) Color(0x061016) else BlueprintTheme.Text
@@ -761,7 +1765,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JLabel("Project: ${project.name}").apply { foreground = Color(0x333333) })
             add(summaryLabel.apply { foreground = Color(0x333333) })
             add(providerLabel.apply { foreground = providerColor() })
-            add(JLabel("Workflow: UML -> code diff -> apply").apply {
+            add(JLabel("Workflow: Refresh UML From Code -> edit UML -> Generate Code Diff -> Apply Approved Changes").apply {
                 foreground = Color(0x555555)
             })
             add(row("Filter", filterCombo))
@@ -774,9 +1778,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val leftButtons = JPanel(GridLayout(0, 1, 4, 4)).apply {
             border = BorderFactory.createEmptyBorder(6, 6, 6, 6)
-            add(JButton("Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
+            add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
             add(JButton("Paste UML").apply { addActionListener { importUml() } })
-            add(JButton("Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
+            if (advancedMode.isSelected) add(JButton("Generate Code Diff").apply { addActionListener { generateCodeFromUml() } }) // Advanced mode only
             add(JButton("+ Manual Node").apply { addActionListener { addNode() } })
             add(
                 JButton(if (shouldShowInviteFirstRunScenario()) "Sample: Invite UML" else "Sample: Car Company UML").apply {
@@ -811,6 +1815,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val actions = actionPanel()
+        val actionsScrollPane = JBScrollPane(actions).apply {
+            border = BorderFactory.createEmptyBorder()
+            minimumSize = Dimension(0, 150)
+            preferredSize = Dimension(0, 190)
+            horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            verticalScrollBar.unitIncrement = 16
+        }
 
         val summary = JPanel(BorderLayout()).apply {
             border = BorderFactory.createTitledBorder("Review / Safety")
@@ -819,10 +1830,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(artifactLabel)
             }
             add(labels, BorderLayout.NORTH)
-            add(JBScrollPane(reviewSummaryArea), BorderLayout.CENTER)
+            val center = JPanel(GridLayout(2, 1, 0, 6)).apply {
+                add(JBScrollPane(groundingSummaryArea))
+                add(JBScrollPane(reviewSummaryArea))
+            }
+            add(center, BorderLayout.CENTER)
             val lower = JPanel(GridLayout(1, 3, 6, 0)).apply {
+                add(changedFilesScrollPane)
                 add(JBScrollPane(safetyArea))
-                add(JBScrollPane(dependencyBlockArea))
                 add(JBScrollPane(graphArea))
             }
             add(lower, BorderLayout.SOUTH)
@@ -852,24 +1867,48 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val lowerWorkspace = JPanel(BorderLayout()).apply {
             minimumSize = Dimension(0, 320)
             preferredSize = Dimension(0, 380)
-            add(actions, BorderLayout.NORTH)
+            add(actionsScrollPane, BorderLayout.NORTH)
             add(secondaryTabs, BorderLayout.CENTER)
         }
 
         val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
             border = BorderFactory.createTitledBorder("UML Canvas")
             add(JPanel(BorderLayout()).apply {
-                add(JPanel(GridLayout(0, 1, 2, 2)).apply {
+                add(JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
                     add(JLabel("Blueprint").apply {
                         font = font.deriveFont(java.awt.Font.BOLD, 15f)
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
                     })
-                    add(umlStatusLabel.apply { foreground = Color(0x555555) })
-                    add(modeBannerLabel)
+                    add(umlStatusLabel.apply {
+                        foreground = Color(0x555555)
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+                    })
+                    add(modeBannerLabel.apply {
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+                    })
+                    add(JBScrollPane(scopeReceiptArea).apply {
+                        border = BorderFactory.createTitledBorder("Current Scope Receipt")
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        preferredSize = Dimension(520, 58)
+                        maximumSize = Dimension(Int.MAX_VALUE, 64)
+                        verticalScrollBar.unitIncrement = 16
+                    })
                 }, BorderLayout.CENTER)
                 add(JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
                     add(JButton("\u2212").apply { addActionListener { miniGraph.zoomOut() } })
                     add(JButton("+").apply { addActionListener { miniGraph.zoomIn() } })
-                    add(JButton("\u27f3").apply { addActionListener { miniGraph.zoomReset() } })
+                    add(JButton("Fit").apply {
+                        toolTipText = "Fit the UML cards into the visible canvas."
+                        addActionListener { miniGraph.fitToView() }
+                    })
+                    add(JButton("1:1").apply {
+                        toolTipText = "Reset the UML card zoom to readable size."
+                        addActionListener { miniGraph.zoomReset() }
+                    })
                     add(JButton("Reset").apply {
                         toolTipText = "Forget restored chat, UML draft, and filters. Generated nodes are kept."
                         addActionListener { resetWorkspace() }
@@ -995,42 +2034,102 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+            add(JPanel(BorderLayout(8, 2)).apply {
+                border = BorderFactory.createEmptyBorder(2, 4, 6, 4)
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 76)
+                add(primaryActionButton.apply {
+                    preferredSize = Dimension(260, 44)
+                    font = font.deriveFont(java.awt.Font.BOLD, 13f)
+                }, BorderLayout.WEST)
+                add(
+                    JPanel().apply {
+                        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                        add(nextStepTitleLabel.apply {
+                            foreground = BlueprintTheme.TextStrong
+                            font = BlueprintTheme.font(12f, Font.BOLD)
+                        })
+                        add(nextStepDetailLabel.apply {
+                            foreground = BlueprintTheme.Muted
+                            font = BlueprintTheme.font(12f)
+                        })
+                        add(staleDiffBannerLabel.apply {
+                            foreground = BlueprintTheme.Warning
+                            font = BlueprintTheme.font(12f, Font.BOLD)
+                            border = BorderFactory.createEmptyBorder(4, 0, 0, 0)
+                        })
+                        add(guideLabel.apply {
+                            foreground = Color(0x444444)
+                        })
+                    },
+                    BorderLayout.CENTER,
+                )
+            })
             if (shouldShowInviteFirstRunScenario()) {
                 add(
                     JPanel(BorderLayout(6, 6)).apply {
                         border = BorderFactory.createTitledBorder("First-Run Demo")
-                        add(firstRunScenarioArea, BorderLayout.CENTER)
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, 150)
+                        preferredSize = Dimension(520, 130)
+                        add(
+                            JPanel(GridLayout(2, 1, 0, 6)).apply {
+                                add(JBScrollPane(firstRunScenarioArea).apply {
+                                    verticalScrollBar.unitIncrement = 16
+                                })
+                                add(JBScrollPane(demoReceiptArea).apply {
+                                    verticalScrollBar.unitIncrement = 16
+                                })
+                            },
+                            BorderLayout.CENTER,
+                        )
                         add(
                             JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
                                 add(firstRunPromptButton)
+                                add(runChecklistActionButton)
+                                add(runDemoButton)
                             },
                             BorderLayout.SOUTH,
                         )
                     },
                 )
             }
-            add(JPanel(BorderLayout(8, 2)).apply {
-                border = BorderFactory.createEmptyBorder(2, 4, 6, 4)
-                add(primaryActionButton.apply {
-                    preferredSize = Dimension(260, 44)
-                    font = font.deriveFont(java.awt.Font.BOLD, 13f)
-                }, BorderLayout.WEST)
-                add(guideLabel.apply {
-                    foreground = Color(0x444444)
-                }, BorderLayout.CENTER)
-            })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 40)
                 add(mockMode)
                 add(actionProviderLabel.apply { foreground = providerColor() })
                 add(advancedMode)
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 40)
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
+                add(runAppButton)
+                add(copyRunSummaryButton)
+                add(openLikelyEntryFileButton)
+            })
+            add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 30)
+                add(runStatusNoteLabel)
+            })
+            add(manualRunFallbackCard.apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+            })
+            add(JPanel(BorderLayout()).apply {
+                border = BorderFactory.createTitledBorder("Run Output")
+                alignmentX = Component.LEFT_ALIGNMENT
+                add(JBScrollPane(runOutputArea), BorderLayout.CENTER)
+                maximumSize = Dimension(Int.MAX_VALUE, 140)
             })
             val advancedRows = listOf(
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(previewDiffButton)
                 add(applyApprovedButton)
+                add(verifyInUmlButton)
+                add(openAppliedFilesButton)
                 add(undoLastApplyButton)
             },
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
@@ -1149,7 +2248,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun seedInitialChat() {
-        val demoPrompt = if (shouldShowInviteFirstRunScenario()) GuidedInviteScenario.PROMPT else "add a Supplier entity"
+        val demoPrompt = if (shouldShowInviteFirstRunScenario()) {
+            currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"
+        } else {
+            "add a Supplier entity"
+        }
         appendChat(
             "Blueprint",
             """
@@ -1220,17 +2323,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val ready = graph.readyNodes()
         return when {
-            "generate code" in lower || "code nodes" in lower -> {
-                "When the UML looks right, click Create Code Nodes. Blueprint will turn the current UML into scoped nodes, then you can plan, execute, review, preview the diff, and apply."
+            lower.containsWorkflowQuestion() -> {
+                "When the UML looks right, click Generate Code Diff. Blueprint will prepare a reviewed code patch that you can inspect and then apply."
             }
             "abstract" in lower || "sync" in lower -> {
-                "Click Abstract Code to UML at any time. Blueprint will rescan the Python project and replace the editable UML with the current code architecture."
+                "Click Refresh UML From Code at any time. Blueprint will rescan the Python project and replace the editable UML with the current code architecture."
             }
             "blocked" in lower || "why" in lower -> {
                 val node = selected ?: return "Select a node in the UML diagram first, then ask why it is blocked."
                 val readiness = graph.readinessFor(node)
                 if (readiness.ready) {
-                    "${node.title.ifBlank { node.id.take(8) }} is ready. Run Generate Plan, then Execute Node."
+                    "${node.title.ifBlank { node.id.take(8) }} is ready. Keep refining the UML if needed, then click Generate Code Diff."
                 } else {
                     "Blocked reasons for ${node.title.ifBlank { node.id.take(8) }}:\n" +
                         readiness.reasons.joinToString("\n") { "- $it" }
@@ -1238,9 +2341,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "next" in lower || "run" in lower -> {
                 if (ready.isEmpty()) {
-                    "No nodes are ready right now. Check the UML diagram for blocked nodes, or select a node and ask why it is blocked."
+                    "No reviewed code patch is ready yet. Refine the UML, or select a UML item and ask why it is blocked."
                 } else {
-                    "Next ready node: ${ready.first().title.ifBlank { ready.first().id.take(8) }}.\nRun Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All."
+                    "Next ready UML item: ${ready.first().title.ifBlank { ready.first().id.take(8) }}.\nReview the diagram, then click Generate Code Diff when you are ready for a reviewed code patch."
                 }
             }
             "changed" in lower || "diff" in lower -> {
@@ -1249,9 +2352,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "uml" in lower || "diagram" in lower -> {
                 if (shouldShowInviteFirstRunScenario()) {
-                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${GuidedInviteScenario.PROMPT}', then generate a reviewed code diff."
+                    "The main canvas is editable Mermaid UML. For the guided invite demo, use Try This Change for a fresh prompt based on the current sandbox state, or try '${currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"}', then click Generate Code Diff."
                 } else {
-                    "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Create Code Nodes."
+                    "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
                 }
             }
             selected != null -> {
@@ -1259,7 +2362,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "${selected.title.ifBlank { selected.id.take(8) }} is selected. Status: ${badgeFor(selected)}. " +
                     if (readiness.ready) "It is ready to run." else "It is blocked; ask 'why blocked' for details."
             }
-            else -> "Start with Abstract Code to UML. Refine the editable diagram here with chat, then click Create Code Nodes when the architecture is ready."
+            else -> "Start with Refresh UML From Code. Refine the editable diagram here with chat, then click Generate Code Diff when the architecture is ready."
         }
     }
 
@@ -1267,7 +2370,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (codex.providerMode() == "mock") return false
         val lower = message.lowercase()
         if (!codex.hasOpenAIKey() && codex.providerMode() == "openai") return false
-        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "apply").any { it in lower }) {
+        if (lower.containsWorkflowQuestion()) {
             return false
         }
         return listOf("explain", "what is", "what are", "current product", "product", "architecture", "summarize", "describe")
@@ -1296,8 +2399,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val lower = message.lowercase()
         return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field")
             .any { it in lower } &&
-            !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "code nodes", "explain").any { it in lower }
+            !lower.containsWorkflowQuestion() &&
+            "explain" !in lower
     }
+
+    private fun String.containsWorkflowQuestion(): Boolean = WorkflowIntentRouting.isWorkflowQuestion(this)
 
     private fun refineUmlWithChat(message: String) {
         status("Refining UML with ${providerText()}...")
@@ -1324,11 +2430,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     return@invokeLater
                 }
                 setUmlEditorText(nextUml, pendingEdits = true)
-                umlStatusLabel.text = "UML: refined by chat. Create Code Nodes when ready, or keep editing."
+                umlStatusLabel.text = "UML: refined by chat. Generate Code Diff when ready, or keep editing."
+                groundingSummaryArea.text = grounding.summaryText
                 appendChat(
                     "Blueprint",
-                    "Updated the UML using ${grounding.selectedLabel}, so the edit stays tied to the selected source facts, fields, methods, and relationships. Review it in the main canvas, then keep refining or click Create Code Nodes."
+                    if (grounding.selectedId == null) {
+                        "Updated the UML using whole-diagram context. Select a UML card if you want the next edit grounded to one entity's source file, fields, and relationships."
+                    } else {
+                        "Updated the UML using ${grounding.selectedLabel}. Blueprint grounded this edit to the selected source file, fields, methods, and relationships before rewriting the UML."
+                    }
                 )
+                logActivity("Chat refined the UML using ${grounding.activityLabel}.")
                 updateGuide()
                 status("UML refined")
             }
@@ -1343,7 +2455,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         """
         You are Blueprint, an architecture assistant inside PyCharm.
 
-        The user edits a Mermaid UML classDiagram that will later be converted into scoped code-generation nodes.
+        The user edits a Mermaid UML classDiagram that will later be converted into a reviewed code patch.
         Update the UML according to the user's request.
         Use the grounding context to interpret pronouns like "this", "it", "selected", or "the current class".
 
@@ -1374,7 +2486,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         You are Blueprint, an architecture assistant inside PyCharm.
 
         Product loop:
-        codebase -> editable UML -> chat refinement -> code nodes -> plan/execute/review/apply -> UML again.
+        codebase -> editable UML -> chat refinement -> Generate Code Diff -> plan/execute/review/apply -> UML again.
 
         Answer the user's question clearly and briefly. Do not claim you changed code unless the user used the execution buttons.
         When useful, refer to the selected entity's source, fields, methods, relationships, current UML, and generated nodes.
@@ -1408,6 +2520,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
     }
 
+    private fun refreshGroundingSummary() {
+        groundingSummaryArea.text = chatGrounding().summaryText
+    }
+
     private fun extractMermaid(text: String): String {
         val fenced = Regex("""```(?:mermaid)?\s*(classDiagram.*?)(?:```|$)""", RegexOption.DOT_MATCHES_ALL)
             .find(text)
@@ -1431,6 +2547,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
                 Invite --> InvitePolicy : uses
             """.trimIndent()
+            "invitereminder" in lower || ("reminder" in lower && currentUml.contains("class Invite")) -> """
+
+                class InviteReminder {
+                  sendAt: datetime
+                  channel: str
+                }
+
+                Invite --> InviteReminder : schedules
+            """.trimIndent()
+            "expires_at" in lower || ("expire" in lower && currentUml.contains("class Invite")) -> currentUml.replace(
+                "class Invite {",
+                "class Invite {\n  expires_at: datetime",
+            )
             "supplier" in lower -> """
 
                 class Supplier {
@@ -1475,20 +2604,74 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun loadGeneratedUml(generated: PythonUmlGenerator.GeneratedUml) {
+        if (!refreshedAfterApply) {
+            postApplyInlineSummary = null
+        }
+        val context = project.service<PythonProjectAnalyzer>().analyze()
         setUmlEditorText(generated.text, pendingEdits = false)
-        umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
+        focusChangedEntityAfterRefresh()
+        if (refreshedAfterApply) {
+            skippedPathInlineSummary(context, prefix = "Refresh scope:")
+                .takeIf { it.isNotBlank() }
+                ?.let { summary ->
+                    postApplyVerifyState = listOfNotNull(postApplyVerifyState, summary).joinToString(" ")
+                }
+        }
+        val refreshStatus = if (context.skippedFiles.isEmpty()) {
+            "UML: complete code-backed UML loaded. ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()}"
+        } else {
+            "UML: partial code-backed UML loaded. ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()} Review the skipped-path guidance if anything looks incomplete."
+        }
+        umlStatusLabel.text = refreshStatus
+        scopeReceiptArea.text = buildString {
+            appendLine("Current Scope Receipt")
+            appendLine("- Included files: ${context.filesAnalyzed.size}")
+            appendLine("- Skipped files: ${context.skippedFiles.size}")
+            if (context.skippedFiles.isNotEmpty()) {
+                val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
+                    .entries.sortedByDescending { it.value }
+                    .take(3)
+                    .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+                appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code.")
+                appendLine("- Confidence: the current UML still reflects the Python files Blueprint could read.")
+                appendLine("- Top skipped reasons: $topReasons")
+                appendLine("- Next action: inspect the skipped paths below, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff.")
+            }
+            if (context.filesAnalyzed.isNotEmpty()) {
+                appendLine("- Included paths:")
+                context.filesAnalyzed.take(3).forEach { appendLine("  - $it") }
+            }
+            if (context.skippedFiles.isNotEmpty()) {
+                appendLine("- Skipped paths:")
+                context.skippedFiles.take(3).forEach { appendLine("  - ${it.path} — ${it.reason}") }
+            }
+        }.trim()
         graphArea.text = buildString {
             appendLine("Abstracted Python codebase to editable UML.")
             appendLine("Classes: ${generated.classCount}")
             appendLine("Relationships: ${generated.relationshipCount}")
             appendLine("Files scanned: ${generated.filesScanned}")
+            appendLine(context.scopeReceipt())
             if (generated.warnings.isNotEmpty()) {
                 appendLine()
                 appendLine("Warnings:")
                 generated.warnings.forEach { appendLine("- $it") }
             }
         }.trim()
-        appendChat("Blueprint", "I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Create Code Nodes when ready.")
+        val refreshExplanation = refreshExplanation(generated, context, postApplyHighlightMessage, postApplyVerifyState)
+        val refreshMessage = buildString {
+            append("I abstracted the current Python code into UML. ${refreshExplanation.summary} Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+            append("\n\n${refreshExplanation.detail}")
+            if (context.skippedFiles.isNotEmpty()) {
+                append("\n\nSome Python paths were skipped during Refresh UML From Code. Blueprint still built the current UML from the Python files it could read. If anything looks incomplete, inspect these skipped paths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff:\n")
+                context.skippedFiles.take(3).forEach { append("- ${it.path}: ${it.reason}\n") }
+            }
+            if (generated.warnings.isNotEmpty()) {
+                append("\nNotes:\n")
+                generated.warnings.take(3).forEach { append("- $it\n") }
+            }
+        }.trim()
+        appendChat("Blueprint", refreshMessage)
         logActivity("Abstracted code to UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s).")
         status("Code abstracted to UML")
     }
@@ -1515,7 +2698,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val panel = JPanel(BorderLayout(6, 6)).apply {
             add(
-                JLabel("Paste PlantUML, Mermaid classDiagram, or simple entity bullets. Blueprint will create reviewable nodes."),
+                JLabel("Paste PlantUML, Mermaid classDiagram, or simple entity bullets. Blueprint will turn them into a reviewed code patch flow."),
                 BorderLayout.NORTH
             )
             add(JBScrollPane(input).apply { preferredSize = Dimension(760, 420) }, BorderLayout.CENTER)
@@ -1537,7 +2720,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         setUmlEditorText(text, pendingEdits = true)
         umlStatusLabel.text = "UML: pasted/loaded. Edit or ask chat to refine it."
-        appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Create Code Nodes.")
+        appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Generate Code Diff.")
         status("Loaded UML into editor")
     }
 
@@ -1546,8 +2729,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (text.isBlank() || !text.contains("classDiagram")) {
             Messages.showWarningDialog(
                 project,
-                "The UML editor needs Mermaid classDiagram text before Blueprint can generate code nodes.",
-                "Blueprint - Create Code Nodes"
+                "The UML editor needs Mermaid classDiagram text before Blueprint can Generate Code Diff.",
+                "Blueprint - Generate Code Diff"
             )
             status("No usable UML to generate code")
             return
@@ -1556,6 +2739,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun runPrimaryProductAction() {
+        if (primaryActionBusy) return
         when {
             selectedNodeCanApply() -> applyChanges(null)
             currentUmlEntityCount() == 0 -> generateProjectUml()
@@ -1571,23 +2755,25 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun generateCodeDiffFromCurrentUml() {
+        beginPrimaryAction("Generating Code Diff...", "Blueprint is turning the current UML into a reviewed code patch.")
         val text = umlEditor.text.trim()
         if (text.isBlank() || !text.contains("classDiagram")) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
             if (existingNodes.isNotEmpty()) {
-                status("Using existing code nodes for diff")
+                status("Using existing reviewed code patch")
                 logActivity("Generate Code Diff used existing nodes because the UML text was not parseable.")
                 generateFirstRealCodeDiff(existingNodes)
                 return
             }
             generateProjectUml()
+            endPrimaryAction()
             return
         }
         val parsed = project.service<UmlImportService>().parse(text)
         if (parsed.entities.isEmpty()) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
             if (existingNodes.isNotEmpty()) {
-                status("Using existing code nodes for diff")
+                status("Using existing reviewed code patch")
                 logActivity("Generate Code Diff used existing nodes because the UML editor had no parseable entities.")
                 generateFirstRealCodeDiff(existingNodes)
                 return
@@ -1596,11 +2782,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             showArtifactTab("Review")
             reviewSummaryArea.text = "No parseable UML entities. Click Refresh UML From Code, then ask chat for the architecture change again."
             safetyArea.text = "No diff generated."
+            endPrimaryAction()
             return
         }
         importUmlText(text, "current UML")
         val nodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
-        if (nodes.isEmpty()) return status("No code nodes created")
+        if (nodes.isEmpty()) {
+            val noOpMessage = noOpDiffMessage()
+            showArtifactTab("Review")
+            reviewSummaryArea.text = noOpMessage
+            safetyArea.text = "No reviewed code patch was generated because no UML-backed work items were ready."
+            appendChat("Blueprint", noOpMessage)
+            logActivity("Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk.")
+            status("No code changes needed")
+            endPrimaryAction()
+            return
+        }
         generateFirstRealCodeDiff(nodes)
     }
 
@@ -1610,16 +2807,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         noChangeTitles: List<String> = emptyList(),
     ) {
         if (index >= nodes.size) {
-            val checked = noChangeTitles.size
-            reviewSummaryArea.text = if (checked == 0) {
-                "No implementation nodes were ready to run."
-            } else {
-                "No code changes were generated. The current UML appears to match the code for $checked checked node(s)."
-            }
-            safetyArea.text = "No diff to apply."
+            val noOpMessage = noOpDiffMessage()
+            reviewSummaryArea.text = noOpMessage
+            safetyArea.text = "No reviewed code patch to apply."
             showArtifactTab("Review")
-            status("No code changes")
-            logActivity("Generate Code Diff found no changed patches across $checked node(s).")
+            status("No code changes needed")
+            appendChat("Blueprint", noOpMessage)
+            logActivity("Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk.")
+            endPrimaryAction()
             return
         }
 
@@ -1642,10 +2837,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = registry.find(node.id) ?: node
         status("Generating code diff for ${n.title.ifBlank { n.id.take(8) }}...")
         showArtifactTab("Review")
-        reviewSummaryArea.text = "Generating a code diff from the current UML. Blueprint will plan, write a scoped patch, review it, and open the diff."
+        reviewSummaryArea.text = "Generating Code Diff for ${n.title.ifBlank { n.id.take(8) }}... Blueprint will plan, write a scoped patch, review it, and open the diff."
         safetyArea.text = "Review gate is on. Apply stays blocked unless review approves the patch."
         n.executionStatus = ExecutionStatus.EXECUTING
         registry.update(n)
+        logActivity("Planning code diff for ${n.title.ifBlank { n.id.take(8) }} with ${providerText()}.")
 
         project.service<NodePlanningService>().generatePlanAsync(n) { plan ->
             registry.setPlan(n.id, plan)
@@ -1657,9 +2853,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 showArtifactTab("Review")
                 status("Code diff blocked at planning")
                 logActivity("Code diff blocked at plan for ${n.title.ifBlank { n.id.take(8) }}")
+                endPrimaryAction()
                 return@generatePlanAsync
             }
 
+            status("Writing code patch for ${n.title.ifBlank { n.id.take(8) }}...")
+            reviewSummaryArea.text = "Plan ready. Writing a scoped patch for ${n.title.ifBlank { n.id.take(8) }}..."
+            logActivity("Plan ready for ${n.title.ifBlank { n.id.take(8) }}; writing patch.")
             project.service<NodeExecutionService>().executeNodeAsync(n, plan) { exec ->
                 val changedPatches = exec.patches.filter { patchChangesDisk(it) }
                 val changedExec = exec.copy(
@@ -1688,13 +2888,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     showArtifactTab("Review")
                     val title = n.title.ifBlank { n.id.take(8) }
                     status("No changes for $title; checking next node")
-                    logActivity("Skipped no-op code diff for $title")
+                    reviewSummaryArea.text = "No code changes for $title yet. Blueprint compared that UML-backed request against the code on disk and is checking the next UML change."
+                    logActivity("No file changes were needed for $title because that UML-backed request already matched the code on disk.")
                     onNoChange?.invoke(title)
                     return@executeNodeAsync
                 }
 
+                status("Reviewing code diff for ${n.title.ifBlank { n.id.take(8) }}...")
+                reviewSummaryArea.text = PatchChangeSummary.reviewSummary(changedExec)
+                logActivity("Patch generated for ${n.title.ifBlank { n.id.take(8) }}: ${changedExec.patches.size} file(s). Reviewing safety.")
                 project.service<ReviewService>().reviewAsync(n, changedExec) { review ->
                     registry.setReview(n.id, review)
+                    lastReviewedUmlByNodeId[n.id] = normalizedUmlText()
+                    reviewedAtByNodeId[n.id] = Instant.now()
+                    refreshedAfterApply = false
+                    postApplyInlineSummary = null
                     reviewArea.text = review.rawJson.ifBlank { JsonExtractor.toJson(review) }
                     refreshArtifactSummary()
                     showArtifactTab("Review")
@@ -1704,10 +2912,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             "${changedExec.patches.size} file(s), review ${review.reviewStatus}."
                     )
                     status("Code diff ready: review ${review.reviewStatus}")
+                    endPrimaryAction()
                 }
             }
         }
     }
+
+    private fun noOpDiffMessage(): String =
+        "No code changes needed. Blueprint compared the current UML-backed request against the code on disk. Refresh UML From Code to verify the current code, or refine the UML and try a different change."
 
     private fun patchChangesDisk(patch: Patch): Boolean {
         val before = project.service<ApplyChangesService>().readCurrentSnapshot(patch.path)
@@ -1736,7 +2948,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         graphArea.text = result.summary
         appendChat(
             "Blueprint",
-            "Imported $sourceLabel into ${result.nodes.size} implementation nodes. Click Generate Code Diff to preview code changes."
+            "Imported $sourceLabel into an editable UML draft. Review it, then click Generate Code Diff to preview code changes."
         )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
@@ -2268,12 +3480,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             showArtifactTab("Review JSON")
             refreshArtifactSummary()
             val parseIssues = JsonExtractor.reviewIssues(r)
+            val reviewExplanation = ReviewExplanation.summary(
+                nodeTitle = n.title.ifBlank { n.id.take(8) },
+                exec = exec,
+                review = r,
+                readiness = project.service<DependencyGraphService>().readinessFor(n),
+                validation = validationResults[n.id],
+                validationCommand = project.service<ProjectValidationService>().selectedCommand(),
+            )
+            val reviewStatusLine = ReviewExplanation.statusLine(
+                nodeTitle = n.title.ifBlank { n.id.take(8) },
+                exec = exec,
+                review = r,
+            )
             if (parseIssues.isNotEmpty()) {
-                logActivity("Review ${r.reviewStatus} with warnings for ${n.title}: ${parseIssues.joinToString("; ")}")
+                logActivity("$reviewStatusLine Warnings: ${parseIssues.joinToString("; ")}")
             } else {
-                logActivity("Review ${r.reviewStatus} for ${n.title}: ${r.issues.size} issue(s), next action ${r.recommendedNextAction}.")
+                logActivity(reviewStatusLine)
             }
-            status("Review ${r.reviewStatus}: ${n.title.ifBlank { n.id.take(8) }}")
+            appendChat("Blueprint", "$reviewStatusLine\n\n$reviewExplanation")
+            status(reviewStatusLine)
         }
     }
 
@@ -2516,20 +3742,183 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     refreshUmlAfterSuccessfulApply()
                     refreshArtifactSummary()
                     logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
-                    status(result.summaryLine())
+                    val changedPaths = applyResult.applied.distinct().sorted()
+                    postApplyChangedPaths = changedPaths
+                    val summaryLine = when {
+                        changedPaths.isEmpty() ->
+                            when (result.status) {
+                                ProjectValidationService.ValidationResult.Status.PASS -> "No code changes needed. Validation passed."
+                                ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                                    if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                                        "No code changes needed. Validation skipped because no command was inferred."
+                                    } else {
+                                        "No code changes needed. Validation skipped."
+                                    }
+                                }
+                                ProjectValidationService.ValidationResult.Status.FAIL -> "No code changes needed. Validation failed."
+                            }
+                        else -> buildString {
+                            append("Applied ")
+                            append(if (changedPaths.size == 1) "1 file." else "${changedPaths.size} files.")
+                            append(' ')
+                            append(
+                                when (result.status) {
+                                    ProjectValidationService.ValidationResult.Status.PASS -> "Validation passed."
+                                    ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                                        if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                                            "Validation skipped because no command was inferred."
+                                        } else {
+                                            "Validation skipped."
+                                        }
+                                    }
+                                    ProjectValidationService.ValidationResult.Status.FAIL -> "Validation failed."
+                                }
+                            )
+                        }
+                    }
+                    status(summaryLine)
+                    val nextActionLine = POST_APPLY_NEXT_STEP_LINE
+                    postApplyVerifyState = POST_APPLY_VERIFY_STATE
+                    val refreshNote = POST_APPLY_REFRESH_NOTE
+                    val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
+                    val validationCommand = project.service<ProjectValidationService>().selectedCommand()
+                    val runNote = inferredRunNote(pythonContext)
+                    val commandBlock = commandReviewBlock(validationCommand, pythonContext)
+                    val receiptValidationCommandLine = validationCommandReceiptLine(result)
+                    val runBlock = buildString {
+                        appendLine("Run after apply:")
+                        appendLine(runNote)
+                    }.trim()
+                    val undoNote = if (undoLastApplyButton.isEnabled) {
+                        "Undo Last Apply is available if you want to roll back this reviewed code patch."
+                    } else {
+                        "Undo Last Apply is not available for this apply result."
+                    }
+                    val highlightLine = postApplyHighlightMessage ?: "Blueprint refreshed the code-backed UML after apply."
+                    val verificationSummaryLine = if (highlightLine == "Blueprint refreshed the code-backed UML after apply.") {
+                        postApplyVerifyState ?: highlightLine
+                    } else {
+                        listOfNotNull(postApplyVerifyState, highlightLine)
+                            .distinct()
+                            .joinToString(" ")
+                    }
+                    val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
+                    val changedPathsBlock = buildString {
+                        appendLine("Changed paths:")
+                        if (changedPaths.isEmpty()) {
+                            appendLine("- None")
+                        } else {
+                            changedPaths.forEach { appendLine("- $it") }
+                        }
+                    }.trim()
+                    val validationDetailsText = validationReportText(result)
+                    val validationBlock = buildString {
+                        appendLine("Validation:")
+                        appendLine(validationDetailsText)
+                    }.trim()
+                    val writtenPathsText = if (changedPaths.isEmpty()) {
+                        "Written paths: none."
+                    } else {
+                        buildString {
+                            appendLine("Written paths:")
+                            changedPaths.forEach { appendLine("- $it") }
+                        }.trim()
+                    }
+                    val writtenPathCountLine = if (changedPaths.isEmpty()) {
+                        "Written paths: none."
+                    } else {
+                        "Written paths (${changedPaths.size}): ${changedPaths.joinToString(", ")}"
+                    }
+                    val validationOutcomeLine = when (result.status) {
+                        ProjectValidationService.ValidationResult.Status.PASS -> "Validation outcome: passed."
+                        ProjectValidationService.ValidationResult.Status.SKIPPED ->
+                            if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                                "Validation outcome: skipped because no command was inferred."
+                            } else {
+                                "Validation outcome: skipped."
+                            }
+                        ProjectValidationService.ValidationResult.Status.FAIL -> "Validation outcome: failed."
+                    }
+                    val receiptSummary = buildString {
+                        appendLine("Apply receipt:")
+                        appendLine("- $summaryLine")
+                        appendLine("- $writtenPathCountLine")
+                        appendLine("- $validationOutcomeLine")
+                        receiptValidationCommandLine?.let { appendLine("- $it") }
+                        appendLine("- $nextActionLine")
+                    }.trim()
+                    val validationAndPathsLine = buildString {
+                        appendLine(receiptSummary)
+                        appendLine(validationDetailsText)
+                        appendLine(runBlock)
+                        append(writtenPathsText)
+                    }.trim()
+                    val verifyChecklist = postApplyVerifyChecklist(
+                        summaryLine = summaryLine,
+                        validationSummary = result.summaryLine(),
+                        changedPaths = changedPaths,
+                        verificationSummaryLine = verificationSummaryLine,
+                        refreshNote = refreshNote,
+                    )
+                    postApplyInlineSummary = PostApplyInlineSummary(
+                        changedPaths = changedPaths,
+                        summaryLine = summaryLine,
+                        receiptSummary = receiptSummary,
+                        validationDetailsText = validationDetailsText,
+                        validationAndPathsLine = validationAndPathsLine,
+                        nextStepLine = nextActionLine,
+                        verifyChecklist = verifyChecklist,
+                        copyableResultSummary = buildString {
+                            appendLine("Result summary")
+                            appendLine("- $summaryLine")
+                            appendLine("- $writtenPathCountLine")
+                            appendLine("- $validationOutcomeLine")
+                            receiptValidationCommandLine?.let { appendLine("- $it") }
+                            appendLine("- Validation details: ${result.summaryLine()}")
+                            appendLine("- $POST_APPLY_NEXT_STEP_LINE")
+                            appendLine("- Run after apply: $runNote")
+                            appendLine("- Verification: $verificationSummaryLine")
+                        }.trim(),
+                    )
+                    copyRunSummaryButton.isEnabled = true
+                    copyRunSummaryButton.toolTipText = if (pythonContext.runCommands.firstOrNull().isNullOrBlank()) {
+                        "Copy a manual verification receipt when Blueprint cannot infer a run command yet."
+                    } else {
+                        "Copy a plain-English result summary after successful run verification."
+                    }
+                    openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
+                    openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
+                    verifyInUmlButton.isEnabled = true
+                    val openChangedFilesNote = when (changedPaths.size) {
+                        0 -> ""
+                        1 -> "Verify in code: Use Open Changed File to inspect the primary changed file in the IDE. This does not apply or refresh anything."
+                        else -> "Verify in code: Use Open Changed Files to inspect the primary changed files in the IDE. This does not apply or refresh anything."
+                    }
                     Messages.showInfoMessage(
                         project,
-                        buildString {
-                            append("Applied ${applyResult.applied.size} file change(s).")
-                            if (applyResult.applied.isNotEmpty()) {
-                                append("\n\n")
-                                append(applyResult.applied.joinToString("\n"))
-                            }
-                            append("\n\n")
-                            append(validationReportText(result))
-                        },
-                        "Blueprint - Apply Complete",
+                        listOf(nextActionLine, summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, verificationSummaryLine, runNote, undoNote, validationBlock)
+                            .filter { it.isNotBlank() }
+                            .joinToString("\n\n") + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
+                        "Blueprint - Apply Complete"
                     )
+                    SwingUtilities.invokeLater {
+                        showArtifactTab("UML")
+                        umlStatusLabel.text = "UML: automatically refreshed from code after apply. Refresh UML From Code to verify the updated code-backed UML, or use Undo Last Apply to roll it back."
+                        appendChat(
+                            "Blueprint",
+                            listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, verificationSummaryLine, runNote, undoNote)
+                                .filter { it.isNotBlank() }
+                                .joinToString("\n"),
+                        )
+                        guideLabel.text = listOf(
+                            POST_APPLY_NEXT_STEP_LINE,
+                            summaryLine,
+                            verificationSummaryLine,
+                            POST_APPLY_VERIFY_PROMPT,
+                            inferredRunGuideText(),
+                            "Use Undo Last Apply to roll back this reviewed code patch.",
+                        ).filter { it.isNotBlank() }.joinToString(" ")
+                    }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
                     node.executionStatus = ExecutionStatus.FAILED
@@ -2552,6 +3941,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun refreshUmlAfterSuccessfulApply() {
         umlHasPendingEdits = false
+        refreshedAfterApply = true
+        postApplyHighlightMessage = null
         val generated = project.service<PythonUmlGenerator>().generate()
         loadGeneratedUml(generated)
         showArtifactTab("UML")
@@ -2596,13 +3987,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
 
+    private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String =
+        summary.reviewPanelText(exec)
+
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
         buildString {
+            appendLine("${result.detailLabel()} command: ${result.command.ifBlank { "not available" }}")
             append(result.summaryLine())
             result.exitCode?.let { append(" (exit $it)") }
             if (result.durationMillis > 0) append(" in ${result.durationMillis}ms")
+            if (result.reason.isNotBlank() && result.status != ProjectValidationService.ValidationResult.Status.SKIPPED) {
+                append("\nResult: ${result.reason}")
+            }
             if (result.outputExcerpt.isNotBlank()) {
-                append("\n\n")
+                append("\n\nOutput excerpt:\n")
                 append(result.outputExcerpt)
             }
             if (result.relatedFiles.isNotEmpty()) {
@@ -2610,6 +4008,38 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 append(result.relatedFiles.joinToString("\n") { "- $it" })
             }
         }
+
+    private fun validationCommandReceiptLine(result: ProjectValidationService.ValidationResult): String? =
+        result.command.takeIf { it.isNotBlank() && result.status != ProjectValidationService.ValidationResult.Status.SKIPPED }
+            ?.let { "Validation command: $it" }
+
+    private fun openAppliedFiles() {
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty()
+        if (changedPaths.isEmpty()) {
+            status("No changed files to open")
+            return
+        }
+        if (changedPaths.size == 1) {
+            openChangedFileWithReceipt(
+                changedPaths.first(),
+                "Inspected the only changed file after apply: ${changedPaths.first()}",
+            )
+            return
+        }
+        val selectedPath = JOptionPane.showInputDialog(
+            this,
+            "Open which changed file?",
+            "Blueprint - Open Changed Files",
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            changedPaths.toTypedArray(),
+            changedPaths.first(),
+        ) as? String ?: return
+        openChangedFileWithReceipt(
+            selectedPath,
+            "Inspected one changed file after apply from the chooser: $selectedPath",
+        )
+    }
 
     private fun reviewBlockMessage(review: ReviewArtifact?): String {
         if (review == null) {
@@ -2714,30 +4144,77 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return
         }
         val sourceFile = resolveProjectFile(sourcePath)
+        if (!openProjectFile(sourceFile, sourcePath, node.sourceLine)) return
+        selectedCanvasId = node.id
+        status("Opened source: ${node.sourceDescriptionForStatus()}")
+        logActivity("Opened source for ${node.title}: ${node.sourceDescriptionForStatus()}")
+    }
+
+    private fun openProjectFile(sourceFile: File, displayPath: String, lineNumber: Int? = null): Boolean {
         if (!sourceFile.isFile) {
-            status("Could not find source: $sourcePath")
+            status("Could not find source: $displayPath")
             Messages.showWarningDialog(
                 project,
-                "Could not find source file:\n$sourcePath",
+                "Could not find source file:\n$displayPath\n\nOpening a file here does not apply changes. Generate Code Diff and Apply Approved Changes are still separate steps.",
                 "Blueprint - Source Not Found",
             )
-            return
+            return false
         }
         val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(sourceFile)
         if (virtualFile == null) {
             status("Could not open source: ${sourceFile.path}")
             Messages.showWarningDialog(
                 project,
-                "Could not open source file:\n${sourceFile.path}",
+                "Could not open source file:\n${sourceFile.path}\n\nOpening a file here does not apply changes. Generate Code Diff and Apply Approved Changes are still separate steps.",
                 "Blueprint - Source Not Found",
             )
-            return
+            return false
         }
-        val zeroBasedLine = (node.sourceLine ?: 1).coerceAtLeast(1) - 1
+        val zeroBasedLine = (lineNumber ?: 1).coerceAtLeast(1) - 1
         OpenFileDescriptor(project, virtualFile, zeroBasedLine, 0).navigate(true)
-        selectedCanvasId = node.id
-        status("Opened source: ${node.sourceDescriptionForStatus()}")
-        logActivity("Opened source for ${node.title}: ${node.sourceDescriptionForStatus()}")
+        return true
+    }
+
+    private fun openChangedFile(path: String) {
+        openChangedFileWithReceipt(path, "Opened changed file from review: $path")
+    }
+
+    private fun openChangedFileWithReceipt(path: String, receiptMessage: String) {
+        val sourceFile = resolveProjectFile(path)
+        if (!openProjectFile(sourceFile, path)) return
+        status("Opened changed file: $path")
+        logActivity(receiptMessage)
+    }
+
+    private fun refreshChangedFilesPanel(exec: ExecutionArtifact?) {
+        changedFilesPanel.removeAll()
+        val changedPaths = exec?.patches.orEmpty().map { it.path }.distinct().sorted()
+        if (changedPaths.isEmpty()) {
+            changedFilesPanel.add(JLabel("Reviewed patch files appear here after Generate Code Diff.").apply {
+                foreground = BlueprintTheme.Muted
+                font = BlueprintTheme.font(12f)
+            })
+        } else {
+            changedFilesPanel.add(JLabel("Reviewed patch files (open to inspect, not apply):").apply {
+                foreground = BlueprintTheme.TextStrong
+                font = BlueprintTheme.font(12f, Font.BOLD)
+            })
+            changedFilesPanel.add(JSeparator().apply { foreground = BlueprintTheme.Border })
+            changedPaths.forEach { path ->
+                changedFilesPanel.add(JButton(path).apply {
+                    alignmentX = Component.LEFT_ALIGNMENT
+                    horizontalAlignment = SwingConstants.LEFT
+                    isFocusPainted = false
+                    foreground = BlueprintTheme.Accent
+                    background = BlueprintTheme.Panel
+                    border = BorderFactory.createEmptyBorder(4, 0, 4, 0)
+                    toolTipText = "Open this changed file in the IDE. This does not apply the reviewed code patch."
+                    addActionListener { openChangedFile(path) }
+                })
+            }
+        }
+        changedFilesPanel.revalidate()
+        changedFilesPanel.repaint()
     }
 
     private fun resolveProjectFile(path: String): File {
@@ -2764,6 +4241,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             suppressUmlDocumentEvents = false
         }
         clearRestoredFlag()
+        refreshReviewFreshnessState()
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
         updateGuide()
         persistWorkspace()
@@ -2773,6 +4251,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!suppressUmlDocumentEvents) {
             umlHasPendingEdits = true
             clearRestoredFlag()
+            refreshReviewFreshnessState()
             persistWorkspace()
         }
         refreshCanvasFromUml()
@@ -2788,14 +4267,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = nodeList.selectedValue ?: run {
             applyApprovedButton.isEnabled = false
             applyApprovedButton.text = "Apply Approved Changes"
+            openAppliedFilesButton.isEnabled = false
+            openAppliedFilesButton.text = "Open Changed Files"
             undoLastApplyButton.isEnabled = false
             updateOverviewSummary()
             selectedLabel.text = "Selected: none"
             artifactLabel.text = "Artifacts: not planned"
             reviewSummaryArea.text = "No node selected."
+            refreshChangedFilesPanel(null)
             safetyArea.text = "Select or seed a node to begin."
             dependencyBlockArea.text = "No dependency status yet."
-            graphArea.text = "No graph yet. Seed a sample or create nodes."
+            graphArea.text = "No graph yet. Seed a sample or load a UML change."
             updateMiniGraph(project.service<DependencyGraphService>().analyze())
             titleField.text = ""
             summaryField.text = ""
@@ -2839,7 +4321,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val report = graph.analyze()
         val readiness = graph.readinessFor(n)
+        val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
+        val validationCommand = project.service<ProjectValidationService>().selectedCommand()
         updateOverviewSummary(report)
+        val reviewFreshness = reviewFreshnessFor(n, exec)
         val canApply = n.executionStatus != ExecutionStatus.APPLIED &&
             n.executionStatus != ExecutionStatus.FAILED &&
             !exec?.patches.isNullOrEmpty() &&
@@ -2850,16 +4335,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             n.executionStatus == ExecutionStatus.FAILED -> "Validation Failed"
             else -> "Apply Blocked By Review"
         }
-        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
-        reviewSummaryArea.text = buildString {
-            append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
-            append("\n\n")
-            append(changedFileSummary(exec))
-            if (validation != null) {
-                append("\n\n")
-                append(validation.summaryLine())
-            }
+        val openAppliedFilesEnabled = n.executionStatus == ExecutionStatus.APPLIED && postApplyInlineSummary?.changedPaths.orEmpty().isNotEmpty()
+        openAppliedFilesButton.isEnabled = openAppliedFilesEnabled
+        openAppliedFilesButton.text = if (postApplyInlineSummary?.changedPaths?.size == 1) "Open Changed File" else "Open Changed Files"
+        verifyInUmlButton.isEnabled = n.executionStatus == ExecutionStatus.APPLIED
+        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | ${reviewFreshness.reviewedAtLine.lowercase(Locale.US)} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
+        updateStaleDiffBanner()
+        val inlineSummary = postApplyInlineSummary
+        reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
+            postApplyReviewSummary(exec, inlineSummary)
+        } else {
+            buildReviewSummary(exec, review, reviewFreshness, validationCommand)
         }
+        refreshChangedFilesPanel(exec)
+        refreshGroundingSummary()
 
         val issues = buildList {
             if (plan != null) addAll(JsonExtractor.planIssues(plan))
@@ -2867,17 +4356,37 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (review != null) addAll(JsonExtractor.reviewIssues(review))
         }
         val scopeDrops = exec?.validation?.risks.orEmpty().filter { it.contains("out-of-scope", ignoreCase = true) }
+        val reviewDetails = review?.let {
+            ReviewExplanation.details(
+                nodeTitle = n.title.ifBlank { n.id.take(8) },
+                exec = exec,
+                review = it,
+                readiness = readiness,
+                validation = validation,
+                validationCommand = validationCommand,
+            )
+        }
+        val commandBlock = commandReviewBlock(validationCommand, pythonContext)
         safetyArea.text = when {
             validation?.status == ProjectValidationService.ValidationResult.Status.FAIL -> validationReportText(validation)
             validation?.status == ProjectValidationService.ValidationResult.Status.PASS -> validationReportText(validation)
             validation?.status == ProjectValidationService.ValidationResult.Status.SKIPPED -> validationReportText(validation)
             issues.isNotEmpty() || scopeDrops.isNotEmpty() ->
-                (issues + scopeDrops).distinct().joinToString("\n") { "- $it" }
-            n.executionStatus == ExecutionStatus.FAILED -> "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing."
-            exec?.status == "PARTIAL" -> "Execution is PARTIAL. Inspect the diff and validation notes before applying."
-            exec?.status == "BLOCKED" -> "Execution is BLOCKED. Do not apply until the node is revised."
-            review?.reviewStatus == "APPROVE" -> "Review approved. Scope compliance: ${review.scopeCompliance.result}."
-            review != null -> reviewBlockMessage(review)
+                listOf((issues + scopeDrops).distinct().joinToString("\n") { "- $it" }, commandBlock).joinToString("\n\n")
+            reviewDetails != null -> listOf(reviewDetails.joinToString("\n"), commandBlock).joinToString("\n\n")
+            n.executionStatus == ExecutionStatus.FAILED -> listOf(
+                validationFailureRecoveryMessage(reviewFreshness.badge),
+                commandBlock,
+            ).joinToString("\n\n")
+            exec?.status == "PARTIAL" -> listOf(
+                "Execution is PARTIAL. Inspect the diff and validation notes before applying.",
+                commandBlock,
+            ).joinToString("\n\n")
+            exec?.status == "BLOCKED" -> listOf(
+                "Execution is BLOCKED. Do not apply until the node is revised.",
+                commandBlock,
+            ).joinToString("\n\n")
+            !exec?.patches.isNullOrEmpty() -> commandBlock
             else -> "No safety issues reported yet."
         }
         dependencyBlockArea.text = if (readiness.reasons.isEmpty()) {
@@ -2990,8 +4499,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             .filter { it.from in entityNames && it.to in entityNames }
         val dependenciesByEntity = relationshipsByEntity.groupBy({ it.to }, { it.from })
         return parsed.entities.mapIndexed { index, entity ->
-            val fieldLines = entity.fields.filterNot { it.contains("(") && it.contains(")") }
-            val methodLines = entity.fields.filter { it.contains("(") && it.contains(")") }
+            val visibleFields = entity.fields.map(::sanitizeUmlPreviewField).filter { it.isNotBlank() }
+            val fieldLines = visibleFields.filterNot { it.contains("(") && it.contains(")") }
+            val methodLines = visibleFields.filter { it.contains("(") && it.contains(")") }
             val relationshipHint = relationshipsByEntity
                 .filter { it.from == entity.name || it.to == entity.name }
                 .map { rel -> rel.label.ifBlank { "relates to" } }
@@ -3011,14 +4521,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 blocked = false,
                 detail = buildString {
                     append("Proposed UML entity")
-                    if (entity.fields.isNotEmpty()) {
+                    if (visibleFields.isNotEmpty()) {
                         append("\n")
-                        append(entity.fields.take(8).joinToString("\n") { "- $it" })
+                        append(visibleFields.take(8).joinToString("\n") { "- $it" })
                     }
                 },
                 origin = MiniGraphPanel.NodeOrigin.PROPOSED_UML,
                 kind = "UML entity",
-                preview = entity.fields.take(3).joinToString(", ").ifBlank { "no fields yet" },
+                preview = fieldLines.take(3).joinToString(", ").ifBlank { "no fields yet" },
                 fields = fieldLines.take(3),
                 fieldOverflowCount = (fieldLines.size - 3).coerceAtLeast(0),
                 methods = methodLines.take(2),
@@ -3055,35 +4565,462 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun updateGuide() {
+        if (primaryActionBusy) return
         refreshFirstRunScenario()
         when {
             nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
+                val failedNode = nodeList.selectedValue
+                val failedFreshness = failedNode?.let { reviewFreshnessFor(it, registry.getExecution(it.id)) }
                 primaryActionButton.text = "Generate Code Diff"
-                guideLabel.text = "Validation failed after apply. Adjust the UML or code, then regenerate a reviewed diff."
+                guideLabel.text = validationFailureRecoveryMessage(failedFreshness?.badge)
+                updateNextStepBanner("Next: Generate Code Diff", validationFailureNextStepDetail(failedFreshness?.badge))
             }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
-                guideLabel.text = "Review approved the generated diff. Apply it to disk; Blueprint will validate the project after apply."
+                guideLabel.text = "Review approved the reviewed code patch because it stays in scope and has no blocking safety issues. Apply Approved Changes to write it to disk, then Blueprint will validate the project."
+                updateNextStepBanner("Next: Apply Approved Changes", "Review approved the current patch because it stays in scope and has no blocking safety issues, so this is the safe time to write it to disk.")
             }
             currentUmlEntityCount() == 0 -> {
-            primaryActionButton.text = "Refresh UML From Code"
-            guideLabel.text = "Start by reading the current project into an editable UML diagram."
+                primaryActionButton.text = "Refresh UML From Code"
+                guideLabel.text = emptyUmlGuideText()
+                updateNextStepBanner("Next: Refresh UML From Code", "Load the current Python project into a code-backed UML diagram before editing.")
             }
             else -> {
-            primaryActionButton.text = "Generate Code Diff"
-            guideLabel.text = "Change the UML with chat or direct edits, then generate a reviewed code diff."
+                val diffGuide = generateDiffGuideSummary()
+                primaryActionButton.text = "Generate Code Diff"
+                guideLabel.text = listOf(diffGuide.guideText, diffGuide.commandSummary)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n")
+                updateNextStepBanner("Next: Generate Code Diff", diffGuide.nextStepDetail)
             }
         }
     }
+
+    private fun emptyUmlGuideText(): String {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val folderSummary = emptyStateFolderSummary(context)
+        if (context.isPythonLikely()) {
+            val runGuide = inferredRunGuideText(context)
+            val partialRefreshNote = emptyStatePartialRefreshNote(context)
+            return listOf(
+                "No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram.",
+                folderSummary,
+                "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and run the changed app.",
+                "Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet.",
+                partialRefreshNote,
+                "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
+                "After that, refine the UML, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and Run In Blueprint.",
+                "Next steps: review the inferred source roots, open a Python file to confirm the folder you want, or keep editing the project and refresh again.",
+                runGuide,
+            ).filter { it.isNotBlank() }.joinToString(" ")
+        }
+        val nextStep = context.notes.firstOrNull()
+            ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
+        return listOf(
+            "No Python files were found in the opened folder, so Blueprint cannot build a code-backed UML diagram yet.",
+            folderSummary,
+            "Open the Python app folder or a Python subfolder you want to map, then click Refresh UML From Code again.",
+            "If you are still choosing the folder, you can open source files manually or paste/import UML first and come back to code refresh later.",
+            "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and run the changed app.",
+            nextStep,
+            "Open a Python source root or add .py files, then Refresh UML From Code to start the full Blueprint loop.",
+            "Next steps: open a Python source root, open a Python subfolder, add .py files, or paste/import UML while you pick the folder to map.",
+        ).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
+    private fun emptyStateFolderSummary(context: PythonProjectAnalyzer.PythonProjectContext): String {
+        val folderLabel = project.basePath?.replace('\\', '/') ?: context.basePath.ifBlank { project.name }
+        val detectedFiles = context.filesAnalyzed.size + context.skippedFiles.size
+        val pythonScope = when {
+            detectedFiles > 0 -> "$detectedFiles Python file${if (detectedFiles == 1) "" else "s"} detected in this folder."
+            else -> "0 Python files detected in this folder so far."
+        }
+        return "Current folder: $folderLabel. $pythonScope"
+    }
+
+    private fun skippedPathInlineSummary(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+        prefix: String,
+        topReasonLimit: Int = 2,
+        examplePathLimit: Int = 2,
+    ): String {
+        if (context.skippedFiles.isEmpty()) return ""
+        val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .take(topReasonLimit)
+            .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+        val examplePaths = context.skippedFiles.take(examplePathLimit).joinToString(", ") { it.path }
+        return "$prefix ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). Blueprint still built the current code-backed UML from the Python files it could read, so inspect skipped paths like $examplePaths if anything looks incomplete. Fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
+    }
+
+    private fun emptyStatePartialRefreshNote(context: PythonProjectAnalyzer.PythonProjectContext): String =
+        skippedPathInlineSummary(context, prefix = "Partial refresh note:")
+
+    private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
+        context.runCommands.firstOrNull()?.let {
+            "When you want to run the app, start with: $it or click Run In Blueprint. ${inferredRunCommandReason(it, context.runEntryCandidates)}"
+        } ?: missingRunCommandGuidance(context)
+
+    private fun generateDiffGuideSummary(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+        validationCommand: String? = project.service<ProjectValidationService>().selectedCommand(),
+    ): GenerateDiffGuideSummary {
+        val lines = mutableListOf("Change the UML with chat or direct edits, then Generate Code Diff.")
+        firstEditHint(context)?.let { lines += it }
+        lines += generateDiffValidationHint(validationCommand)
+        if (umlHasPendingEdits) {
+            lines += "Generate Code Diff will create a reviewed code patch for your current UML edits."
+        }
+        lines += validationCommandReviewText(validationCommand)
+        lines += runCommandReviewText(context)
+        val commandSummary = preApplyCommandSummary(context, validationCommand)
+        val guideText = (lines + commandSummary.lines()).joinToString(" ")
+        val nextStepDetail = if (umlHasPendingEdits) {
+            "Create a reviewed code patch for the current UML edits. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
+        } else {
+            "Turn the current UML edits into a reviewed code patch before apply. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
+        }
+        return GenerateDiffGuideSummary(guideText, nextStepDetail, commandSummary)
+    }
+
+    private fun firstEditHint(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String? {
+        if (umlHasPendingEdits || registry.all().isNotEmpty()) return null
+        val suggestions = safeFirstRefinementSuggestions(context)
+        if (suggestions.isEmpty()) return null
+        return "Safe first refinement: ${suggestions.joinToString(" ")}".trim()
+    }
+
+    private fun safeFirstRefinementSuggestions(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+    ): List<String> {
+        val candidates = context.runEntryCandidates.map { it.substringAfterLast('/') }
+        return when {
+            candidates.any { it == "main.py" || it == "app.py" } -> listOf(
+                "Ask for one reviewable app-facing change such as 'add a status field to the main model' or 'rename one label shown by the entry flow'.",
+                "Keep the first edit scoped to one entity, one field, or one relationship before Generate Code Diff.",
+            )
+            candidates.any { it == "__main__.py" } -> listOf(
+                "Ask for one reviewable package change such as 'add a field to the primary CLI model' or 'link one helper class to the main package'.",
+                "Keep the first edit scoped to one entity, one field, or one relationship before Generate Code Diff.",
+            )
+            context.filesAnalyzed.isNotEmpty() -> listOf(
+                "Ask for one reviewable UML change such as 'add a field to one class', 'rename one relationship', or 'extract one helper entity'.",
+                "Keep the first edit scoped to one entity, one field, or one relationship before Generate Code Diff.",
+            )
+            else -> emptyList()
+        }
+    }
+
+    private fun generateDiffValidationHint(command: String?): String =
+        command?.takeIf { it.isNotBlank() }
+            ?.let { "Generate Code Diff will prepare a patch that Blueprint validates after apply with: $it" }
+            ?: "Generate Code Diff can still prepare a reviewed code patch, but Blueprint did not infer a validation command yet, so verify manually if you need extra checks."
+
+    private fun validationCommandReviewText(command: String?): String =
+        command?.takeIf { it.isNotBlank() }
+            ?.let { "Validation after apply: $it" }
+            ?: "Validation after apply is unavailable. Blueprint did not infer a validation command, so verify manually if you need extra checks."
+
+    private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
+        context.runCommands.firstOrNull()?.let { "Run after apply was inferred automatically: $it. ${inferredRunCommandReason(it, context.runEntryCandidates)}" }
+            ?: "Run after apply is unavailable. ${missingRunCommandGuidance(context)}"
+
+    private fun preApplyCommandSummary(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+        validationCommand: String? = project.service<ProjectValidationService>().selectedCommand(),
+    ): String = listOf(
+        "Before apply, Blueprint expects:",
+        "- ${validationCommandReviewText(validationCommand)}",
+        "- ${runCommandReviewText(context)}",
+    ).joinToString("\n")
+
+    private fun commandReviewBlock(
+        validationCommand: String?,
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String = preApplyCommandSummary(context, validationCommand)
+
+    private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
+        context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here when you want the result inside Blueprint instead of the app, browser, or terminal." }
+            ?: missingRunCommandGuidance(context)
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =
         GuidedInviteScenario.matchesProject(project.name, project.basePath)
 
     private fun refreshFirstRunScenario() {
-        if (!shouldShowInviteFirstRunScenario()) return
-        val state = currentInviteFirstRunScenarioState()
-        firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
-        firstRunPromptButton.isEnabled = state.codeMapReady && !state.umlDraftReady
+        val inviteFlow = shouldShowInviteFirstRunScenario()
+        val genericState = currentFirstRunChecklistState()
+        firstRunScenarioArea.text = if (inviteFlow) {
+            GuidedInviteScenario.checklistText(currentInviteFirstRunScenarioState())
+        } else {
+            genericState.checklistText()
+        }
+        if (inviteFlow) {
+            val state = currentInviteFirstRunScenarioState()
+            demoReceiptArea.text = state.demoReceiptText()
+            firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Sandbox" else "Try This Change"
+            firstRunPromptButton.isEnabled = state.codeMapReady
+            firstRunPromptButton.toolTipText = if (state.resetSuggested) {
+                "The guided demo prompt likely matches code that is already in ${state.resetPath}. Reset Demo Sandbox is optional but recommended because that file already contains the guided change. If you skip reset, make a different UML-backed change instead."
+            } else if (state.promptReady) {
+                "Fresh prompt already loaded for the current sandbox: \"${state.prompt}\""
+            } else {
+                "Fresh prompt for the current sandbox: \"${state.prompt}\""
+            }
+            runChecklistActionButton.text = if (state.runVerified) "Run The Changed App Again" else "Run The Changed App"
+            runChecklistActionButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
+            runChecklistActionButton.toolTipText = when {
+                state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
+                state.runVerified -> "Run the inferred command again from the first-run checklist: ${state.runCommand}"
+                else -> "Run the inferred command from the first-run checklist: ${state.runCommand}"
+            }
+            runDemoButton.text = if (state.runVerified) "Demo Run Verified" else "Run Demo Step"
+            runDemoButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
+            runDemoButton.toolTipText = when {
+                state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
+                state.runVerified -> "Blueprint already recorded a passed demo run for: ${state.runCommand}"
+                else -> "Record the final manual demo step and expected visible result for: ${state.runCommand}"
+            }
+        } else {
+            demoReceiptArea.text = genericState.checklistText()
+            firstRunPromptButton.text = "Refresh UML From Code"
+            firstRunPromptButton.isEnabled = !genericState.codeMapReady
+            firstRunPromptButton.toolTipText = if (genericState.codeMapReady) {
+                "Current Python folder is already loaded into the code-backed UML. Refresh again anytime if the code on disk changes."
+            } else {
+                "Load the current Python folder into a code-backed UML diagram for the first time."
+            }
+            runChecklistActionButton.text = if (genericState.runVerified) "Run The Changed App Again" else "Run The Changed App"
+            runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()
+            runChecklistActionButton.toolTipText = when {
+                genericState.runCommand.isNullOrBlank() -> manualVerificationTooltip(genericState.runEntryCandidates.isNotEmpty())
+                genericState.runVerified -> "Run the inferred command again from the first-run checklist: ${genericState.runCommand}"
+                else -> "Run the inferred command from the first-run checklist: ${genericState.runCommand}"
+            }
+            runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
+            runDemoButton.isEnabled = genericState.codeMapReady
+            runDemoButton.toolTipText = when {
+                genericState.runCommand.isNullOrBlank() -> manualVerificationTooltip(genericState.runEntryCandidates.isNotEmpty())
+                genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
+                else -> "Record how you verified the changed app with: ${genericState.runCommand}"
+            }
+        }
+        refreshRunControls()
+    }
+
+    private fun runFromChecklist() {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val runCommand = project.service<ProjectRunService>().inferredRunCommand(context)
+        if (runCommand.isNullOrBlank()) {
+            status("No run command inferred")
+            logActivity("First-run checklist run blocked: no inferred project run command was available.")
+            refreshFirstRunScenario()
+            return
+        }
+        logActivity("First-run checklist run launched: $runCommand")
+        status("Launching run from checklist")
+        toggleRunInBlueprint()
+    }
+
+    private fun refreshRunControls() {
+        val runner = project.service<ProjectRunService>()
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        updateLikelyEntryFileAction(context)
+        if (runner.isRunning()) {
+            runChecklistActionButton.text = "Stop The Changed App"
+            runChecklistActionButton.isEnabled = true
+            runChecklistActionButton.toolTipText = "Stop the checklist run that is streaming inside Blueprint."
+            runAppButton.text = "Stop Run"
+            runAppButton.isEnabled = true
+            runAppButton.toolTipText = "Stop the inferred project command running inside Blueprint."
+            manualRunFallbackCard.isVisible = false
+            return
+        }
+        val runCommand = runner.inferredRunCommand(context)
+        runChecklistActionButton.text = "Run The Changed App"
+        runChecklistActionButton.isEnabled = !runCommand.isNullOrBlank()
+        runChecklistActionButton.toolTipText = runCommand?.let { "Run the inferred project command from the first-run checklist: $it" }
+            ?: manualVerificationTooltip(context.runEntryCandidates.isNotEmpty())
+        runAppButton.text = "Run In Blueprint"
+        runAppButton.isEnabled = !runCommand.isNullOrBlank()
+        runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }
+            ?: runner.noCommandSummary(context)
+        if (runOutputArea.text.isBlank() || runOutputArea.text == "Preparing inferred run command...") {
+            runOutputArea.text = runOutputIdleHint()
+        }
+        runStatusNoteLabel.text = disabledRunExplanation(context, runCommand)
+        updateManualRunFallbackCard(context, runCommand)
+    }
+
+    private fun toggleRunInBlueprint() {
+        val runner = project.service<ProjectRunService>()
+        if (runner.isRunning()) {
+            val stopped = runner.stopRun()
+            if (stopped) {
+                runOutputArea.text = listOf(runOutputArea.text.trimEnd(), "", "Run stopped from Blueprint.").filter { it.isNotBlank() }.joinToString("\n")
+                logActivity("Stopped in-app run for the inferred Python command.")
+                status("Run stopped")
+            }
+            refreshRunControls()
+            return
+        }
+        runOutputArea.text = "Preparing inferred run command..."
+        runner.runInferredCommand { state ->
+            when (state.status) {
+                ProjectRunService.RunState.Status.FAILED -> {
+                    runOutputArea.text = listOf(state.summary, state.output).filter { it.isNotBlank() }.joinToString("\n\n")
+                    status("Run failed")
+                    logActivity("In-app run failed: ${state.summary}")
+                }
+                ProjectRunService.RunState.Status.FINISHED -> {
+                    runOutputArea.text = listOf(state.output, state.summary).filter { it.isNotBlank() }.joinToString("\n\n")
+                    status("Run finished")
+                    logActivity("In-app run finished: ${state.command}")
+                }
+                ProjectRunService.RunState.Status.STOPPED -> {
+                    runOutputArea.text = listOf(state.output, state.summary).filter { it.isNotBlank() }.joinToString("\n\n")
+                    status("Run stopped")
+                    logActivity("In-app run stopped: ${state.command}")
+                }
+                ProjectRunService.RunState.Status.RUNNING -> {
+                    runOutputArea.text = if (state.output.isBlank()) state.summary else listOf(
+                        state.output,
+                        "",
+                        "Blueprint is still streaming output. Long-running apps can stay here until you click Stop Run.",
+                    ).joinToString("\n")
+                    status("Streaming app output")
+                }
+                ProjectRunService.RunState.Status.STARTING -> {
+                    runOutputArea.text = state.summary
+                    status("Starting inferred run command")
+                    logActivity("Started in-app run for ${state.command}")
+                }
+                ProjectRunService.RunState.Status.IDLE -> Unit
+            }
+            refreshRunControls()
+        }
+    }
+
+    private fun runOutputIdleHint(): String {
+        val runner = project.service<ProjectRunService>()
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val runCommand = runner.inferredRunCommand(context)
+        return runCommand?.let {
+            "Run Output\n\nRun In Blueprint will launch: $it\nClick Run In Blueprint to start: $it\nBlueprint will stream stdout and stderr here. If this command starts a dev server or watcher, it may keep streaming until you click Stop Run."
+        } ?: "Run Output\n\n${runner.noCommandSummary(context)}\nWhen a command is available, Run In Blueprint will stream stdout and stderr here."
+    }
+
+    private fun disabledRunExplanation(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+        runCommand: String?,
+    ): String = when {
+        !runCommand.isNullOrBlank() -> "${runReadinessSummary(runCommand, context.runEntryCandidates)} Click Run In Blueprint to launch $runCommand."
+        else -> "${runReadinessSummary(null, context.runEntryCandidates)} ${manualVerificationNextStep(context.runEntryCandidates)}"
+    }
+
+    private fun missingRunCommandGuidance(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String = missingRunCommandChecklist(context.runEntryCandidates)
+
+    private fun updateManualRunFallbackCard(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+        runCommand: String?,
+    ) {
+        if (!runCommand.isNullOrBlank()) {
+            manualRunFallbackCard.isVisible = false
+            return
+        }
+        val body = manualRunFallbackCard.components.filterIsInstance<JBTextArea>().first()
+        val firstCandidate = context.runEntryCandidates.firstOrNull()
+        body.text = buildString {
+            appendLine("Blueprint could not run this app automatically yet.")
+            appendLine("Manual verification path: inspect the likely entry file, run it manually, confirm the feature, then Refresh UML From Code if you changed folders.")
+            appendLine("What Blueprint can do now: Refresh UML From Code re-checks the current Python folder, and Open Likely Entry File opens the strongest launcher candidate in the IDE.")
+            append(missingRunCommandChecklist(context.runEntryCandidates))
+            if (firstCandidate != null) {
+                append("\n\nLikely entry file action: Open Likely Entry File (${firstCandidate.substringAfterLast('/')}) opens $firstCandidate in the IDE without running or applying anything.")
+            }
+        }.trim()
+        manualRunFallbackCard.isVisible = true
+        manualRunFallbackCard.revalidate()
+    }
+
+    private fun updateLikelyEntryFileAction(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ) {
+        val firstCandidate = context.runEntryCandidates.firstOrNull()
+        val hasRunCommand = !project.service<ProjectRunService>().inferredRunCommand(context).isNullOrBlank()
+        openLikelyEntryFileButton.isEnabled = !hasRunCommand && firstCandidate != null
+        openLikelyEntryFileButton.toolTipText = firstCandidate?.let {
+            "Open likely entry file: $it. This does not run or apply anything."
+        } ?: "Open a likely app entry file when Blueprint cannot infer a run command. This does not run or apply anything."
+        openLikelyEntryFileButton.text = if (firstCandidate == null) {
+            "Open Likely Entry File"
+        } else {
+            "Open Likely Entry File (${firstCandidate.substringAfterLast('/')})"
+        }
+    }
+
+    private fun openLikelyEntryFile() {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val candidate = context.runEntryCandidates.firstOrNull()
+        if (candidate == null) {
+            status("No likely entry file found")
+            Messages.showInfoMessage(
+                project,
+                missingRunCommandChecklist(emptyList()),
+                "Blueprint - No Likely Entry File"
+            )
+            return
+        }
+        val sourceFile = resolveProjectFile(candidate)
+        if (!openProjectFile(sourceFile, candidate)) return
+        status("Opened likely entry file: $candidate")
+        appendChat(
+            "Blueprint",
+            "Opened likely entry file: $candidate. This helps you inspect the app entrypoint when no run command is inferred. It does not run the app or apply changes."
+        )
+        logActivity("Opened likely entry file for manual verification: $candidate")
+    }
+
+    private fun currentInvitePrompt(): String? =
+        currentInvitePromptPlan()?.prompt
+
+    private fun currentInvitePromptPlan(): GuidedInviteScenario.PromptPlan? {
+        val ir = project.service<IRStore>().load()
+        val componentNames = ir?.components?.map { it.name }?.toSet().orEmpty()
+        val parsedUml = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
+        val entityNames = parsedUml?.entities?.map { it.name }?.toSet().orEmpty()
+        val inviteFields = parsedUml?.entities.orEmpty()
+            .firstOrNull { it.name == "Invite" }
+            ?.fields
+            .orEmpty()
+            .map { it.substringBefore(":").trim() }
+        return GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
+    }
+
+    private fun currentFirstRunChecklistState(): FirstRunChecklistState {
+        val runner = project.service<ProjectRunService>()
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val selected = nodeList.selectedValue
+        val validation = selected?.let { validationResults[it.id] }
+        val exec = selected?.let { registry.getExecution(it.id) }
+        val review = selected?.let { registry.getReview(it.id) }
+        return FirstRunChecklistState(
+            codeMapReady = currentUmlEntityCount() > 0,
+            reviewedDiffReady = exec?.patches.orEmpty().isNotEmpty(),
+            reviewApprovedReady = reviewAllowsApply(review),
+            appliedReady = selected?.executionStatus == ExecutionStatus.APPLIED,
+            refreshedCodeMapReady = refreshedAfterApply && !umlHasPendingEdits,
+            runCommand = runner.inferredRunCommand().orEmpty().ifBlank { context.runCommands.firstOrNull() },
+            runEntryCandidates = context.runEntryCandidates,
+            validationCommand = project.service<ProjectValidationService>().selectedCommand(),
+            validationReady = validation != null,
+            validationPassed = validation?.status == ProjectValidationService.ValidationResult.Status.PASS,
+            runVerified = activityLog.text.contains("Run the changed app", ignoreCase = true),
+            skippedFiles = context.skippedFiles,
+        )
     }
 
     private fun currentInviteFirstRunScenarioState(): GuidedInviteScenarioState {
@@ -3091,53 +5028,543 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val componentNames = ir?.components?.map { it.name }?.toSet().orEmpty()
         val parsedUml = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
         val entityNames = parsedUml?.entities?.map { it.name }?.toSet().orEmpty()
-        val hasInvitePolicyLink = parsedUml?.relationships.orEmpty().any { relationship ->
-            setOf(relationship.from, relationship.to) == setOf("Invite", "InvitePolicy")
-        }
+        val inviteFields = parsedUml?.entities.orEmpty()
+            .firstOrNull { it.name == "Invite" }
+            ?.fields
+            .orEmpty()
+            .map { it.substringBefore(":").trim() }
+        val suggestedPrompt = chatInput.text.trim()
+        val promptPlan = GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
+        val resetNeeded = GuidedInviteScenario.needsReset(project.basePath)
         val reviewedInviteDiff = registry.all().any { node ->
             registry.getReview(node.id) != null &&
+                registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
+        }
+        val approvedInviteDiff = registry.all().any { node ->
+            reviewAllowsApply(registry.getReview(node.id)) &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
         }
         val appliedInviteDiff = registry.all().any { node ->
             node.executionStatus == ExecutionStatus.APPLIED &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
         }
+        val activePlan = promptPlan ?: GuidedInviteScenario.PromptPlan(
+            prompt = "reset ${GuidedInviteScenario.PATCH_PATH} to the demo baseline",
+            expectedEntity = "Invite",
+            expectedField = "expires_at",
+        )
+        val promptReady = statefulPromptMatches(activePlan.prompt, suggestedPrompt)
+        val hasExpectedDraft = when {
+            activePlan.expectedField != null -> umlHasPendingEdits && activePlan.expectedField in inviteFields
+            activePlan.relationSource != null && activePlan.relationTarget != null ->
+                umlHasPendingEdits &&
+                    activePlan.expectedEntity in entityNames &&
+                    parsedUml?.relationships.orEmpty().any { relationship ->
+                        setOf(relationship.from, relationship.to) == setOf(activePlan.relationSource, activePlan.relationTarget)
+                    }
+            else -> umlHasPendingEdits && activePlan.expectedEntity in entityNames
+        }
+        val refreshedReady = when {
+            activePlan.expectedField != null -> appliedInviteDiff && !umlHasPendingEdits && activePlan.expectedField in componentNames
+            else -> appliedInviteDiff && !umlHasPendingEdits && activePlan.expectedEntity in componentNames
+        }
         return GuidedInviteScenarioState(
             codeMapReady = setOf("Project", "User", "Invite").all { it in componentNames },
-            umlDraftReady = umlHasPendingEdits && "InvitePolicy" in entityNames && hasInvitePolicyLink,
+            prompt = activePlan.prompt,
+            expectedEntity = activePlan.expectedEntity,
+            expectedRelationSource = activePlan.relationSource,
+            expectedRelationTarget = activePlan.relationTarget,
+            resetSuggested = promptPlan == null || resetNeeded,
+            resetPath = GuidedInviteScenario.PATCH_PATH,
+            umlDraftReady = hasExpectedDraft,
             reviewedDiffReady = reviewedInviteDiff,
+            reviewApprovedReady = approvedInviteDiff,
             appliedReady = appliedInviteDiff,
-            refreshedCodeMapReady = appliedInviteDiff && !umlHasPendingEdits && "InvitePolicy" in componentNames,
+            refreshedCodeMapReady = refreshedReady,
+            runVerified = refreshedReady && activityLog.text.contains("Demo e2e step passed: Run the changed app", ignoreCase = true),
+            promptReady = promptReady,
+            runCommand = project.service<PythonProjectAnalyzer>().analyze().runCommands.firstOrNull(),
         )
+    }
+
+    private fun guidedInviteScenarioState(): GuidedInviteScenarioState =
+        currentInviteFirstRunScenarioState()
+
+    private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String =
+        when {
+            state.resetSuggested ->
+                "The guided demo prompt likely matches code already in the invite demo file. Reset Demo Sandbox is optional but recommended because the guided change is already on disk. If you skip reset, make a different UML-backed change instead."
+            state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
+                "Expect Invite to show expires_at in the refreshed UML and in the running app, browser, or terminal flow."
+            state.expectedRelationSource != null && state.expectedRelationTarget != null ->
+                "Expect ${state.expectedRelationSource} to show ${state.expectedEntity} in the refreshed UML and in the running app, browser, or terminal flow."
+            else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app, browser, or terminal flow."
+        }
+
+    private fun manualDemoWhatToLookForChecklist(state: GuidedInviteScenarioState): String =
+        when {
+            state.resetSuggested -> listOf(
+                "- Reset Demo Sandbox is optional but recommended when you want a predictable fresh invite demo run.",
+                "- Reset Demo Sandbox restores ${state.resetPath} to the baseline invite demo file.",
+                "- Refresh UML From Code next before rerunning the prompt.",
+                "- Click Try This Change again so the next demo prompt is fresh.",
+                "- If you skip reset, make your own UML-backed change instead.",
+            )
+            state.expectedEntity == "Invite" && state.prompt.contains("expires_at") -> listOf(
+                "- Invite shows expires_at in the refreshed UML.",
+                "- The changed app path shows the new expires_at behavior.",
+                "- The visible result matches the reviewed code patch you just applied.",
+            )
+            state.expectedRelationSource != null && state.expectedRelationTarget != null -> listOf(
+                "- ${state.expectedRelationSource} shows ${state.expectedEntity} in the refreshed UML.",
+                "- The changed app flow shows the new ${state.expectedEntity} behavior.",
+                "- The visible result matches the reviewed code patch you just applied.",
+            )
+            else -> listOf(
+                "- ${state.expectedEntity} appears in the refreshed UML.",
+                "- The changed app flow shows the new ${state.expectedEntity} behavior.",
+                "- The visible result matches the reviewed code patch you just applied.",
+            )
+        }.joinToString("\n")
+
+    private fun runDemoVerificationStep() {
+        val state = currentInviteFirstRunScenarioState()
+        val runCommand = state.runCommand
+        if (runCommand.isNullOrBlank()) {
+            Messages.showInfoMessage(
+                project,
+                "Refresh UML From Code first so Blueprint can infer how this Python project should run.",
+                "Blueprint - Demo Runner"
+            )
+            logActivity("Demo e2e step failed: Run the changed app could not start because no run command was inferred.")
+            return
+        }
+        val expectedVisibleResult = manualDemoExpectedVisibleResult(state)
+        val whatToLookForChecklist = manualDemoWhatToLookForChecklist(state)
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val changedPathsSummary = when (changedPaths.size) {
+            0 -> "Changed files to inspect in the IDE:\n- None recorded yet. If you already applied changes, use Open Changed Files or the review receipt to confirm what Blueprint wrote."
+            1 -> "Changed file to inspect in the IDE:\n- ${changedPaths.first()}\nInspect this file after Apply Approved Changes, then confirm the visible result."
+            else -> buildString {
+                appendLine("Changed files to inspect in the IDE:")
+                changedPaths.forEach { appendLine("- $it") }
+                append("Inspect these files after Apply Approved Changes, then confirm the visible result.")
+            }
+        }
+        Messages.showInfoMessage(
+            project,
+            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code to verify the updated code-backed UML\n6. Inspect the changed file(s) in the IDE\n7. Run the changed app with: $runCommand\n8. Confirm the expected visible result in Blueprint, the launched app, a browser, or terminal output.\n\n$changedPathsSummary\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
+            "Blueprint - Run Demo Step"
+        )
+        logActivity("Demo e2e step passed: Run the changed app with $runCommand. Confirmed visible result: $expectedVisibleResult")
+        showRunVerificationSuccessBanner(runCommand, expectedVisibleResult, true)
+        status("Demo run and visible result recorded")
+        refreshFirstRunScenario()
+    }
+
+    private fun showRunVerificationSuccessBanner(
+        runCommand: String,
+        visibleResult: String,
+        demoFlow: Boolean,
+    ) {
+        val flowSummary = if (demoFlow) {
+            "Blueprint completed the full demo path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
+        } else {
+            "Blueprint completed the path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
+        }
+        val copyableSummary = runResultSummary(runCommand, visibleResult, demoFlow)
+        val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
+        val runConfidence = verifiedRunCommandReason(runCommand, pythonContext.runEntryCandidates)
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val changedPathsLine = if (changedPaths.isEmpty()) {
+            "- Changed paths: none recorded for this run."
+        } else {
+            "- Changed paths: ${changedPaths.joinToString(", ")}"
+        }
+        val inspectAction = when (changedPaths.size) {
+            0 -> "Inspect the current code in the IDE if you want to confirm the final state file by file."
+            1 -> "Verify in code: Use Open Changed File to inspect ${changedPaths.first()} in the IDE. This does not apply or refresh anything."
+            else -> "Verify in code: Use Open Changed Files to inspect the ${changedPaths.size} changed paths in the IDE. This does not apply or refresh anything."
+        }
+        val rerunAction = "Rerun ready: use Run In Blueprint to rerun $runCommand after your next approved change, or rerun the same command in your app, browser, or terminal when you want to confirm the next iteration quickly."
+        val verificationActions = listOf(
+            "Verify now:",
+            changedPathsLine,
+            "- $inspectAction",
+            "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
+            "- Run verified with: $runCommand",
+            "- Visible result: $visibleResult",
+        ).joinToString("\n")
+        val nextSteps = listOf(
+            "Next steps:",
+            "- Copy Issue Comment if you want a reusable issue-comment or demo recap.",
+            "- $runConfidence",
+            "- $rerunAction",
+            "- Refine the UML again when you are ready for another reviewed code patch.",
+        ).joinToString("\n")
+        val proofReceipt = listOf(
+            "Proof recorded:",
+            "- Code-backed UML is loaded for the current Python folder.",
+            "- UML changes were refined into a reviewed code patch.",
+            "- Approved changes were applied and UML was refreshed from code.",
+            changedPathsLine,
+            "- Run verified with: $runCommand",
+            "- Visible result: $visibleResult",
+        ).joinToString("\n")
+        val banner = buildString {
+            appendLine("End-to-end success")
+            appendLine(verificationActions)
+            appendLine()
+            appendLine(nextSteps)
+            appendLine()
+            appendLine("Summary")
+            appendLine(flowSummary)
+            appendLine()
+            appendLine(proofReceipt)
+            appendLine()
+            append(copyableSummary)
+        }.trim()
+        copyRunSummaryButton.isEnabled = true
+        copyRunSummaryButton.toolTipText = "Copy an issue-comment-ready recap after successful run verification."
+        completedRunReceiptCycle = true
+        guideLabel.text = banner
+        appendChat("Blueprint", banner)
+        Messages.showInfoMessage(project, banner, "Blueprint - End-to-End Success")
+    }
+
+    private fun runResultSummary(runCommand: String, visibleResult: String, demoFlow: Boolean): String {
+        val flowLabel = if (demoFlow) "Demo flow" else "Blueprint flow"
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val validationSummary = postApplyInlineSummary?.copyableResultSummary
+            ?: "Result summary\n- Validation: not recorded yet\n- Run after apply: not recorded yet\n- Changed paths: none"
+        val runConfidence = verifiedRunCommandReason(runCommand, project.service<PythonProjectAnalyzer>().analyze().runEntryCandidates)
+        return buildString {
+            appendLine("Copyable issue comment")
+            appendLine("- Current verification state:")
+            appendLine("  - Code-backed UML was refreshed from code after apply and the run result was verified.")
+            appendLine("  - Run verified with: $runCommand")
+            appendLine("  - Visible result: $visibleResult")
+            appendLine("  - Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
+            appendLine("- Next verification action: Refresh UML From Code to verify again, or rerun $runCommand after the next approved change.")
+            appendLine("- $flowLabel completed for the current Python folder.")
+            appendLine("- $runConfidence")
+            appendLine("- Rerun ready: reuse $runCommand after the next approved change when you want to confirm the next iteration quickly.")
+            append(validationSummary.removePrefix("Result summary\n"))
+        }.trim()
+    }
+
+    private fun manualVerificationReceipt(context: PythonProjectAnalyzer.PythonProjectContext, demoFlow: Boolean): String {
+        val flowLabel = if (demoFlow) "Demo flow" else "Blueprint flow"
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val validationSummary = postApplyInlineSummary?.copyableResultSummary
+            ?: "Result summary\n- Validation: not recorded yet\n- Run after apply: not recorded yet\n- Changed paths: none"
+        val likelyEntryFiles = context.runEntryCandidates.take(3)
+        val likelyEntryLine = if (likelyEntryFiles.isEmpty()) {
+            "- Likely entry files: none identified yet."
+        } else {
+            "- Likely entry files: ${likelyEntryFiles.joinToString(", ")}."
+        }
+        val changedPathsLine = "- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}"
+        val inspectChangedPathsLine = if (changedPaths.isEmpty()) {
+            "- Inspect the current code in the IDE before manual verification if you want file-by-file proof."
+        } else {
+            "- Inspect the changed paths in the IDE first, then run the app manually if you still need visible-result proof."
+        }
+        return buildString {
+            appendLine("Copyable issue comment")
+            appendLine("- ${runReadinessSummary(null, context.runEntryCandidates)}")
+            appendLine("- $flowLabel is ready for manual verification because Blueprint could not infer a project run command yet.")
+            appendLine("- Refresh UML From Code to verify the current code-backed UML before you inspect the app manually.")
+            appendLine(changedPathsLine)
+            appendLine(inspectChangedPathsLine)
+            appendLine(likelyEntryLine)
+            appendLine("- ${manualVerificationNextStep(context.runEntryCandidates)}")
+            appendLine("- Next action: inspect the changed paths first, run the likely entry file manually if needed, confirm the feature exists, then compare that result with the changed paths above.")
+            append(validationSummary.removePrefix("Result summary\n"))
+        }.trim()
+    }
+
+    private fun copyRunResultSummary() {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val runCommand = project.service<ProjectRunService>().inferredRunCommand()
+        val summary = if (runCommand.isNullOrBlank()) {
+            manualVerificationReceipt(context, false)
+        } else {
+            runResultSummary(runCommand, manualDemoExpectedVisibleResult(guidedInviteScenarioState()), false)
+        }
+        val selection = java.awt.datatransfer.StringSelection(summary)
+        java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
+        appendChat("Blueprint", summary)
+        status(if (runCommand.isNullOrBlank()) "Copied issue comment for manual verification" else "Copied issue comment")
+    }
+
+    private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
+        currentPrompt.equals(expectedPrompt, ignoreCase = true)
+
+    private data class ReviewFreshnessState(
+        val badge: String,
+        val warning: String,
+        val reviewedAtLine: String,
+        val bannerHint: String,
+    )
+
+    private fun reviewFreshnessFor(node: BlueprintNode, exec: ExecutionArtifact?): ReviewFreshnessState {
+        val reviewedAt = reviewedAtByNodeId[node.id]
+        val reviewedAtLine = reviewedAtLine(reviewedAt)
+        if (exec?.patches.isNullOrEmpty()) {
+            return ReviewFreshnessState(
+                badge = "NONE",
+                warning = "No reviewed code patch yet. Generate Code Diff after you refine the UML.",
+                reviewedAtLine = reviewedAtLine,
+                bannerHint = "No reviewed patch yet.",
+            )
+        }
+        if (node.executionStatus == ExecutionStatus.APPLIED && refreshedAfterApply && !umlHasPendingEdits) {
+            return ReviewFreshnessState(
+                badge = "FRESH",
+                warning = "This reviewed code patch matches the refreshed code-backed UML. Refresh UML From Code again anytime to verify after more edits.",
+                reviewedAtLine = reviewedAtLine,
+                bannerHint = "Reviewed patch is fresh.",
+            )
+        }
+        if (normalizedUmlText() != lastReviewedUmlByNodeId[node.id].orEmpty()) {
+            return ReviewFreshnessState(
+                badge = "STALE",
+                warning = "This reviewed code patch is stale because the UML changed after review. Generate Code Diff again before Apply Approved Changes.",
+                reviewedAtLine = reviewedAtLine,
+                bannerHint = "Reviewed patch is stale.",
+            )
+        }
+        return ReviewFreshnessState(
+            badge = "FRESH",
+            warning = "This reviewed code patch matches the current UML. Apply Approved Changes, or keep editing and then Generate Code Diff again.",
+            reviewedAtLine = reviewedAtLine,
+            bannerHint = "Reviewed patch is fresh.",
+        )
+    }
+
+    private fun buildReviewSummary(
+        exec: ExecutionArtifact?,
+        review: ReviewArtifact?,
+        freshness: ReviewFreshnessState,
+        validationCommand: String?,
+    ): String {
+        val summary = PatchChangeSummary.reviewSummary(exec)
+        val scopeSentence = reviewScopeSentence(exec)
+        val changedFilesHeader = reviewChangedFilesHeader(exec)
+        val scopeSummaryLine = reviewScopeSummaryLine(exec)
+        val changedFilesInline = reviewChangedFilesInline(exec)
+        val approvalSentence = reviewApprovalSentence(exec, review)
+        return buildString {
+            appendLine("Review this patch in one place:")
+            approvalSentence?.let {
+                appendLine("- Start with the approval reason and safety proof below.")
+            }
+            appendLine("- Read What changed? for the plain-English summary.")
+            appendLine("- Open Preview Diff to inspect the exact file edits.")
+            appendLine("- Confirm the diff scope summary, changed files, and approval reason before apply.")
+            approvalSentence?.let {
+                appendLine()
+                appendLine("Approval reason:")
+                appendLine(it)
+            }
+            appendLine()
+            appendLine("Validation before apply:")
+            appendLine("- ${validationCommandReviewText(validationCommand)}")
+            appendLine()
+            appendLine("Proof and scope:")
+            appendLine("- Diff status: ${freshness.badge}")
+            appendLine("- ${freshness.reviewedAtLine}")
+            appendLine("- ${freshness.warning}")
+            appendLine("- $scopeSentence")
+            appendLine(scopeSummaryLine)
+            appendLine(changedFilesHeader)
+            appendLine(changedFilesInline)
+            if (exec?.patches.orEmpty().isNotEmpty()) {
+                appendLine()
+                appendLine("What changed? explains the intent. Preview Diff confirms the exact file edits before apply.")
+            }
+            appendLine()
+            append(summary)
+        }.trim()
+    }
+    private fun reviewApprovalSentence(exec: ExecutionArtifact?, review: ReviewArtifact?): String? {
+        if (!reviewAllowsApply(review)) return null
+        val changePhrase = PatchChangeSummary.semanticChangeLines(exec, exec?.patches.orEmpty().map { it.path })
+            .take(2)
+            .ifEmpty { listOf("the reviewed code patch") }
+            .joinToString(" and ")
+        val acceptedEvidence = review?.acceptanceReview.orEmpty()
+            .filter { it.result.uppercase() == "PASS" }
+            .flatMap { it.evidence }
+            .map { it.trim().trimEnd('.') }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(1)
+            .firstOrNull()
+        val scopeReason = when (review?.scopeCompliance?.result?.uppercase()) {
+            "PASS" -> "stays within the selected files"
+            "PARTIAL" -> "mostly stays within the selected files"
+            else -> "was reviewed for scope"
+        }
+        val evidenceReason = acceptedEvidence?.let { " It also matches the requested UML because $it." }.orEmpty()
+        return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported. That is why Apply Approved Changes is safe now.$evidenceReason"
+    }
+
+    private fun reviewChangedFilesHeader(exec: ExecutionArtifact?): String {
+        val count = exec?.patches.orEmpty().map { it.path }.distinct().size
+        return when (count) {
+            0 -> "Changed files: 0 files"
+            1 -> "Changed files: 1 file"
+            else -> "Changed files: $count files"
+        }
+    }
+
+    private fun reviewScopeSummaryLine(exec: ExecutionArtifact?): String {
+        val paths = exec?.patches.orEmpty().map { it.path }.distinct()
+        return when (paths.size) {
+            0 -> "Diff scope summary: no files will change before apply."
+            1 -> "Diff scope summary: only ${paths.first()} will change before apply."
+            else -> "Diff scope summary: ${paths.size} files will change before apply (${paths.joinToString(", ")})."
+        }
+    }
+
+    private fun reviewChangedFilesInline(exec: ExecutionArtifact?): String {
+        val paths = exec?.patches.orEmpty().map { it.path }.distinct()
+        return when (paths.size) {
+            0 -> "Changed paths: none"
+            1 -> "Changed path: ${paths.first()}"
+            else -> "Changed paths: ${paths.joinToString(", ")}"
+        }
+    }
+
+    private fun reviewScopeSentence(exec: ExecutionArtifact?): String {
+        val paths = exec?.patches.orEmpty().map { it.path }.distinct()
+        return when (paths.size) {
+            0 -> "No files will change in this reviewed code patch."
+            1 -> "Only 1 file will change: ${paths.first()}"
+            else -> "${paths.size} files will change: ${paths.joinToString(", ")}"
+        }
+    }
+
+    private fun refreshReviewFreshnessState() {
+        if (nodeList.selectedValue != null) {
+            refreshArtifactSummary()
+        }
+    }
+
+    private fun reviewedAtLine(reviewedAt: Instant?): String =
+        if (reviewedAt == null) {
+            "Reviewed at not available yet"
+        } else {
+            "Reviewed at ${DateTimeFormatter.ofPattern("HH:mm:ss").format(reviewedAt.atZone(java.time.ZoneId.systemDefault()))} (${reviewAgeText(reviewedAt)})"
+        }
+
+    private fun reviewAgeText(reviewedAt: Instant, now: Instant = Instant.now()): String {
+        val duration = Duration.between(reviewedAt, now).abs()
+        val minutes = duration.toMinutes()
+        val hours = duration.toHours()
+        val days = duration.toDays()
+        return when {
+            duration.seconds < 60 -> "reviewed just now"
+            minutes < 60 -> "reviewed $minutes min ago"
+            hours < 24 -> "reviewed $hours hr ago"
+            else -> "reviewed $days day${if (days == 1L) "" else "s"} ago"
+        }
+    }
+
+    private fun refreshUmlAfterApplyVerification() {
+        verifyInUmlButton.isEnabled = false
+        postApplyVerifyState = "Blueprint reran Refresh UML From Code after apply and verified the latest code-backed UML."
+        postApplyHighlightMessage = "Refresh UML From Code will now explain exactly what changed in the refreshed code-backed UML."
+        logActivity("Refresh UML From Code reran after apply and verified the changed code-backed UML from disk.")
+        status("Verifying updated code-backed UML after apply")
+        generateProjectUml()
+    }
+
+    private fun focusChangedEntityAfterRefresh() {
+        val changedPaths = postApplyChangedPaths
+        if (changedPaths.isEmpty()) return
+        val ir = project.service<IRStore>().load() ?: return
+        val match = changedPaths.firstNotNullOfOrNull { changedPath ->
+            ir.components.firstOrNull { component ->
+                val sourcePath = component.sourceRef?.path
+                sourcePath != null && changedPath.endsWith(sourcePath)
+            }?.let { matched -> changedPath to matched }
+        }
+        postApplyChangedPaths = emptyList()
+        if (match == null) {
+            postApplyHighlightMessage = "Blueprint refreshed the code-backed UML after apply, but did not find a matching UML entity to highlight from the changed paths."
+            if (postApplyVerifyState == null) {
+                postApplyVerifyState = POST_APPLY_VERIFY_STATE
+            }
+            logActivity("Refreshed UML after apply but did not find a changed entity to highlight.")
+            return
+        }
+        val (changedPath, matched) = match
+        if (postApplyVerifyState == null) {
+            postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
+        }
+        postApplyHighlightMessage = "Blueprint highlighted ${matched.name} from $changedPath after refresh."
+        selectedCanvasId = matched.id
+        updateMiniGraph(project.service<DependencyGraphService>().analyze())
+        status("Refreshed UML and highlighted ${matched.name} from $changedPath")
+        logActivity("Refreshed UML highlighted ${matched.name} from $changedPath.")
+    }
+
+    private fun normalizedUmlText(): String = PatchFreshness.normalize(umlEditor.text)
+
+    private fun updateNextStepBanner(title: String, detail: String) {
+        nextStepTitleLabel.text = title
+        nextStepDetailLabel.text = detail
+        updateStaleDiffBanner()
+    }
+
+    private fun updateStaleDiffBanner() {
+        val selected = nodeList.selectedValue
+        val exec = selected?.let { registry.getExecution(it.id) }
+        val freshness = selected?.let { reviewFreshnessFor(it, exec) }
+        val bannerText = freshness?.takeIf { it.badge == "STALE" }?.let {
+            listOf(
+                "Stale reviewed code patch.",
+                it.warning,
+                it.reviewedAtLine.takeUnless { line -> line.equals("Reviewed at not available yet.", ignoreCase = true) },
+            ).filter { line -> !line.isNullOrBlank() }.joinToString(" ")
+        }.orEmpty()
+        staleDiffBannerLabel.text = bannerText
+        staleDiffBannerLabel.isVisible = bannerText.isNotBlank()
     }
 
     private fun guidedNextState(): Pair<String, String> {
         val entityCount = currentUmlEntityCount()
         if (entityCount == 0) {
-            return "Next: Abstract Code to UML" to "Read the current Python project and draw the first UML diagram."
+            return "Next: Refresh UML From Code" to "Read the current Python project and draw the first UML diagram."
         }
 
         val allNodes = registry.all()
         if (allNodes.isEmpty()) {
-            return "Next: Create Code Nodes" to "Turn the edited UML into reviewable implementation nodes."
+            return "Next: Generate Code Diff" to "Turn the edited UML into a reviewed code patch."
         }
 
         val graph = project.service<DependencyGraphService>()
         val selected = nodeList.selectedValue ?: graph.readyNodes().firstOrNull() ?: allNodes.first()
         val shortTitle = selected.title.ifBlank { selected.id.take(8) }
+        val review = registry.getReview(selected.id)
+        val reviewApproved = reviewAllowsApply(review)
         return when {
-            registry.getPlan(selected.id) == null ->
-                "Next: Generate Plan" to "Plan the selected node: $shortTitle."
             registry.getExecution(selected.id) == null ->
-                "Next: Execute Node" to "Generate scoped patches for: $shortTitle."
-            registry.getReview(selected.id) == null ->
-                "Next: Review Changes" to "Check generated patches before applying."
+                "Next: Generate Code Diff" to "Create a reviewed code patch for: $shortTitle."
+            !reviewApproved -> {
+                val reviewDetail = review?.let { ReviewExplanation.statusLine(shortTitle, registry.getExecution(selected.id), it) }
+                    ?: "Review not run yet. Generate Code Diff first so Blueprint can explain why the patch is safe to apply."
+                "Next: Review" to reviewDetail
+            }
             selected.executionStatus != ExecutionStatus.APPLIED ->
-                "Next: Apply Approved Changes" to "Apply reviewed changes for: $shortTitle."
+                "Next: Apply Approved Changes" to "Apply the approved reviewed code patch for: $shortTitle."
             graph.readyNodes().any { it.id != selected.id } ->
-                "Next: Select Ready Node" to "Move to the next dependency-ready node."
+                "Next: Generate Code Diff" to "Another UML-backed change is ready when you want a new reviewed code patch."
             else ->
-                "Next: Refresh UML From Code" to "All current work is applied. Re-abstract the updated codebase."
+                "Next: Refresh UML From Code" to "All current work is applied. Blueprint already refreshed the code-backed UML automatically after apply. Refresh UML From Code to verify the updated code-backed UML again, then run the changed app or make another change."
         }
     }
 
@@ -3199,12 +5626,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> BlueprintTheme.Accent
         }
 
-    private fun changedFileSummary(exec: com.blueprint.model.ExecutionArtifact?): String {
-        if (exec == null) return "Changed files: none yet."
-        if (exec.patches.isEmpty()) return "Changed files: none."
-        return "Changed files (${exec.patches.size}):\n" +
-            exec.patches.joinToString("\n") { "- ${it.action} ${it.path}" }
-    }
+    private fun changedFileSummary(exec: com.blueprint.model.ExecutionArtifact?): String =
+        PatchChangeSummary.changedFilesSummary(exec)
 
     private fun hasDependencyBlock(readiness: DependencyGraphService.NodeReadiness?): Boolean =
         readiness?.reasons.orEmpty().any { !it.startsWith("Node is already") }
@@ -3302,10 +5725,112 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         statusLabel.text = msg
     }
 
+    private fun beginPrimaryAction(buttonText: String, detail: String) {
+        maybeLogNewIterationBoundary(buttonText)
+        primaryActionBusy = true
+        primaryActionButton.text = buttonText
+        primaryActionButton.isEnabled = false
+        guideLabel.text = detail
+        status(buttonText.removeSuffix("..."))
+        showArtifactTab("Review")
+        reviewSummaryArea.text = detail
+        safetyArea.text = "Working with ${providerText()}. Apply stays blocked until a reviewed patch is ready."
+        logActivity(detail)
+    }
+
+    private fun maybeLogNewIterationBoundary(buttonText: String) {
+        if (!completedRunReceiptCycle || buttonText != "Generating Code Diff...") return
+        val nextCycle = activityIterationCount() + 1
+        logActivity("New iteration started - returning to Generate Code Diff after a completed run. Iteration $nextCycle keeps this receipt easy to scan.")
+        completedRunReceiptCycle = false
+    }
+
+    private fun activityIterationCount(): Int =
+        activityLog.text.lineSequence().count { it.contains("Receipt marker - Iteration ") }
+
+    private fun endPrimaryAction() {
+        primaryActionBusy = false
+        primaryActionButton.isEnabled = true
+        updateGuide()
+    }
+
     private fun logActivity(msg: String) {
         val at = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-        activityLog.append("[$at] $msg\n")
+        val numbered = activityLog.lineCount + 1
+        activityLog.append("[$at] ${numbered.toString().padStart(2, '0')}. ${receiptText(msg)}\n")
         activityLog.caretPosition = activityLog.document.length
+    }
+
+    private fun receiptText(msg: String): String {
+        val lower = msg.lowercase(Locale.getDefault())
+        return when {
+            lower.startsWith("abstracted code to uml:") -> msg.replaceFirst("Abstracted code to UML:", "Step 1 complete - Scanned project and generated UML:")
+            lower.startsWith("updated the uml using") -> "Step complete - Refined the UML draft from chat context and grounded source facts."
+            lower.startsWith("planning code diff for") -> msg.replaceFirst("Planning code diff for", "Step 2 started - Preparing reviewed code patch for")
+            lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Step 2 progress - Reviewed code patch plan is ready for")
+            lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Step 2 complete - Reviewed code patch is ready for")
+            lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Step 2 complete - Reviewed code patch is ready for")
+            lower.startsWith("generate code diff used existing nodes because") ->
+                "Step 2 blocked - Generate Code Diff kept the last reviewed code patch because the current UML could not be parsed."
+            lower.startsWith("generate code diff completed with no file changes because") -> "Step 2 complete - $msg"
+            lower.startsWith("generate code diff found no file changes because") -> "Step 2 complete - $msg"
+            lower.startsWith("generate code diff found no uml-backed work items ready to run") -> "Step 2 complete - $msg"
+            lower.startsWith("generate code diff completed with no-op result across") ->
+                "Step 2 complete - Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk."
+            lower.startsWith("no-op code diff for") ->
+                "Step 2 complete - " + msg.replaceFirst("No-op code diff for", "No file changes were needed for")
+                    .replace("; generated content matched disk.", " because that UML-backed request already matched the code on disk.")
+            lower.startsWith("code diff blocked at plan for") ->
+                msg.replaceFirst("Code diff blocked at plan for", "Step 2 blocked - Generate Code Diff stopped at planning for") + ". Review the blocked plan before continuing."
+            lower.startsWith("cannot execute ") ->
+                msg.replaceFirst("Cannot execute", "Blocked by dependencies for")
+                    .replace(" yet:", ":")
+            lower.startsWith("running validation after apply for") -> msg.replaceFirst("Running validation after apply for", "Step 4 validation started -")
+            lower.startsWith("validation skipped after apply for") -> msg.replaceFirst("Validation skipped after apply for", "Step 4 validation skipped -")
+            lower.startsWith("apply finished for") -> msg.replaceFirst("Apply finished for", "Step 4 complete - Applied approved changes for")
+            lower.startsWith("undo apply for '") -> msg.replaceFirst("Undo apply for '", "Rolled back apply for '")
+            lower.startsWith("validation passed:") -> "Step 4 validation passed - " + msg.removePrefix("Validation passed: ")
+            lower.startsWith("validation skipped:") -> "Step 4 validation skipped - " + msg.removePrefix("Validation skipped: ")
+            lower.startsWith("validation failed:") -> "Step 4 validation failed - " + msg.removePrefix("Validation failed: ")
+            lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Step 5 complete - Refreshed UML from code after apply:")
+            lower.startsWith("demo e2e step passed: reset invite demo sandbox at") ->
+                "Step 0 reset complete - " + msg.removePrefix("Demo e2e step passed: ")
+            lower.startsWith("demo e2e step passed: try this change prepared") ->
+                "Step 1 demo prompt ready - " + msg.removePrefix("Demo e2e step passed: ")
+            lower.startsWith("demo e2e step passed:") -> "Step 6 complete - " + msg.removePrefix("Demo e2e step passed: ")
+            lower.startsWith("demo e2e step failed:") -> "Step 6 blocked - " + msg.removePrefix("Demo e2e step failed: ")
+            lower.startsWith("first-run checklist run blocked:") ->
+                msg.replaceFirst("First-run checklist run blocked:", "Step 6 blocked - Run the changed app could not start:")
+            lower.startsWith("first-run checklist run launched:") ->
+                msg.replaceFirst("First-run checklist run launched:", "Step 6 run started - Checklist command:")
+            lower.startsWith("stopped in-app run for the inferred python command.") ->
+                "Step 6 run stopped - Stopped the in-app run for the inferred Python command."
+            lower.startsWith("in-app run failed:") ->
+                msg.replaceFirst("In-app run failed:", "Step 6 blocked - In-app run failed:")
+            lower.startsWith("in-app run finished:") ->
+                msg.replaceFirst("In-app run finished:", "Step 6 run finished - In-app run finished:")
+            lower.startsWith("in-app run stopped:") ->
+                msg.replaceFirst("In-app run stopped:", "Step 6 run stopped - In-app run stopped:")
+            lower.startsWith("started in-app run for") ->
+                msg.replaceFirst("Started in-app run for", "Step 6 run started - In-app run:")
+            lower.startsWith("opened diff preview for") -> msg.replaceFirst("Opened diff preview for", "Opened reviewed diff for")
+            lower.startsWith("inspected the only changed file after apply:") -> "Optional inspection - $msg"
+            lower.startsWith("inspected one changed file after apply from the chooser:") -> "Optional inspection - $msg"
+            lower.startsWith("opened source for") -> msg.replaceFirst("Opened source for", "Opened source file for")
+            lower.startsWith("opened likely entry file for manual verification:") -> msg.replaceFirst("Opened likely entry file for manual verification:", "Optional run check - Opened likely entry file for manual verification:")
+            lower.startsWith("uml import found no entities") -> "Import blocked - Could not build UML from the imported text because no entities were found."
+            lower.startsWith("saved node ") -> msg.replaceFirst("Saved node", "Saved workflow node")
+            lower.startsWith("removed node ") -> msg.replaceFirst("Removed node", "Removed workflow node")
+            lower.startsWith("refreshed dependency wave preview") -> "Optional advanced view - Refreshed dependency wave preview"
+            lower.startsWith("mode changed to") -> msg
+            lower.startsWith("review approved") -> "Step 3 complete - $msg"
+            lower.startsWith("review blocked") -> "Step 3 blocked - $msg"
+            lower.startsWith("review approve") || lower.startsWith("review request_changes") || lower.startsWith("review reject") ->
+                "Step 3 review result - " + msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "")
+            lower.startsWith("new iteration started -") ->
+                msg.replaceFirst("New iteration started -", "Receipt marker - Iteration ${activityIterationCount() + 1} started -")
+            else -> msg
+        }
     }
 
     private fun decorateBanner(text: String): String =
@@ -3334,6 +5859,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             umlHasPendingEdits = umlHasPendingEdits,
             selectedCanvasId = selectedCanvasId,
             selectedNodeId = registry.selectedNodeId(),
+            activityReceipt = activityLog.text,
             chatTranscript = chatHistory.toList(),
             codeMapGroupMode = (codeMapGroupCombo.selectedItem as? CodeMapProjection.GroupMode)?.name,
             hideTests = hideCodeMapTests.isSelected,
@@ -3383,6 +5909,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
             }
 
+            activityLog.text = state.activityReceipt.orEmpty()
+
             if (state.chatTranscript.isNotEmpty()) {
                 chatHistory.clear()
                 chatMessages.removeAll()
@@ -3404,6 +5932,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
         updateGuide()
     }
+
+    private fun sanitizeUmlPreviewField(field: String): String =
+        field
+            .replace("&lt;&lt;", "<<")
+            .replace("&gt;&gt;", ">>")
+            .trim()
+            .takeUnless { it.matches(Regex("""<<[^>]+>>""")) }
+            .orEmpty()
 
     private fun resetWorkspace() {
         val confirm = Messages.showYesNoDialog(

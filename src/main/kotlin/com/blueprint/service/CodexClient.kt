@@ -105,7 +105,7 @@ class CodexClient {
 
     private fun callOpenAI(prompt: String): String {
         val key = openAiKeyOverride ?: envValue("OPENAI_API_KEY") ?: error("OPENAI_API_KEY not set")
-        val model = envValue("BLUEPRINT_MODEL") ?: "gpt-4o-mini"
+        val model = preferredOpenAIModel()
         val body = """
             {
               "model": ${jsonStr(model)},
@@ -300,6 +300,11 @@ class CodexClient {
     }
 
     private data class EnvEntry(val value: String, val source: String)
+
+    private fun preferredOpenAIModel(): String =
+        envValue("BLUEPRINT_MODEL")
+            ?: envValue("OPENAI_MODEL")
+            ?: "gpt-5"
 
     private fun envValue(name: String): String? = envEntry(name)?.value
 

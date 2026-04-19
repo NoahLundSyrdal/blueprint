@@ -90,6 +90,20 @@ class MiniGraphPanel : JPanel() {
     fun zoomIn() { applyZoom(zoom + zoomStep) }
     fun zoomOut() { applyZoom(zoom - zoomStep) }
     fun zoomReset() { applyZoom(1.0) }
+    fun fitToView() {
+        val viewport = SwingUtilities.getAncestorOfClass(javax.swing.JViewport::class.java, this)
+            as? javax.swing.JViewport ?: return zoomReset()
+        val content = graphContentSize()
+        val target = minOf(
+            (viewport.width - 24).toDouble() / content.width.toDouble(),
+            (viewport.height - 24).toDouble() / content.height.toDouble(),
+        ).coerceIn(0.75, 1.4)
+        zoom = target
+        updateCanvasSize()
+        revalidate()
+        viewport.viewPosition = Point(0, 0)
+        repaint()
+    }
 
     private fun applyZoom(target: Double, pivotX: Double = width / 2.0, pivotY: Double = height / 2.0) {
         val oldZoom = zoom
@@ -120,12 +134,7 @@ class MiniGraphPanel : JPanel() {
 
             override fun mouseReleased(e: MouseEvent) {
                 dragOrigin = null
-                // Restore cursor based on what's under the pointer
-                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
-                    Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-                } else {
-                    Cursor.getDefaultCursor()
-                }
+                updateCursor(e.point)
             }
 
             override fun mouseClicked(e: MouseEvent) {
@@ -146,11 +155,7 @@ class MiniGraphPanel : JPanel() {
         })
         addMouseMotionListener(object : MouseMotionAdapter() {
             override fun mouseMoved(e: MouseEvent) {
-                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
-                    Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-                } else {
-                    Cursor.getDefaultCursor()
-                }
+                updateCursor(e.point)
             }
 
             override fun mouseDragged(e: MouseEvent) {
@@ -172,10 +177,16 @@ class MiniGraphPanel : JPanel() {
             }
         })
         addMouseWheelListener { e ->
-            // All vertical scroll events zoom (matches IntelliJ diagram viewer convention).
-            // On macOS, two-finger scroll and pinch both arrive as plain MouseWheelEvent
-            // without Ctrl unless the user has enabled Accessibility → Zoom scroll gesture.
-            // Panning is handled by click-and-drag instead.
+            if (!e.isControlDown && !e.isMetaDown) {
+                val scrollPane = SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane::class.java, this)
+                    as? javax.swing.JScrollPane ?: return@addMouseWheelListener
+                val bar = if (e.isShiftDown) scrollPane.horizontalScrollBar else scrollPane.verticalScrollBar
+                val delta = (e.preciseWheelRotation * bar.unitIncrement * e.scrollAmount).toInt()
+                val max = (bar.maximum - bar.visibleAmount).coerceAtLeast(bar.minimum)
+                bar.value = (bar.value + delta).coerceIn(bar.minimum, max)
+                e.consume()
+                return@addMouseWheelListener
+            }
             val delta = -e.preciseWheelRotation * zoomStep
             applyZoom(zoom + delta, pivotX = e.x.toDouble(), pivotY = e.y.toDouble())
             e.consume()
@@ -189,15 +200,27 @@ class MiniGraphPanel : JPanel() {
         repaint()
     }
 
-    override fun getToolTipText(event: MouseEvent): String? =
-        nodeAt(event.point)?.let { node ->
+    private fun updateCursor(point: Point) {
+        cursor = when {
+            sourceBadgeAt(point) != null -> Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            nodeAt(point) != null -> Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR)
+            else -> Cursor.getDefaultCursor()
+        }
+    }
+
+    override fun getToolTipText(event: MouseEvent): String? {
+        val sourceNode = sourceBadgeAt(event.point)
+        if (sourceNode != null) {
+            return "<html><b>${escape(sourceNode.title)}</b><br/>Open the source file for this code-backed card. This does not run Generate Code Diff or Apply Approved Changes.</html>"
+        }
+        return nodeAt(event.point)?.let { node ->
             "<html><b>${escape(node.title)}</b><br/>" +
                 "ID: ${node.id.take(8)}<br/>" +
                 "Origin: ${node.origin.label()}<br/>" +
                 "Status: ${node.status}<br/>" +
                 node.kind.takeIf { it.isNotBlank() }?.let { "Kind: ${escape(it)}<br/>" }.orEmpty() +
                 "Source: ${escape(node.sourceDescription())}<br/>" +
-                node.hasSourceTarget().takeIf { it }?.let { "Double-click to open source.<br/>" }.orEmpty() +
+                node.hasSourceTarget().takeIf { it }?.let { "Use the file badge or double-click to open the source file. This does not run Generate Code Diff or Apply Approved Changes.<br/>" }.orEmpty() +
                 "Wave: ${node.wave}<br/>" +
                 node.summaryLine("Fields", node.fields, node.fieldOverflowCount).takeIf { it.isNotBlank() }
                     ?.let { "${escape(it)}<br/>" }.orEmpty() +
@@ -207,6 +230,7 @@ class MiniGraphPanel : JPanel() {
                 escape(node.detail).replace("\n", "<br/>") +
                 "</html>"
         }
+    }
 
     override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
@@ -225,7 +249,7 @@ class MiniGraphPanel : JPanel() {
         if (nodes.isEmpty()) {
             g.color = Theme.Muted
             g.font = font.deriveFont(Font.PLAIN, 13f)
-            g.drawString("Click Abstract Code to UML to draw this project as architecture.", 24, 38)
+            g.drawString("Click Refresh UML From Code to draw this project as architecture.", 24, 38)
             cards = emptyMap()
             sourceBadges = emptyMap()
             return
@@ -327,11 +351,9 @@ class MiniGraphPanel : JPanel() {
 
             paintStatusBadge(g, node, card)
 
-            g.color = if (node.selected) Theme.Accent else Theme.Muted
-            g.drawOval((card.x + card.width - 28).toInt(), (card.y + 10).toInt(), 16, 16)
-            val px = (card.x + card.width - 22).toInt()
-            val py = (card.y + 14).toInt()
-            g.fillPolygon(intArrayOf(px, px, px + 7), intArrayOf(py, py + 8, py + 4), 3)
+            if (node.hasSourceTarget()) {
+                paintOpenGlyph(g, card)
+            }
         }
 
         cards = localCards
@@ -353,6 +375,14 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun updateCanvasSize() {
+        val contentSize = graphContentSize()
+        preferredSize = Dimension(
+            (contentSize.width * zoom).toInt().coerceAtLeast(minimumSize.width),
+            (contentSize.height * zoom).toInt().coerceAtLeast(minimumSize.height),
+        )
+    }
+
+    private fun graphContentSize(): Dimension {
         val richCards = nodes.any { it.hasRichFacts() }
         val cardW = if (richCards) 292 else 230
         val cardH = if (richCards) 132 else 76
@@ -365,10 +395,7 @@ class MiniGraphPanel : JPanel() {
         val maxRows = (layoutGroups.maxOfOrNull { it.nodes.size } ?: 1).coerceAtLeast(1)
         val contentWidth = startX + columns * cardW + (columns - 1) * gapX + 24
         val contentHeight = startY + maxRows * cardH + (maxRows - 1) * gapY + 28
-        preferredSize = Dimension(
-            (contentWidth * zoom).toInt().coerceAtLeast(minimumSize.width),
-            (contentHeight * zoom).toInt().coerceAtLeast(minimumSize.height),
-        )
+        return Dimension(contentWidth, contentHeight)
     }
 
     private fun layoutGroups(): List<LayoutGroup> =
@@ -402,8 +429,8 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun paintSourceBadge(g: Graphics2D, card: RoundRectangle2D.Float, textLeft: Int): RoundRectangle2D.Float {
-        val label = "src"
-        val width = 36
+        val label = "file"
+        val width = 44
         val x = textLeft
         val y = (card.y + card.height - 22).toInt()
         val badge = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), 16f, 8f, 8f)
@@ -411,8 +438,19 @@ class MiniGraphPanel : JPanel() {
         g.fill(badge)
         g.color = Theme.Accent
         g.font = font.deriveFont(Font.PLAIN, 10f)
-        g.drawString(label, x + 9, y + 12)
+        g.drawString(label, x + 8, y + 12)
         return badge
+    }
+
+    private fun paintOpenGlyph(g: Graphics2D, card: RoundRectangle2D.Float) {
+        val x = (card.x + card.width - 28).toInt()
+        val y = (card.y + 10).toInt()
+        g.color = Theme.Accent
+        g.drawRect(x, y + 4, 10, 10)
+        g.drawLine(x + 6, y, x + 16, y)
+        g.drawLine(x + 16, y, x + 16, y + 10)
+        g.drawLine(x + 10, y + 2, x + 16, y)
+        g.drawLine(x + 16, y, x + 14, y + 6)
     }
 
     private fun paintStatusBadge(g: Graphics2D, node: NodeView, card: RoundRectangle2D.Float) {

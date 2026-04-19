@@ -35,6 +35,9 @@ class ChatGroundingContextTest {
         assertTrue(grounding.promptText.contains("- project: Project"))
         assertTrue(grounding.promptText.contains("- accept() -> None"))
         assertTrue(grounding.promptText.contains("out references Project"))
+        assertTrue(grounding.summaryText.contains("Grounding: selected code entity Invite"))
+        assertTrue(grounding.summaryText.contains("Source file: app/models.py:12"))
+        assertTrue(grounding.activityLabel.contains("selected code entity Invite"))
     }
 
     @Test
@@ -51,6 +54,9 @@ class ChatGroundingContextTest {
         assertTrue(grounding.promptText.contains("Selected proposed UML entity: InvitePolicy"))
         assertTrue(grounding.promptText.contains("- max_invites: int"))
         assertTrue(grounding.promptText.contains("- Project owns InvitePolicy"))
+        assertTrue(grounding.summaryText.contains("Grounding: selected UML entity InvitePolicy"))
+        assertTrue(grounding.summaryText.contains("Source file: not code-backed yet"))
+        assertTrue(grounding.activityLabel.contains("selected UML entity InvitePolicy"))
     }
 
     @Test
@@ -66,6 +72,9 @@ class ChatGroundingContextTest {
         assertTrue(grounding.promptText.contains("Selected entity: none"))
         assertTrue(grounding.promptText.contains("UML entities in editor: Project, InvitePolicy"))
         assertTrue(grounding.promptText.contains("Code entities recovered: Invite, Project"))
+        assertTrue(grounding.summaryText.contains("Grounding: whole-diagram context"))
+        assertTrue(grounding.summaryText.contains("Hint: select a UML card for a more targeted chat edit."))
+        assertTrue(grounding.activityLabel.contains("whole-diagram context"))
     }
 
     @Test

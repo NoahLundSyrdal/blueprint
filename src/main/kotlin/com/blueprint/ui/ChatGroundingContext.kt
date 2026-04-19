@@ -19,6 +19,8 @@ object ChatGroundingContext {
         val selectedId: String?,
         val selectedLabel: String,
         val promptText: String,
+        val summaryText: String,
+        val activityLabel: String,
     )
 
     fun build(
@@ -96,6 +98,13 @@ object ChatGroundingContext {
             selectedId = component.id,
             selectedLabel = "selected code entity ${component.name}",
             promptText = prompt,
+            summaryText = buildString {
+                appendLine("Grounding: selected code entity ${component.name}")
+                appendLine("Source file: ${component.sourceLabel()}")
+                appendLine("Key fields: ${component.fields.take(3).joinToString(", ") { "${it.name}: ${it.type}" }.ifBlank { "none" }}")
+                appendLine("Relationships: ${relatedEdges.take(3).joinToString(", ") { it.labelFor(component, componentsById) }.ifBlank { "none" }}")
+            }.trim(),
+            activityLabel = "selected code entity ${component.name} (${component.sourceLabel()})",
         )
     }
 
@@ -122,6 +131,13 @@ object ChatGroundingContext {
             selectedId = entity.name,
             selectedLabel = "selected UML entity ${entity.name}",
             promptText = prompt,
+            summaryText = buildString {
+                appendLine("Grounding: selected UML entity ${entity.name}")
+                appendLine("Source file: not code-backed yet")
+                appendLine("Key fields: ${entity.fields.take(4).joinToString(", ").ifBlank { "none" }}")
+                appendLine("Relationships: ${relationships.take(3).joinToString(", ") { "${it.from} ${it.label} ${it.to}" }.ifBlank { "none" }}")
+            }.trim(),
+            activityLabel = "selected UML entity ${entity.name}",
         )
     }
 
@@ -145,8 +161,19 @@ object ChatGroundingContext {
         return Grounding(
             mode = if (viewingUmlDraft) "editable UML draft" else "current code map",
             selectedId = null,
-            selectedLabel = "no selected entity",
+            selectedLabel = "whole-diagram context",
             promptText = prompt,
+            summaryText = buildString {
+                appendLine("Grounding: whole-diagram context")
+                appendLine("Hint: select a UML card for a more targeted chat edit.")
+                parsedUml?.entities?.takeIf { it.isNotEmpty() }?.let { entities ->
+                    appendLine("Visible UML entities: ${entities.take(4).joinToString(", ") { it.name }}")
+                }
+                ir?.components?.takeIf { it.isNotEmpty() }?.let { components ->
+                    appendLine("Recovered code entities: ${components.take(4).joinToString(", ") { it.name }}")
+                }
+            }.trim(),
+            activityLabel = "whole-diagram context",
         )
     }
 
