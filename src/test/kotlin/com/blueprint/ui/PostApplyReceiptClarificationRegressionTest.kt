@@ -10,10 +10,9 @@ class PostApplyReceiptClarificationRegressionTest {
 
     @Test
     fun `post apply receipt distinguishes automatic refresh from explicit verify`() {
-        assertTrue(source.contains("val refreshNote = \"\${postApplyVerifyState} Refresh UML From Code verifies the updated code-backed UML again whenever you want to confirm it yourself.\""))
-        assertTrue(source.contains("val umlRefreshLine = \"Blueprint automatically refreshed the code-backed UML from disk after apply.\""))
+        assertTrue(source.contains("val refreshNote = \"Blueprint already refreshed the code-backed UML automatically after apply. Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\""))
         assertTrue(source.contains("appendLine(\"- Blueprint already reloaded the changed code into the UML automatically after apply.\")"))
         assertTrue(source.contains("Click Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."))
-        assertTrue(source.contains("val verifyStateLine = postApplyVerifyState ?: \"Blueprint automatically refreshed the code-backed UML from disk after apply.\""))
+        assertTrue(source.contains("val verificationSummaryLine = if (highlightLine == \"Blueprint refreshed the code-backed UML after apply.\") {"))
     }
 }

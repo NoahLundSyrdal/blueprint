@@ -16,7 +16,7 @@ class VerifyInUmlActionRegressionTest {
         assertTrue(source.contains("add(verifyInUmlButton)"))
         assertTrue(source.contains("verifyInUmlButton.isEnabled = n.executionStatus == ExecutionStatus.APPLIED"))
         assertTrue(source.contains("verifyInUmlButton.isEnabled = true"))
-        assertTrue(source.contains("\${postApplyVerifyState} Refresh UML From Code verifies the updated code-backed UML again whenever you want to confirm it yourself."))
+        assertTrue(source.contains("Blueprint already refreshed the code-backed UML automatically after apply. Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."))
         assertTrue(source.contains("Blueprint automatically refreshed the code-backed UML from disk after apply."))
         assertTrue(source.contains("appendLine(\"- Blueprint already reloaded the changed code into the UML automatically after apply.\")"))
         assertTrue(source.contains("Click Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."))

@@ -758,7 +758,7 @@ internal data class PostApplyInlineSummary(
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, changedPaths))
             appendLine(verifyChecklist)
-            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Blueprint already refreshed the code-backed UML automatically after apply.\n- Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.")
+            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Blueprint already refreshed the code-backed UML automatically after apply.\n- Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.")
         }.trim()
 
     private fun resultDetailsSection(): String =
@@ -3690,7 +3690,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     status(summaryLine)
                     val nextActionLine = "Next: Refresh UML From Code to verify the updated code-backed UML."
                     postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
-                    val refreshNote = "${postApplyVerifyState} Refresh UML From Code verifies the updated code-backed UML again whenever you want to confirm it yourself."
+                    val refreshNote = "Blueprint already refreshed the code-backed UML automatically after apply. Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3705,9 +3705,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     } else {
                         "Undo Last Apply is not available for this apply result."
                     }
-                    val umlRefreshLine = "Blueprint automatically refreshed the code-backed UML from disk after apply."
                     val highlightLine = postApplyHighlightMessage ?: "Blueprint refreshed the code-backed UML after apply."
-                    val verifyStateLine = postApplyVerifyState ?: "Blueprint automatically refreshed the code-backed UML from disk after apply."
+                    val verificationSummaryLine = if (highlightLine == "Blueprint refreshed the code-backed UML after apply.") {
+                        postApplyVerifyState ?: highlightLine
+                    } else {
+                        listOfNotNull(postApplyVerifyState, highlightLine)
+                            .distinct()
+                            .joinToString(" ")
+                    }
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     val changedPathsBlock = buildString {
                         appendLine("Changed paths:")
@@ -3770,9 +3775,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine("- Written paths:")
                             changedPaths.forEach { appendLine("  - $it") }
                         }
-                        appendLine("- $umlRefreshLine")
-                        appendLine("- $verifyStateLine")
-                        appendLine("- $highlightLine")
+                        appendLine("- $verificationSummaryLine")
                         appendLine("- $refreshNote")
                     }.trim()
                     postApplyInlineSummary = PostApplyInlineSummary(
@@ -3791,6 +3794,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine("- Validation details: ${result.summaryLine()}")
                             appendLine("- Next: Refresh UML From Code to verify the updated code-backed UML.")
                             appendLine("- Run after apply: $runNote")
+                            appendLine("- Verification: $verificationSummaryLine")
                         }.trim(),
                     )
                     copyRunSummaryButton.isEnabled = true
@@ -3809,7 +3813,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }
                     Messages.showInfoMessage(
                         project,
-                        listOf(nextActionLine, summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine, validationBlock)
+                        listOf(nextActionLine, summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, verificationSummaryLine, runNote, undoNote, validationBlock)
                             .filter { it.isNotBlank() }
                             .joinToString("\n\n") + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
                         "Blueprint - Apply Complete"
@@ -3819,15 +3823,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         umlStatusLabel.text = "UML: automatically refreshed from code after apply. Refresh UML From Code to verify the updated code-backed UML again, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
-                            listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine)
+                            listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, verificationSummaryLine, runNote, undoNote)
                                 .filter { it.isNotBlank() }
                                 .joinToString("\n"),
                         )
                         guideLabel.text = listOf(
                             "Next: Refresh UML From Code to verify the updated code-backed UML.",
                             summaryLine,
-                            verifyStateLine,
-                            "Refresh UML From Code verifies the updated code-backed UML again whenever you want to confirm it yourself.",
+                            verificationSummaryLine,
+                            "Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")

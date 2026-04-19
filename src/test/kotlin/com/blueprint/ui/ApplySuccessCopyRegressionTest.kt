@@ -36,7 +36,7 @@ class ApplySuccessCopyRegressionTest {
         assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("Undo Last Apply is available if you want to roll back this reviewed code patch."))
         assertTrue(source.contains("val commandBlock = commandReviewBlock(validationCommand, pythonContext)"))
-        assertTrue(source.contains("listOf(nextActionLine, summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine, validationBlock)"))
+        assertTrue(source.contains("listOf(nextActionLine, summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, verificationSummaryLine, runNote, undoNote, validationBlock)"))
         assertTrue(source.contains("val receiptSummary = buildString {"))
         assertTrue(source.contains("appendLine(\"Apply receipt:\")"))
         assertTrue(source.contains("status(summaryLine)"))
@@ -46,10 +46,10 @@ class ApplySuccessCopyRegressionTest {
         assertTrue(source.contains("guideLabel.text = listOf("))
         assertTrue(source.contains("\"Next: Refresh UML From Code to verify the updated code-backed UML.\""))
         assertTrue(source.contains("summaryLine,"))
-        assertTrue(source.contains("verifyStateLine,"))
-        assertTrue(source.contains("\"Refresh UML From Code verifies the updated code-backed UML again whenever you want to confirm it yourself.\""))
+        assertTrue(source.contains("verificationSummaryLine,"))
+        assertTrue(source.contains("\"Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\""))
         assertTrue(source.contains("\"Use Undo Last Apply to roll back this reviewed code patch.\""))
         assertTrue(source.contains("appendChat("))
-        assertTrue(source.contains("listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine)"))
+        assertTrue(source.contains("listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, verificationSummaryLine, runNote, undoNote)"))
     }
 }
