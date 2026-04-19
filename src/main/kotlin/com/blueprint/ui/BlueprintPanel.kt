@@ -3639,8 +3639,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     verifyInUmlButton.isEnabled = true
                     val openChangedFilesNote = when (changedPaths.size) {
                         0 -> ""
-                        1 -> "Optional after verification: Use Open Changed File if you want to inspect exactly what Blueprint wrote."
-                        else -> "Optional after verification: Use Open Changed Files if you want to inspect exactly what Blueprint wrote."
+                        1 -> "Verify in code: Use Open Changed File to inspect the primary changed file in the IDE. This does not apply or refresh anything."
+                        else -> "Verify in code: Use Open Changed Files to inspect the primary changed files in the IDE. This does not apply or refresh anything."
                     }
                     Messages.showInfoMessage(
                         project,
@@ -4880,8 +4880,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
         val inspectAction = when (changedPaths.size) {
             0 -> "Inspect the current code in the IDE if you want to confirm the final state file by file."
-            1 -> "Use Open Changed File if you want to inspect ${changedPaths.first()} in the IDE."
-            else -> "Use Open Changed Files if you want to inspect the ${changedPaths.size} changed paths in the IDE."
+            1 -> "Verify in code: Use Open Changed File to inspect ${changedPaths.first()} in the IDE. This does not apply or refresh anything."
+            else -> "Verify in code: Use Open Changed Files to inspect the ${changedPaths.size} changed paths in the IDE. This does not apply or refresh anything."
         }
         val nextSteps = listOf(
             "Next steps:",

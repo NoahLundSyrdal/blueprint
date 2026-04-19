@@ -18,7 +18,8 @@ class OpenAppliedFilesRegressionTest {
         assertTrue(source.contains("add(openAppliedFilesButton)"))
         assertTrue(source.contains("openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()"))
         assertTrue(source.contains("openAppliedFilesButton.text = if (changedPaths.size == 1) \"Open Changed File\" else \"Open Changed Files\""))
-        assertTrue(source.contains("Open Changed Files is optional after verification if you want to inspect what Blueprint wrote."))
+        assertTrue(source.contains("Verify in code: Use Open Changed File to inspect the primary changed file in the IDE. This does not apply or refresh anything."))
+        assertTrue(source.contains("Verify in code: Use Open Changed Files to inspect the primary changed files in the IDE. This does not apply or refresh anything."))
     }
 
     @Test

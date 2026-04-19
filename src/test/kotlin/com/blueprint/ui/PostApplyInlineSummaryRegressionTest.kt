@@ -39,5 +39,6 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("appendLine(validationAndPathsLine)"))
         assertTrue(source.contains("appendLine(verifyChecklist)"))
         assertTrue(source.contains("append(\"\\nVerified receipt:\\n- Review the changed paths, validation result, and inferred run command above.\\n- Blueprint already refreshed the code-backed UML automatically after apply.\\n- Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\\n- Run the changed app to confirm the feature exists.\\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.\")"))
+        assertTrue(source.contains("Verify in code: Use Open Changed File to inspect the primary changed file in the IDE. This does not apply or refresh anything."))
     }
 }

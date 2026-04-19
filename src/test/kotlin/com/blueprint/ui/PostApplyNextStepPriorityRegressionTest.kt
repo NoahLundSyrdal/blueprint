@@ -19,6 +19,7 @@ class PostApplyNextStepPriorityRegressionTest {
         assertTrue(source.contains("- Run the changed app to confirm the feature exists."))
         assertTrue(source.contains("- Review the changed paths, validation result, and inferred run command above."))
         assertTrue(source.contains("- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote."))
+        assertTrue(source.contains("Verify in code: Use Open Changed File to inspect the primary changed file in the IDE. This does not apply or refresh anything."))
         assertFalse(source.contains("Open Changed Files to inspect what Blueprint wrote before you rerun the app."))
     }
 
