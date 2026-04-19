@@ -4,6 +4,7 @@ import com.blueprint.ir.IRStore
 import com.blueprint.model.AcceptanceCriterion
 import com.blueprint.model.AcceptanceCriterionType
 import com.blueprint.model.BlueprintNode
+import com.blueprint.model.ExecutionArtifact
 import com.blueprint.model.ExecutionStatus
 import com.blueprint.model.FileScope
 import com.blueprint.model.NodeType
@@ -284,6 +285,94 @@ internal object GuidedInviteScenario {
             step == currentStep -> "[next]"
             else -> "[wait]"
         }
+}
+
+internal object PatchChangeSummary {
+    fun reviewSummary(exec: ExecutionArtifact?): String {
+        if (exec == null) return "What changed?\n- No reviewed code patch yet."
+        if (exec.patches.isEmpty()) return "What changed?\n- No code changes needed"
+        val semanticChanges = semanticChanges(exec.patches, exec.summary)
+        return buildString {
+            appendLine("What changed?")
+            semanticChanges.forEach { appendLine("- $it") }
+            appendLine()
+            appendLine(changedFilesSummary(exec))
+        }.trim()
+    }
+
+    fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
+        if (exec == null || appliedPaths.isEmpty()) return "No code changes needed"
+        val changedFiles = exec.patches.filter { it.path in appliedPaths.toSet() }
+        val semanticChanges = semanticChanges(changedFiles, exec.summary)
+        return buildString {
+            appendLine("What changed:")
+            semanticChanges.forEach { appendLine("- $it") }
+            appendLine()
+            append(changedFilesSummary(changedFiles))
+        }.trim()
+    }
+
+    fun changedFilesSummary(exec: ExecutionArtifact?): String =
+        when {
+            exec == null -> "Changed files: none yet."
+            exec.patches.isEmpty() -> "Changed files: none."
+            else -> changedFilesSummary(exec.patches)
+        }
+
+    private fun changedFilesSummary(patches: List<Patch>): String =
+        buildString {
+            appendLine("Changed files (${patches.size}):")
+            patches.forEach { appendLine("- ${it.action} ${it.path}") }
+        }.trim()
+
+    private fun semanticChanges(patches: List<Patch>, fallbackSummary: String): List<String> {
+        val changes = patches
+            .asSequence()
+            .flatMap { patch -> patchSemanticChanges(patch).asSequence() }
+            .distinct()
+            .toList()
+        return if (changes.isEmpty()) {
+            fallbackSummary.takeIf { it.isNotBlank() }?.let { listOf(it) } ?: listOf("Reviewed code patch is ready.")
+        } else {
+            changes
+        }
+    }
+
+    private fun patchSemanticChanges(patch: Patch): List<String> {
+        val lines = patch.content.lines().map { it.trim() }
+        val classes = mutableMapOf<String, MutableList<String>>()
+        var currentClass: String? = null
+        for (line in lines) {
+            val className = Regex("^class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(line)?.groupValues?.get(1)
+            if (className != null) {
+                currentClass = className
+                classes.getOrPut(className) { mutableListOf() }
+                continue
+            }
+            val owner = currentClass ?: continue
+            fieldSummary(line)?.let { classes.getOrPut(owner) { mutableListOf() }.add(it) }
+        }
+        val summaries = classes.entries.flatMap { (name, fields) ->
+            if (fields.isEmpty()) listOf("$name updated") else fields.distinct().map { "$name + $it" }
+        }
+        return if (summaries.isNotEmpty()) summaries else listOf(fallbackPatchSummary(patch))
+    }
+
+    private fun fieldSummary(line: String): String? {
+        val fieldMatch = Regex("^([A-Za-z_][A-Za-z0-9_]*)\\s*:\\s*([^=#]+)").find(line) ?: return null
+        val name = fieldMatch.groupValues[1]
+        if (name == "return") return null
+        return "$name: ${fieldMatch.groupValues[2].trim()}"
+    }
+
+    private fun fallbackPatchSummary(patch: Patch): String {
+        val target = patch.path.substringAfterLast('/').ifBlank { patch.path }
+        return when (patch.action.lowercase()) {
+            "create" -> "$target created"
+            "delete" -> "$target deleted"
+            else -> "$target updated"
+        }
+    }
 }
 
 private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
@@ -2556,15 +2645,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }
                     val refreshNote = "Refresh UML From Code to verify."
                     val refreshedNote = "After refresh, Blueprint shows the code-backed UML updated from disk."
+                    val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     Messages.showInfoMessage(
                         project,
                         buildString {
                             appendLine(summaryLine)
-                            if (changedPaths.isNotEmpty()) {
-                                appendLine()
-                                appendLine("Changed paths:")
-                                changedPaths.forEach { appendLine("- $it") }
-                            }
+                            appendLine()
+                            appendLine(whatChanged)
                             appendLine()
                             appendLine(refreshNote)
                             appendLine(refreshedNote)
@@ -2578,7 +2665,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         showArtifactTab("UML")
                         status(refreshNote)
                         umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram."
-                        appendChat("Blueprint", "$summaryLine $refreshNote")
+                        appendChat("Blueprint", "$summaryLine\n$whatChanged\n$refreshNote")
                     }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
@@ -2902,11 +2989,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         reviewSummaryArea.text = buildString {
-            append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
+            append(PatchChangeSummary.reviewSummary(exec))
             append("\n\n")
-            append(changedFileSummary(exec))
+            append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
             if (validation != null) {
                 append("\n\n")
+                append("Validation:\n")
                 append(validation.summaryLine())
             }
         }
@@ -3250,12 +3338,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> BlueprintTheme.Accent
         }
 
-    private fun changedFileSummary(exec: com.blueprint.model.ExecutionArtifact?): String {
-        if (exec == null) return "Changed files: none yet."
-        if (exec.patches.isEmpty()) return "Changed files: none."
-        return "Changed files (${exec.patches.size}):\n" +
-            exec.patches.joinToString("\n") { "- ${it.action} ${it.path}" }
-    }
+    private fun changedFileSummary(exec: com.blueprint.model.ExecutionArtifact?): String =
+        PatchChangeSummary.changedFilesSummary(exec)
 
     private fun hasDependencyBlock(readiness: DependencyGraphService.NodeReadiness?): Boolean =
         readiness?.reasons.orEmpty().any { !it.startsWith("Node is already") }
