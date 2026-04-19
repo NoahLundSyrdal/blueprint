@@ -20,7 +20,7 @@ class ReviewTabCopyRegressionTest {
         assertTrue(source.contains("appendLine(\"Review this patch in one place:\")"))
         assertTrue(source.contains("appendLine(\"- Read What changed? for the plain-English summary.\")"))
         assertTrue(source.contains("appendLine(\"- Open Preview Diff to inspect the exact file edits.\")"))
-        assertTrue(source.contains("appendLine(\"- Confirm the changed files and approval reason before apply.\")"))
+        assertTrue(source.contains("appendLine(\"- Confirm the diff scope summary, changed files, and approval reason before apply.\")"))
         assertTrue(source.contains("appendLine(\"Validation before apply:\")"))
         assertTrue(source.contains("appendLine(\"- \${validationCommandReviewText(validationCommand)}\")"))
         assertTrue(source.contains("What changed? explains the intent. Preview Diff confirms the exact file edits before apply."))

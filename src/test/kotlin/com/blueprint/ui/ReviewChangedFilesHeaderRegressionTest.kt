@@ -13,8 +13,13 @@ class ReviewChangedFilesHeaderRegressionTest {
         assertTrue(source.contains("val changedFilesHeader = reviewChangedFilesHeader(exec)"))
         assertTrue(source.contains("appendLine(changedFilesHeader)"))
         assertTrue(source.contains("private fun reviewChangedFilesHeader(exec: ExecutionArtifact?): String {"))
+        assertTrue(source.contains("private fun reviewScopeSummaryLine(exec: ExecutionArtifact?): String {"))
+        assertTrue(source.contains("appendLine(scopeSummaryLine)"))
         assertTrue(source.contains("0 -> \"Changed files: 0 files\""))
         assertTrue(source.contains("1 -> \"Changed files: 1 file\""))
         assertTrue(source.contains("else -> \"Changed files: \$count files\""))
+        assertTrue(source.contains("\"Diff scope summary: no files will change before apply.\""))
+        assertTrue(source.contains("\"Diff scope summary: only \${paths.first()} will change before apply.\""))
+        assertTrue(source.contains("\"Diff scope summary: \${paths.size} files will change before apply (\${paths.joinToString(\", \")}).\""))
     }
 }

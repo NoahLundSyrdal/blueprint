@@ -5152,18 +5152,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val summary = PatchChangeSummary.reviewSummary(exec)
         val scopeSentence = reviewScopeSentence(exec)
         val changedFilesHeader = reviewChangedFilesHeader(exec)
+        val scopeSummaryLine = reviewScopeSummaryLine(exec)
         val changedFilesInline = reviewChangedFilesInline(exec)
         val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
             appendLine("Review this patch in one place:")
             appendLine("- Read What changed? for the plain-English summary.")
             appendLine("- Open Preview Diff to inspect the exact file edits.")
-            appendLine("- Confirm the changed files and approval reason before apply.")
+            appendLine("- Confirm the diff scope summary, changed files, and approval reason before apply.")
             appendLine()
             appendLine("Validation before apply:")
             appendLine("- ${validationCommandReviewText(validationCommand)}")
             appendLine()
             appendLine(changedFilesHeader)
+            appendLine(scopeSummaryLine)
             appendLine(changedFilesInline)
             appendLine("Diff status: ${freshness.badge}")
             appendLine(freshness.reviewedAtLine)
@@ -5211,6 +5213,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             0 -> "Changed files: 0 files"
             1 -> "Changed files: 1 file"
             else -> "Changed files: $count files"
+        }
+    }
+
+    private fun reviewScopeSummaryLine(exec: ExecutionArtifact?): String {
+        val paths = exec?.patches.orEmpty().map { it.path }.distinct()
+        return when (paths.size) {
+            0 -> "Diff scope summary: no files will change before apply."
+            1 -> "Diff scope summary: only ${paths.first()} will change before apply."
+            else -> "Diff scope summary: ${paths.size} files will change before apply (${paths.joinToString(", ")})."
         }
     }
 
