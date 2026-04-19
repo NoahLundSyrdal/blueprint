@@ -13,7 +13,7 @@ class DiagramCanvasVisibilityRegressionTest {
 
         assertFalse(source.contains("add(JPanel(GridLayout(0, 1, 2, 2)).apply"))
         assertTrue(source.contains("layout = BoxLayout(this, BoxLayout.Y_AXIS)"))
-        assertTrue(source.contains("maximumSize = Dimension(Int.MAX_VALUE, 96)"))
+        assertTrue(source.contains("maximumSize = Dimension(Int.MAX_VALUE, 64)"))
         assertTrue(source.contains("add(JBScrollPane(miniGraph).apply"))
     }
 }

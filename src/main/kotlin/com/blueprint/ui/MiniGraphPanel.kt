@@ -90,6 +90,20 @@ class MiniGraphPanel : JPanel() {
     fun zoomIn() { applyZoom(zoom + zoomStep) }
     fun zoomOut() { applyZoom(zoom - zoomStep) }
     fun zoomReset() { applyZoom(1.0) }
+    fun fitToView() {
+        val viewport = SwingUtilities.getAncestorOfClass(javax.swing.JViewport::class.java, this)
+            as? javax.swing.JViewport ?: return zoomReset()
+        val content = graphContentSize()
+        val target = minOf(
+            (viewport.width - 24).toDouble() / content.width.toDouble(),
+            (viewport.height - 24).toDouble() / content.height.toDouble(),
+        ).coerceIn(0.75, 1.4)
+        zoom = target
+        updateCanvasSize()
+        revalidate()
+        viewport.viewPosition = Point(0, 0)
+        repaint()
+    }
 
     private fun applyZoom(target: Double, pivotX: Double = width / 2.0, pivotY: Double = height / 2.0) {
         val oldZoom = zoom
@@ -163,10 +177,16 @@ class MiniGraphPanel : JPanel() {
             }
         })
         addMouseWheelListener { e ->
-            // All vertical scroll events zoom (matches IntelliJ diagram viewer convention).
-            // On macOS, two-finger scroll and pinch both arrive as plain MouseWheelEvent
-            // without Ctrl unless the user has enabled Accessibility → Zoom scroll gesture.
-            // Panning is handled by click-and-drag instead.
+            if (!e.isControlDown && !e.isMetaDown) {
+                val scrollPane = SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane::class.java, this)
+                    as? javax.swing.JScrollPane ?: return@addMouseWheelListener
+                val bar = if (e.isShiftDown) scrollPane.horizontalScrollBar else scrollPane.verticalScrollBar
+                val delta = (e.preciseWheelRotation * bar.unitIncrement * e.scrollAmount).toInt()
+                val max = (bar.maximum - bar.visibleAmount).coerceAtLeast(bar.minimum)
+                bar.value = (bar.value + delta).coerceIn(bar.minimum, max)
+                e.consume()
+                return@addMouseWheelListener
+            }
             val delta = -e.preciseWheelRotation * zoomStep
             applyZoom(zoom + delta, pivotX = e.x.toDouble(), pivotY = e.y.toDouble())
             e.consume()
@@ -355,6 +375,14 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun updateCanvasSize() {
+        val contentSize = graphContentSize()
+        preferredSize = Dimension(
+            (contentSize.width * zoom).toInt().coerceAtLeast(minimumSize.width),
+            (contentSize.height * zoom).toInt().coerceAtLeast(minimumSize.height),
+        )
+    }
+
+    private fun graphContentSize(): Dimension {
         val richCards = nodes.any { it.hasRichFacts() }
         val cardW = if (richCards) 292 else 230
         val cardH = if (richCards) 132 else 76
@@ -367,10 +395,7 @@ class MiniGraphPanel : JPanel() {
         val maxRows = (layoutGroups.maxOfOrNull { it.nodes.size } ?: 1).coerceAtLeast(1)
         val contentWidth = startX + columns * cardW + (columns - 1) * gapX + 24
         val contentHeight = startY + maxRows * cardH + (maxRows - 1) * gapY + 28
-        preferredSize = Dimension(
-            (contentWidth * zoom).toInt().coerceAtLeast(minimumSize.width),
-            (contentHeight * zoom).toInt().coerceAtLeast(minimumSize.height),
-        )
+        return Dimension(contentWidth, contentHeight)
     }
 
     private fun layoutGroups(): List<LayoutGroup> =

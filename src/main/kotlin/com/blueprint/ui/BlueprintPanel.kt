@@ -1471,7 +1471,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         isFocusable = false
         lineWrap = true
         wrapStyleWord = true
-        rows = 5
+        rows = 3
         text = "Scope receipt will appear here after Refresh UML From Code."
     }
     private val umlEditor = JBTextArea(18, 72).apply {
@@ -1818,7 +1818,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val actionsScrollPane = JBScrollPane(actions).apply {
             border = BorderFactory.createEmptyBorder()
             minimumSize = Dimension(0, 150)
-            preferredSize = Dimension(0, 250)
+            preferredSize = Dimension(0, 190)
             horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
             verticalScrollBar.unitIncrement = 16
         }
@@ -1893,15 +1893,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(JBScrollPane(scopeReceiptArea).apply {
                         border = BorderFactory.createTitledBorder("Current Scope Receipt")
                         alignmentX = Component.LEFT_ALIGNMENT
-                        preferredSize = Dimension(520, 86)
-                        maximumSize = Dimension(Int.MAX_VALUE, 96)
+                        preferredSize = Dimension(520, 58)
+                        maximumSize = Dimension(Int.MAX_VALUE, 64)
                         verticalScrollBar.unitIncrement = 16
                     })
                 }, BorderLayout.CENTER)
                 add(JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
                     add(JButton("\u2212").apply { addActionListener { miniGraph.zoomOut() } })
                     add(JButton("+").apply { addActionListener { miniGraph.zoomIn() } })
-                    add(JButton("\u27f3").apply { addActionListener { miniGraph.zoomReset() } })
+                    add(JButton("Fit").apply {
+                        toolTipText = "Fit the UML cards into the visible canvas."
+                        addActionListener { miniGraph.fitToView() }
+                    })
+                    add(JButton("1:1").apply {
+                        toolTipText = "Reset the UML card zoom to readable size."
+                        addActionListener { miniGraph.zoomReset() }
+                    })
                     add(JButton("Reset").apply {
                         toolTipText = "Forget restored chat, UML draft, and filters. Generated nodes are kept."
                         addActionListener { resetWorkspace() }
@@ -2063,8 +2070,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     JPanel(BorderLayout(6, 6)).apply {
                         border = BorderFactory.createTitledBorder("First-Run Demo")
                         alignmentX = Component.LEFT_ALIGNMENT
-                        maximumSize = Dimension(Int.MAX_VALUE, 220)
-                        preferredSize = Dimension(520, 180)
+                        maximumSize = Dimension(Int.MAX_VALUE, 150)
+                        preferredSize = Dimension(520, 130)
                         add(
                             JPanel(GridLayout(2, 1, 0, 6)).apply {
                                 add(JBScrollPane(firstRunScenarioArea).apply {
