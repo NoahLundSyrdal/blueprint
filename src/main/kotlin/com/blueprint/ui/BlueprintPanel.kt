@@ -3885,7 +3885,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
             postApplyReviewSummary(exec, inlineSummary)
         } else {
-            buildReviewSummary(exec, review, reviewFreshness)
+            buildReviewSummary(exec, review, reviewFreshness, validationCommand)
         }
         refreshChangedFilesPanel(exec)
         refreshGroundingSummary()
@@ -4185,7 +4185,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun validationCommandReviewText(command: String?): String =
         command?.takeIf { it.isNotBlank() }
-            ?.let { "Validation after apply was inferred automatically: $it" }
+            ?.let { "Validation after apply: $it" }
             ?: "Validation after apply is unavailable. Blueprint did not infer a validation command, so verify manually if you need extra checks."
 
     private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
@@ -4591,6 +4591,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         exec: ExecutionArtifact?,
         review: ReviewArtifact?,
         freshness: ReviewFreshnessState,
+        validationCommand: String?,
     ): String {
         val summary = PatchChangeSummary.reviewSummary(exec)
         val scopeSentence = reviewScopeSentence(exec)
@@ -4602,6 +4603,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine("- Read What changed? for the plain-English summary.")
             appendLine("- Open Preview Diff to inspect the exact file edits.")
             appendLine("- Confirm the changed files and approval reason before apply.")
+            appendLine()
+            appendLine("Validation before apply:")
+            appendLine("- ${validationCommandReviewText(validationCommand)}")
             appendLine()
             appendLine(changedFilesHeader)
             appendLine(changedFilesInline)

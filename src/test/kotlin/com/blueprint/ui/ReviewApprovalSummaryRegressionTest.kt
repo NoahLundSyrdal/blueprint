@@ -13,7 +13,7 @@ class ReviewApprovalSummaryRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {"))
-        assertTrue(source.contains("buildReviewSummary(exec, review, reviewFreshness)"))
+        assertTrue(source.contains("buildReviewSummary(exec, review, reviewFreshness, validationCommand)"))
         assertTrue(source.contains("private fun reviewApprovalSentence(exec: ExecutionArtifact?, review: ReviewArtifact?): String?"))
         assertTrue(source.contains("Why review approved this patch:"))
         assertTrue(source.contains("private fun compactApprovalReason(review: ReviewArtifact): String ="))

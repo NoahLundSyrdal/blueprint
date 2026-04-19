@@ -25,7 +25,7 @@ class PreApplyCommandSummaryRegressionTest {
 
         assertTrue(source.contains("private fun preApplyCommandSummary("))
         assertTrue(source.contains("\"Before apply, Blueprint expects:\""))
-        assertTrue(source.contains("Validation after apply was inferred automatically:"))
+        assertTrue(source.contains("Validation after apply:"))
         assertTrue(source.contains("Validation after apply is unavailable. Blueprint did not infer a validation command"))
         assertTrue(source.contains("Run after apply was inferred automatically:"))
         assertTrue(source.contains("Run after apply is unavailable."))
