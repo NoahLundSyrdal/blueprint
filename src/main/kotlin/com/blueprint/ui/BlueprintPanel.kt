@@ -38,6 +38,7 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
@@ -364,6 +365,7 @@ internal data class GuidedInviteScenarioState(
 
 internal object GuidedInviteScenario {
     const val PATCH_PATH = "blueprint_demo/imported_invite/models.py"
+    private const val BASELINE_RESOURCE = "/guided_demo/invite_project_imported_invite_models.py"
     private val promptPlans = listOf(
         PromptPlan(
             prompt = "add an InvitePolicy entity",
@@ -397,6 +399,28 @@ internal object GuidedInviteScenario {
         return projectName == "invite_project" || normalizedPath.endsWith("/examples/invite_project")
     }
 
+    fun importedInviteFile(projectBasePath: String?): File =
+        projectBasePath?.let { File(it, PATCH_PATH) } ?: File(PATCH_PATH)
+
+    fun baselineText(): String =
+        GuidedInviteScenario::class.java.getResourceAsStream(BASELINE_RESOURCE)?.use { input ->
+            input.readBytes().toString(StandardCharsets.UTF_8)
+        } ?: error("Missing guided invite baseline resource: $BASELINE_RESOURCE")
+
+    fun resetImportedInviteFile(projectBasePath: String?): Boolean {
+        val target = importedInviteFile(projectBasePath)
+        val parent = target.parentFile ?: return false
+        if (!parent.exists() && !parent.mkdirs()) return false
+        target.writeText(baselineText())
+        return true
+    }
+
+    fun needsReset(projectBasePath: String?): Boolean {
+        val target = importedInviteFile(projectBasePath)
+        if (!target.isFile) return false
+        return runCatching { target.readText() == baselineText() }.getOrDefault(false).not()
+    }
+
     fun pickPrompt(componentNames: Set<String>, entityNames: Set<String>, inviteFields: List<String>): PromptPlan? =
         promptPlans.firstOrNull { plan ->
             when {
@@ -418,7 +442,7 @@ internal object GuidedInviteScenario {
                 "[done] Abstract Code to UML -> current code map is loaded.",
                 if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
-                "[next] Reset the invite demo sandbox by restoring ${state.resetPath}, or use Try This Change again after reset.",
+                "[next] Reset the invite demo sandbox with Reset Demo Sandbox for ${state.resetPath}, or use Try This Change again after reset.",
                 "[wait] Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.",
                 "[wait] Blueprint reviews the fresh code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the fresh reviewed code patch.",
@@ -950,11 +974,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         addActionListener {
             val state = currentInviteFirstRunScenarioState()
             if (state.resetSuggested) {
-                Messages.showInfoMessage(
-                    project,
-                    "To get a fresh invite demo path, restore ${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code.\n\nBlueprint keeps this Try This Change prompt fresh by checking the current UML and imported invite code before suggesting the next demo change.\n\nYou can also ignore the demo path and ask for your own architecture change.",
-                    "Blueprint - Reset Demo Path"
-                )
+                if (GuidedInviteScenario.resetImportedInviteFile(project.basePath)) {
+                    appendChat(
+                        "Blueprint",
+                        "Reset the invite demo sandbox at ${state.resetPath}. Refresh UML From Code to confirm the clean code-backed UML before you run Try This Change again."
+                    )
+                    logActivity("Demo e2e step passed: Reset invite demo sandbox at ${state.resetPath}.")
+                    status("Invite demo sandbox reset")
+                    refreshFirstRunScenario()
+                } else {
+                    Messages.showWarningDialog(
+                        project,
+                        "Blueprint could not reset ${state.resetPath}. Restore it manually, then click Refresh UML From Code.",
+                        "Blueprint - Reset Demo Path"
+                    )
+                }
             } else {
                 chatInput.text = state.prompt
                 appendChat("Blueprint", "Fresh demo prompt loaded into chat: \"${state.prompt}\". Send it as-is, or edit it before Generate Code Diff.")
@@ -3917,10 +3951,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (inviteFlow) {
             val state = currentInviteFirstRunScenarioState()
             demoReceiptArea.text = state.demoReceiptText()
-            firstRunPromptButton.text = if (state.resetSuggested) "Show Reset Steps" else "Try This Change"
+            firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Sandbox" else "Try This Change"
             firstRunPromptButton.isEnabled = state.codeMapReady
             firstRunPromptButton.toolTipText = if (state.resetSuggested) {
-                "All guided demo changes already exist. Restore ${state.resetPath} from git, or pick your own change."
+                "All guided demo changes already exist. Reset ${state.resetPath} to the baseline demo sandbox, or pick your own change."
             } else if (state.promptReady) {
                 "Fresh demo prompt loaded: ${state.prompt}"
             } else {
@@ -4062,6 +4096,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             .map { it.substringBefore(":").trim() }
         val suggestedPrompt = chatInput.text.trim()
         val promptPlan = GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
+        val resetNeeded = GuidedInviteScenario.needsReset(project.basePath)
         val reviewedInviteDiff = registry.all().any { node ->
             registry.getReview(node.id) != null &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
@@ -4075,7 +4110,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
         }
         val activePlan = promptPlan ?: GuidedInviteScenario.PromptPlan(
-            prompt = "restore ${GuidedInviteScenario.PATCH_PATH} from git",
+            prompt = "reset ${GuidedInviteScenario.PATCH_PATH} to the demo baseline",
             expectedEntity = "Invite",
             expectedField = "expires_at",
         )
@@ -4100,7 +4135,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             expectedEntity = activePlan.expectedEntity,
             expectedRelationSource = activePlan.relationSource,
             expectedRelationTarget = activePlan.relationTarget,
-            resetSuggested = promptPlan == null,
+            resetSuggested = promptPlan == null || resetNeeded,
             resetPath = GuidedInviteScenario.PATCH_PATH,
             umlDraftReady = hasExpectedDraft,
             reviewedDiffReady = reviewedInviteDiff,
