@@ -79,7 +79,7 @@ class GuidedInviteScenarioTest {
         assertTrue(first.contains("Try This Change -> load a fresh prompt for the current code map."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
         assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
-        assertTrue(first.contains("Run the changed app -> Blueprint could not infer a run command yet. Verify manually with this checklist:"))
+        assertTrue(first.contains("Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:"))
         assertTrue(first.contains("- Open the likely entrypoint manually."))
         assertTrue(first.contains("- Confirm the changed feature exists."))
         assertTrue(first.contains("Your own change:"))
@@ -250,8 +250,9 @@ class GuidedInviteScenarioTest {
         ).checklistText()
         assertTrue(fresh.contains("First-run checklist:"))
         assertTrue(fresh.contains("Run readiness: Blueprint has not inferred a project run command yet."))
+        assertTrue(fresh.contains("Run decision: Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
-        assertTrue(fresh.contains("Blueprint could not infer a run command yet. Verify manually with this checklist:"))
+        assertTrue(fresh.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:"))
         assertTrue(fresh.contains("- Open the likely entrypoint manually."))
         assertTrue(fresh.contains("- Confirm the changed feature exists."))
         assertTrue(fresh.contains("No validation command was inferred."))
@@ -263,6 +264,7 @@ class GuidedInviteScenarioTest {
             appliedReady = false,
             refreshedCodeMapReady = false,
             runCommand = "python main.py",
+            runEntryCandidates = listOf("app/main.py", "app.py", "manage.py"),
             validationCommand = "pytest",
             validationReady = false,
             validationPassed = false,
@@ -274,6 +276,7 @@ class GuidedInviteScenarioTest {
             ),
         ).checklistText()
         assertTrue(patchReady.contains("Run readiness: Blueprint inferred python main.py for this project."))
+        assertTrue(patchReady.contains("Run decision: Blueprint inferred this command because the current Python folder looks runnable and includes likely entry files such as app/main.py, app.py, manage.py. Run command: python main.py"))
         assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
         assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). Inspect Skipped paths like generated/schema.py, build/tmp.py if the UML looks incomplete."))
         assertTrue(patchReady.contains("[next] Review approved -> confirm Blueprint says the reviewed code patch is safe to apply."))
@@ -312,7 +315,7 @@ class GuidedInviteScenarioTest {
         ).checklistText()
         assertTrue(noRunCommand.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
         assertTrue(noRunCommand.contains("Run readiness: Blueprint has not inferred a project run command yet."))
-        assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet. Verify manually with this checklist:"))
+        assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:"))
         assertTrue(noRunCommand.contains("- Open the likely entrypoint manually."))
         assertTrue(noRunCommand.contains("- Confirm the changed feature exists."))
         assertTrue(noRunCommand.contains("Validation ran after apply. Review the result before you continue."))

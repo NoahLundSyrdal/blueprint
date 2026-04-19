@@ -319,10 +319,17 @@ internal data class FirstRunChecklistState(
             else ->
                 "Run readiness: Blueprint inferred $runCommand for this project."
         }
+        val runDecisionLine = when {
+            runCommand.isNullOrBlank() ->
+                "Run decision: ${missingRunCommandChecklist(runEntryCandidates)}"
+            else ->
+                "Run decision: ${inferredRunCommandReason(runCommand, runEntryCandidates)}"
+        }
         return buildList {
             add("First-run checklist:")
             resetAdviceLine?.let { add(it) }
             add(runReadinessLine)
+            add(runDecisionLine)
             add("${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.")
             skippedLine?.let { add(it) }
             add("${markerForStep(2, currentStep, reviewedDiffReady)} Generate Code Diff -> create a reviewed code patch from your UML edits.")
@@ -356,12 +363,22 @@ internal data class FirstRunChecklistState(
         }
 }
 
+private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
+    val candidates = runEntryCandidates.take(3)
+    val candidateReason = if (candidates.isEmpty()) {
+        "Blueprint inferred this command from the current Python project structure."
+    } else {
+        "Blueprint inferred this command because the current Python folder looks runnable and includes likely entry files such as ${candidates.joinToString(", ")}."
+    }
+    return "$candidateReason Run command: $runCommand"
+}
+
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
     return if (candidates.isEmpty()) {
-        "Blueprint could not infer a run command yet. Verify manually with this checklist:\n- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
+        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:\n- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
     } else {
-        "Blueprint could not infer a run command yet. Open Likely Entry File to jump into one of these likely entry files: ${candidates.joinToString(", ")}. Then confirm the changed feature exists."
+        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Open Likely Entry File to jump into one of these likely entry files: ${candidates.joinToString(", ")}. Then confirm the changed feature exists."
     }
 }
 
@@ -4214,8 +4231,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }
-            ?: missingRunCommandGuidance(context)
+        context.runCommands.firstOrNull()?.let {
+            "When you want to run the app, start with: $it or click Run In Blueprint. ${inferredRunCommandReason(it, context.runEntryCandidates)}"
+        } ?: missingRunCommandGuidance(context)
 
     private fun generateDiffGuideSummary(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
@@ -4249,7 +4267,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             ?: "Validation after apply is unavailable. Blueprint did not infer a validation command, so verify manually if you need extra checks."
 
     private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "Run after apply was inferred automatically: $it" }
+        context.runCommands.firstOrNull()?.let { "Run after apply was inferred automatically: $it. ${inferredRunCommandReason(it, context.runEntryCandidates)}" }
             ?: "Run after apply is unavailable. ${missingRunCommandGuidance(context)}"
 
     private fun preApplyCommandSummary(
