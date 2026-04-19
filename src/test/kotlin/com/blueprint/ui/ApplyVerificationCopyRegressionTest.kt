@@ -13,7 +13,8 @@ class ApplyVerificationCopyRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("appendLine(\"Validation:\")"))
-        assertTrue(source.contains("appendLine(validationReportText(result))"))
+        assertTrue(source.contains("val validationDetailsText = validationReportText(result)"))
+        assertTrue(source.contains("appendLine(validationDetailsText)"))
         assertTrue(source.contains("result.detailLabel()"))
         assertTrue(source.contains("command: "))
         assertTrue(source.contains("result.command.ifBlank { \"not available\" }"))

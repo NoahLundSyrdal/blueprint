@@ -16,9 +16,10 @@ class ApplySuccessMessageFormattingTest {
         assertTrue(source.contains("appendLine(\"Changed paths:\")"))
         assertTrue(source.contains("changedPaths.forEach { appendLine(\"- \$it\") }"))
         assertTrue(source.contains("appendLine(\"Validation:\")"))
-        assertTrue(source.contains("appendLine(validationReportText(result))"))
+        assertTrue(source.contains("val validationDetailsText = validationReportText(result)"))
+        assertTrue(source.contains("appendLine(validationDetailsText)"))
         assertTrue(source.contains("val validationAndPathsLine = buildString {"))
-        assertTrue(source.contains("appendLine(result.summaryLine())"))
+        assertTrue(source.contains("appendLine(validationDetailsText)"))
         assertTrue(source.contains("append(writtenPathsText)"))
         assertFalse(source.contains("append(validationReportText(result))"))
     }

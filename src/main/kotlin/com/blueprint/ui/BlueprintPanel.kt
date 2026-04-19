@@ -3741,9 +3741,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             changedPaths.forEach { appendLine("- $it") }
                         }
                     }.trim()
+                    val validationDetailsText = validationReportText(result)
                     val validationBlock = buildString {
                         appendLine("Validation:")
-                        appendLine(validationReportText(result))
+                        appendLine(validationDetailsText)
                     }.trim()
                     val writtenPathsText = if (changedPaths.isEmpty()) {
                         "Written paths: none."
@@ -3778,7 +3779,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     val validationAndPathsLine = buildString {
                         appendLine(receiptSummary)
-                        appendLine(result.summaryLine())
+                        appendLine(validationDetailsText)
                         appendLine(runBlock)
                         append(writtenPathsText)
                     }.trim()
