@@ -42,6 +42,26 @@ class ActivityReceiptFormatterTest {
             "Refreshed UML from code after apply: refreshed UML from disk with 4 class(es), 3 relationship(s).",
             receiptTextForTest("Freshness verified after apply: refreshed UML from disk with 4 class(es), 3 relationship(s)."),
         )
+        assertEquals(
+            "Opened reviewed diff for Invite schema (1 file(s)).",
+            receiptTextForTest("Opened diff preview for Invite schema (1 file(s))."),
+        )
+        assertEquals(
+            "Opened source file for Invite: app/models.py:12",
+            receiptTextForTest("Opened source for Invite: app/models.py:12"),
+        )
+        assertEquals(
+            "Could not build UML from the imported text because no entities were found.",
+            receiptTextForTest("UML import found no entities."),
+        )
+        assertEquals(
+            "Saved workflow node Invite schema",
+            receiptTextForTest("Saved node Invite schema"),
+        )
+        assertEquals(
+            "Removed workflow node Invite schema",
+            receiptTextForTest("Removed node Invite schema"),
+        )
     }
 
     @Test

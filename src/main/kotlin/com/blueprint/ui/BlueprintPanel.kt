@@ -3907,6 +3907,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("validation skipped:") -> msg.replaceFirst("Validation skipped:", "Validation skipped:")
             lower.startsWith("validation failed:") -> msg.replaceFirst("Validation failed:", "Validation failed:")
             lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Refreshed UML from code after apply:")
+            lower.startsWith("opened diff preview for") -> msg.replaceFirst("Opened diff preview for", "Opened reviewed diff for")
+            lower.startsWith("opened source for") -> msg.replaceFirst("Opened source for", "Opened source file for")
+            lower.startsWith("uml import found no entities") -> "Could not build UML from the imported text because no entities were found."
+            lower.startsWith("saved node ") -> msg.replaceFirst("Saved node", "Saved workflow node")
+            lower.startsWith("removed node ") -> msg.replaceFirst("Removed node", "Removed workflow node")
+            lower.startsWith("mode changed to") -> msg
             lower.startsWith("review approved") || lower.startsWith("review blocked") -> msg
             lower.startsWith("review approve") || lower.startsWith("review request_changes") || lower.startsWith("review reject") ->
                 msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "Review result: ")
