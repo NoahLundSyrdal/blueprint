@@ -92,7 +92,7 @@ class FirstRunAnyPythonFolderTest {
 
         assertTrue(checklist.contains("Blueprint readiness: run partial; validation not inferred."))
         assertTrue(checklist.contains("Run readiness: likely entry files found, but no single safe default command yet."))
-        assertTrue(checklist.contains("Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Try this fallback:"))
+        assertTrue(checklist.contains("Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Strongest candidate right now: app/models.py. Try this fallback:"))
         assertTrue(checklist.contains("Run readiness: likely entry files found, but no single safe default command yet."))
         assertTrue(checklist.contains("1. Open Likely Entry File to inspect the best candidate."))
         assertTrue(checklist.contains("2. If that is not the right launcher, try one of these likely entry files: app/models.py"))
@@ -115,6 +115,6 @@ class FirstRunAnyPythonFolderTest {
             runVerified = false,
         ).checklistText()
 
-        assertTrue(checklist.contains("Run decision: Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as app.py, main.py, manage.py. Recommended command: python app.py. Other likely entry files: main.py, manage.py."))
+        assertTrue(checklist.contains("Run decision: Blueprint inferred this as the best default run command because python app.py maps directly to the strongest likely entry file app.py. Recommended command: python app.py. Other likely entry files: main.py, manage.py."))
     }
 }

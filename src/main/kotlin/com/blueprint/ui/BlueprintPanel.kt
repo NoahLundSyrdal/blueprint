@@ -355,10 +355,13 @@ internal data class FirstRunChecklistState(
 
 private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(3)
-    val candidateReason = if (candidates.isEmpty()) {
-        "Blueprint inferred this as the best default run command from the current Python project structure."
-    } else {
-        "Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as ${candidates.joinToString(", ")}."
+    val candidateReason = when {
+        candidates.isEmpty() ->
+            "Blueprint inferred this as the best default run command from the current Python project structure."
+        candidates.firstOrNull() == runCommand.removePrefix("python ") ->
+            "Blueprint inferred this as the best default run command because $runCommand maps directly to the strongest likely entry file ${candidates.first()}."
+        else ->
+            "Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as ${candidates.joinToString(", ")}."
     }
     val alternatives = runCommandAlternatives(runEntryCandidates)
     return buildString {
@@ -507,6 +510,8 @@ private fun refreshExplanation(
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
     val candidateList = candidates.joinToString(", ")
+    val strongestCandidate = candidates.firstOrNull()
+    val otherCandidates = candidates.drop(1)
     val projectShape = when {
         candidates.any { it.endsWith("app.py") || it.endsWith("main.py") } ->
             "Project shape hint: this looks most like an app or CLI entry flow, so verify the feature in the running output or UI."
@@ -520,7 +525,20 @@ private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String
     return if (candidates.isEmpty()) {
         "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:\n1. Refresh UML From Code after you pick the Python folder you want to verify.\n2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root.\n3. Open the best candidate and run it from the IDE or terminal.\n4. Confirm the changed feature exists.\n5. $projectShape\n6. Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
     } else {
-        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Try this fallback:\n1. Open Likely Entry File to inspect the best candidate.\n2. If that is not the right launcher, try one of these likely entry files: $candidateList\n3. Run the best candidate from the IDE or terminal.\n4. Confirm the changed feature exists in the running app or CLI output.\n5. $projectShape\n6. Refresh UML From Code again if you switch to a different Python folder or app root."
+        buildString {
+            append("Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command.")
+            strongestCandidate?.let { append(" Strongest candidate right now: $it.") }
+            if (otherCandidates.isNotEmpty()) {
+                append(" Other strong candidates: ${otherCandidates.joinToString(", ")}.")
+            }
+            append(" Try this fallback:\n")
+            append("1. Open Likely Entry File to inspect the best candidate.\n")
+            append("2. If that is not the right launcher, try one of these likely entry files: $candidateList\n")
+            append("3. Run the best candidate from the IDE or terminal.\n")
+            append("4. Confirm the changed feature exists in the running app or CLI output.\n")
+            append("5. $projectShape\n")
+            append("6. Refresh UML From Code again if you switch to a different Python folder or app root.")
+        }
     }
 }
 
