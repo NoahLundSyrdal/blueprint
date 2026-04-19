@@ -5054,9 +5054,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val expectedVisibleResult = manualDemoExpectedVisibleResult(state)
         val whatToLookForChecklist = manualDemoWhatToLookForChecklist(state)
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val changedPathsSummary = when (changedPaths.size) {
+            0 -> "Changed files to inspect in the IDE:\n- None recorded yet. If you already applied changes, use Open Changed Files or the review receipt to confirm what Blueprint wrote."
+            1 -> "Changed file to inspect in the IDE:\n- ${changedPaths.first()}\nInspect this file after Apply Approved Changes, then confirm the visible result."
+            else -> buildString {
+                appendLine("Changed files to inspect in the IDE:")
+                changedPaths.forEach { appendLine("- $it") }
+                append("Inspect these files after Apply Approved Changes, then confirm the visible result.")
+            }
+        }
         Messages.showInfoMessage(
             project,
-            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code to verify the updated code-backed UML\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in Blueprint, the launched app, a browser, or terminal output.\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
+            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code to verify the updated code-backed UML\n6. Inspect the changed file(s) in the IDE\n7. Run the changed app with: $runCommand\n8. Confirm the expected visible result in Blueprint, the launched app, a browser, or terminal output.\n\n$changedPathsSummary\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
             "Blueprint - Run Demo Step"
         )
         logActivity("Demo e2e step passed: Run the changed app with $runCommand. Confirmed visible result: $expectedVisibleResult")
