@@ -17,6 +17,7 @@ import com.blueprint.service.NodeExecutionService
 import com.blueprint.service.NodePlanningService
 import com.blueprint.service.NodeRegistry
 import com.blueprint.service.PatchFreshness
+import com.blueprint.service.ProjectValidationService
 import com.blueprint.service.PythonProjectAnalyzer
 import com.blueprint.service.PythonUmlGenerator
 import com.blueprint.service.ReviewService
@@ -239,6 +240,49 @@ private class ChatBubblePanel(
     }
 }
 
+internal data class GuidedInviteScenarioState(
+    val codeMapReady: Boolean,
+    val umlDraftReady: Boolean,
+    val reviewedDiffReady: Boolean,
+    val appliedReady: Boolean,
+    val refreshedCodeMapReady: Boolean,
+)
+
+internal object GuidedInviteScenario {
+    const val PROMPT = "add an InvitePolicy entity"
+    const val PATCH_PATH = "blueprint_demo/imported_invite/models.py"
+
+    fun matchesProject(projectName: String, basePath: String?): Boolean {
+        val normalizedPath = basePath.orEmpty().replace('\\', '/')
+        return projectName == "invite_project" || normalizedPath.endsWith("/examples/invite_project")
+    }
+
+    fun checklistText(state: GuidedInviteScenarioState): String {
+        val currentStep = when {
+            !state.codeMapReady -> 1
+            !state.umlDraftReady -> 2
+            !state.reviewedDiffReady -> 3
+            !state.appliedReady -> 4
+            !state.refreshedCodeMapReady -> 5
+            else -> 0
+        }
+        return listOf(
+            "${stepMarker(1, currentStep, state.codeMapReady)} Abstract Code to UML -> expect Project, User, and Invite in the current code map.",
+            "${stepMarker(2, currentStep, state.umlDraftReady)} Use demo prompt: \"$PROMPT\" -> expect InvitePolicy linked from Invite in the UML draft.",
+            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
+            "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk.",
+            "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> expect InvitePolicy to appear in the refreshed current code map.",
+        ).joinToString("\n")
+    }
+
+    private fun stepMarker(step: Int, currentStep: Int, done: Boolean): String =
+        when {
+            done -> "[done]"
+            step == currentStep -> "[next]"
+            else -> "[wait]"
+        }
+}
+
 private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
     override fun installDefaults(button: AbstractButton) {
         super.installDefaults(button)
@@ -373,6 +417,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val providerLabel = JLabel(providerText())
     private val actionProviderLabel = JLabel(providerText())
     private val guideLabel = JLabel("Generate UML, change it with chat, then generate a code diff.")
+    private val firstRunScenarioArea = JBTextArea(5, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        rows = 5
+    }
+    private val firstRunPromptButton = JButton("Use Demo Prompt").apply {
+        addActionListener { sendSuggestedChat(GuidedInviteScenario.PROMPT) }
+    }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
         addActionListener { runPrimaryProductAction() }
@@ -436,6 +490,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val execArea = JBTextArea().apply { isEditable = false }
     private val reviewArea = JBTextArea().apply { isEditable = false }
     private val secondaryTabs = JTabbedPane()
+    private val validationResults = mutableMapOf<String, ProjectValidationService.ValidationResult>()
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -465,7 +520,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         })
         refreshList()
         SwingUtilities.invokeLater { relayoutChatTranscript() }
-        logActivity("Blueprint ready. Seed UML Car Company Flow, keep mock mode on, then run the first ready node.")
+        logActivity(
+            if (shouldShowInviteFirstRunScenario()) {
+                "Blueprint ready. Use the first-run invite demo checklist, keep mock mode on, and follow the guided flow."
+            } else {
+                "Blueprint ready. Seed UML Car Company Flow, keep mock mode on, then run the first ready node."
+            },
+        )
     }
 
     private fun applyDarkTheme(component: Component) {
@@ -700,7 +761,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JButton("Paste UML").apply { addActionListener { importUml() } })
             add(JButton("Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
             add(JButton("+ Manual Node").apply { addActionListener { addNode() } })
-            add(JButton("Sample: Car Company UML").apply { addActionListener { seedUmlCarCompanyFlow() } })
+            add(
+                JButton(if (shouldShowInviteFirstRunScenario()) "Sample: Invite UML" else "Sample: Car Company UML").apply {
+                    addActionListener {
+                        if (shouldShowInviteFirstRunScenario()) seedUmlInviteFlow() else seedUmlCarCompanyFlow()
+                    }
+                },
+            )
             add(JButton("- Remove").apply { addActionListener { removeSelected() } })
         }
         val left = JPanel(BorderLayout()).apply {
@@ -906,6 +973,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
+            if (shouldShowInviteFirstRunScenario()) {
+                add(
+                    JPanel(BorderLayout(6, 6)).apply {
+                        border = BorderFactory.createTitledBorder("First-Run Demo")
+                        add(firstRunScenarioArea, BorderLayout.CENTER)
+                        add(
+                            JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                                add(firstRunPromptButton)
+                            },
+                            BorderLayout.SOUTH,
+                        )
+                    },
+                )
+            }
             add(JPanel(BorderLayout(8, 2)).apply {
                 border = BorderFactory.createEmptyBorder(2, 4, 6, 4)
                 add(primaryActionButton.apply {
@@ -1046,6 +1127,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun seedInitialChat() {
+        val demoPrompt = if (shouldShowInviteFirstRunScenario()) GuidedInviteScenario.PROMPT else "add a Supplier entity"
         appendChat(
             "Blueprint",
             """
@@ -1053,7 +1135,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
             Try:
             - explain this UML
-            - add a Supplier entity
+            - $demoPrompt
             - what should I generate next?
 
             Live mode uses OpenAI. Use OPENAI_API_KEY or Set key.
@@ -1138,7 +1220,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 changedFileSummary(registry.getExecution(node.id))
             }
             "uml" in lower || "diagram" in lower -> {
-                "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Create Code Nodes."
+                if (shouldShowInviteFirstRunScenario()) {
+                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${GuidedInviteScenario.PROMPT}', then generate a reviewed code diff."
+                } else {
+                    "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Create Code Nodes."
+                }
             }
             selected != null -> {
                 val readiness = graph.readinessFor(selected)
@@ -1279,6 +1365,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun mockUmlEdit(currentUml: String, message: String): String {
         val lower = message.lowercase()
         val addition = when {
+            "invitepolicy" in lower || ("policy" in lower && currentUml.contains("class Invite")) -> """
+
+                class InvitePolicy {
+                  maxInvitesPerProject: int
+                  requireCompanyEmail: bool
+                }
+
+                Invite --> InvitePolicy : uses
+            """.trimIndent()
             "supplier" in lower -> """
 
                 class Supplier {
@@ -1413,7 +1508,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun selectedNodeCanApply(): Boolean {
         val node = nodeList.selectedValue ?: return false
-        if (node.executionStatus == ExecutionStatus.APPLIED) return false
+        if (node.executionStatus == ExecutionStatus.APPLIED || node.executionStatus == ExecutionStatus.FAILED) return false
         val exec = registry.getExecution(node.id) ?: return false
         return exec.patches.isNotEmpty() && reviewAllowsApply(registry.getReview(node.id))
     }
@@ -1594,6 +1689,41 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun umlImportExample(): String =
+        if (shouldShowInviteFirstRunScenario()) inviteUmlImportExample() else carCompanyUmlImportExample()
+
+    private fun inviteUmlImportExample(): String =
+        """
+        classDiagram
+        class User {
+          id: str
+          email: str
+        }
+
+        class Project {
+          id: str
+          name: str
+          owner: User
+        }
+
+        class Invite {
+          id: str
+          email: str
+          project: Project
+          status: str
+          created_at: datetime
+        }
+
+        class InvitePolicy {
+          max_invites_per_project: int
+          require_company_email: bool
+        }
+
+        Project --> User : owner
+        Invite --> Project : belongs to
+        Invite --> InvitePolicy : uses
+        """.trimIndent()
+
+    private fun carCompanyUmlImportExample(): String =
         """
         classDiagram
         class CarCompany {
@@ -1637,6 +1767,89 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.add(n)
         selectNode(n.id)
         logActivity("Seeded one safe demo node scoped to blueprint_demo/car_company/service.py")
+    }
+
+    private fun seedUmlInviteFlow() {
+        val schema = BlueprintNode(
+            type = NodeType.SCHEMA,
+            title = "01 UML invite schema contract",
+            summary = "Turn the invite architecture into the upstream data contract.",
+            description = """
+                Define the invite flow from this UML-like architecture:
+
+                User
+                - id
+                - email
+
+                Project
+                - id
+                - name
+                - owner: User
+
+                Invite
+                - id
+                - email
+                - project: Project
+                - status
+                - created_at
+
+                InvitePolicy
+                - max_invites_per_project
+                - require_company_email
+
+                Relationships:
+                Project -> User (owner)
+                Invite -> Project (belongs to)
+                Invite -> InvitePolicy (uses)
+
+                The schema node is the architecture contract. Downstream Python
+                service, test, and docs nodes must respect this contract.
+            """.trimIndent(),
+            fileScope = FileScope(paths = listOf(GuidedInviteScenario.PATCH_PATH)),
+            acceptanceCriteria = listOf(
+                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Invite keeps id, email, project, status, and created_at fields."),
+                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "InvitePolicy includes max_invites_per_project and require_company_email."),
+                criterion("AC3", AcceptanceCriterionType.INTERFACE_CONTRACT, "Invite references InvitePolicy in the generated schema."),
+                criterion("AC4", AcceptanceCriterionType.CODEGEN, "Generated changes stay inside the invite schema file scope.")
+            )
+        )
+        val backend = BlueprintNode(
+            type = NodeType.BACKEND,
+            title = "02 Invite policy service",
+            summary = "Apply invite policy rules before creating project invites.",
+            description = "Implement a compact Python service that checks InvitePolicy before creating or accepting invites.",
+            dependencies = listOf(schema.id),
+            fileScope = FileScope(paths = listOf("blueprint_demo/imported_invite/service.py")),
+            acceptanceCriteria = listOf(
+                criterion("AC1", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service reads Invite and InvitePolicy fields from the schema contract."),
+                criterion("AC2", AcceptanceCriterionType.INTERFACE_CONTRACT, "Service can reject invites that violate require_company_email.")
+            )
+        )
+        val test = BlueprintNode(
+            type = NodeType.TEST,
+            title = "03 Invite policy tests",
+            summary = "Verify invite policy behavior against the schema contract.",
+            description = "Add focused tests for company-email enforcement and policy-linked invite creation.",
+            dependencies = listOf(schema.id, backend.id),
+            fileScope = FileScope(paths = listOf("tests/test_imported_invite_policy.py")),
+            acceptanceCriteria = listOf(
+                criterion("AC1", AcceptanceCriterionType.TEST, "Tests cover a passing company-email invite and a rejected external-email invite.")
+            )
+        )
+        val docs = BlueprintNode(
+            type = NodeType.DOCS,
+            title = "04 Invite flow notes",
+            summary = "Document the first-run invite architecture flow.",
+            description = "Document how Project, User, Invite, and InvitePolicy move from UML into generated Python files.",
+            dependencies = listOf(schema.id, backend.id),
+            fileScope = FileScope(paths = listOf("docs/invite_flow.md")),
+            acceptanceCriteria = listOf(
+                criterion("AC1", AcceptanceCriterionType.OTHER, "Docs explain the InvitePolicy fields, relationship, and resulting Python files.")
+            )
+        )
+        listOf(schema, backend, test, docs).forEach(registry::add)
+        selectNode(schema.id)
+        logActivity("Seeded UML Invite Flow: InvitePolicy contract first, downstream nodes wait on the schema patch.")
     }
 
     private fun seedUmlCarCompanyFlow() {
@@ -2184,39 +2397,111 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             project.service<ApplyChangesService>().applySingle(n, exec, singlePath, review)
         }
-        n.executionStatus = if (result.applied.size == patchCount && result.skipped.isEmpty()) {
-            ExecutionStatus.APPLIED
-        } else {
-            ExecutionStatus.REVIEW
-        }
-        if (n.executionStatus == ExecutionStatus.APPLIED) {
-            umlHasPendingEdits = false
-            val generated = project.service<PythonUmlGenerator>().generate()
-            loadGeneratedUml(generated)
-            showArtifactTab("UML")
-            logActivity(
-                "Freshness verified after apply: refreshed UML from disk with " +
-                    "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
-            )
-        }
         undoLastApplyButton.isEnabled = result.applied.isNotEmpty()
-        registry.update(n)
-        refreshArtifactSummary()
         logActivity("Apply finished for ${n.title.ifBlank { n.id.take(8) }}: ${result.applied.size} applied, ${result.skipped.size} skipped.")
-        status("Apply finished: ${result.applied.size} applied, ${result.skipped.size} skipped")
         if (result.skipped.isNotEmpty()) {
+            n.executionStatus = ExecutionStatus.REVIEW
+            registry.update(n)
+            refreshArtifactSummary()
+            status("Apply finished: ${result.applied.size} applied, ${result.skipped.size} skipped")
             Messages.showWarningDialog(
                 project,
                 "Skipped:\n" + result.skipped.joinToString("\n") { "${it.first} - ${it.second}" },
                 "Blueprint - Some changes skipped",
             )
-        } else {
-            Messages.showInfoMessage(
-                project,
-                "Applied ${result.applied.size} file change(s).\n\n${result.applied.joinToString("\n")}",
-                "Blueprint - Apply Complete"
-            )
+            return
         }
+
+        if (result.applied.size != patchCount) {
+            n.executionStatus = ExecutionStatus.REVIEW
+            registry.update(n)
+            refreshArtifactSummary()
+            status("Apply finished: ${result.applied.size} applied, expected $patchCount")
+            return
+        }
+
+        val patchesToValidate = displayedPatches.ifEmpty { exec.patches }
+        runPostApplyValidation(n, patchesToValidate, result)
+    }
+
+    private fun runPostApplyValidation(
+        node: BlueprintNode,
+        patches: List<Patch>,
+        applyResult: ApplyChangesService.ApplyResult,
+    ) {
+        val validation = project.service<ProjectValidationService>()
+        val command = validation.selectedCommand()
+        node.executionStatus = ExecutionStatus.EXECUTING
+        registry.update(node)
+        refreshArtifactSummary()
+        showArtifactTab("Review")
+        safetyArea.text = if (command == null) {
+            "Applied changes. No inferred validation command was available."
+        } else {
+            "Applied changes. Running validation:\n$command"
+        }
+        status(if (command == null) "Validation skipped: no command inferred" else "Running validation: $command")
+        logActivity(
+            if (command == null) {
+                "Validation skipped after apply for ${node.title.ifBlank { node.id.take(8) }}: no command inferred."
+            } else {
+                "Running validation after apply for ${node.title.ifBlank { node.id.take(8) }}: $command"
+            }
+        )
+
+        validation.validateAfterApplyAsync(patches) { result ->
+            validationResults[node.id] = result
+            when (result.status) {
+                ProjectValidationService.ValidationResult.Status.PASS,
+                ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                    node.executionStatus = ExecutionStatus.APPLIED
+                    registry.update(node)
+                    refreshUmlAfterSuccessfulApply()
+                    refreshArtifactSummary()
+                    logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
+                    status(result.summaryLine())
+                    Messages.showInfoMessage(
+                        project,
+                        buildString {
+                            append("Applied ${applyResult.applied.size} file change(s).")
+                            if (applyResult.applied.isNotEmpty()) {
+                                append("\n\n")
+                                append(applyResult.applied.joinToString("\n"))
+                            }
+                            append("\n\n")
+                            append(validationReportText(result))
+                        },
+                        "Blueprint - Apply Complete",
+                    )
+                }
+                ProjectValidationService.ValidationResult.Status.FAIL -> {
+                    node.executionStatus = ExecutionStatus.FAILED
+                    registry.update(node)
+                    refreshArtifactSummary()
+                    showArtifactTab("Review")
+                    safetyArea.text = validationReportText(result)
+                    safetyArea.foreground = BlueprintTheme.Danger
+                    logActivity("${result.summaryLine()}: ${result.reason.ifBlank { "see validation output" }}")
+                    status("Validation failed after apply")
+                    Messages.showWarningDialog(
+                        project,
+                        validationReportText(result),
+                        "Blueprint - Validation Failed",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun refreshUmlAfterSuccessfulApply() {
+        umlHasPendingEdits = false
+        val generated = project.service<PythonUmlGenerator>().generate()
+        loadGeneratedUml(generated)
+        showArtifactTab("UML")
+        logActivity(
+            "Freshness verified after apply: refreshed UML from disk with " +
+                "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
+        )
     }
 
     private fun undoChanges() {
@@ -2253,6 +2538,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
+
+    private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
+        buildString {
+            append(result.summaryLine())
+            result.exitCode?.let { append(" (exit $it)") }
+            if (result.durationMillis > 0) append(" in ${result.durationMillis}ms")
+            if (result.outputExcerpt.isNotBlank()) {
+                append("\n\n")
+                append(result.outputExcerpt)
+            }
+            if (result.relatedFiles.isNotEmpty()) {
+                append("\n\nRelated files:\n")
+                append(result.relatedFiles.joinToString("\n") { "- $it" })
+            }
+        }
 
     private fun reviewBlockMessage(review: ReviewArtifact?): String {
         if (review == null) {
@@ -2472,18 +2772,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val plan = registry.getPlan(n.id)
         val exec = registry.getExecution(n.id)
         val review = registry.getReview(n.id)
+        val validation = validationResults[n.id]
         val graph = project.service<DependencyGraphService>()
         val report = graph.analyze()
         val readiness = graph.readinessFor(n)
         updateOverviewSummary(report)
-        val canApply = !exec?.patches.isNullOrEmpty() && reviewAllowsApply(review)
+        val canApply = n.executionStatus != ExecutionStatus.APPLIED &&
+            n.executionStatus != ExecutionStatus.FAILED &&
+            !exec?.patches.isNullOrEmpty() &&
+            reviewAllowsApply(review)
         applyApprovedButton.isEnabled = canApply
-        applyApprovedButton.text = if (canApply) "Apply Approved Changes" else "Apply Blocked By Review"
-        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | node=${badgeFor(n)} | ready=${readiness.ready}"
+        applyApprovedButton.text = when {
+            canApply -> "Apply Approved Changes"
+            n.executionStatus == ExecutionStatus.FAILED -> "Validation Failed"
+            else -> "Apply Blocked By Review"
+        }
+        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         reviewSummaryArea.text = buildString {
             append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
             append("\n\n")
             append(changedFileSummary(exec))
+            if (validation != null) {
+                append("\n\n")
+                append(validation.summaryLine())
+            }
         }
 
         val issues = buildList {
@@ -2493,8 +2805,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val scopeDrops = exec?.validation?.risks.orEmpty().filter { it.contains("out-of-scope", ignoreCase = true) }
         safetyArea.text = when {
+            validation?.status == ProjectValidationService.ValidationResult.Status.FAIL -> validationReportText(validation)
+            validation?.status == ProjectValidationService.ValidationResult.Status.PASS -> validationReportText(validation)
+            validation?.status == ProjectValidationService.ValidationResult.Status.SKIPPED -> validationReportText(validation)
             issues.isNotEmpty() || scopeDrops.isNotEmpty() ->
                 (issues + scopeDrops).distinct().joinToString("\n") { "- $it" }
+            n.executionStatus == ExecutionStatus.FAILED -> "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing."
             exec?.status == "PARTIAL" -> "Execution is PARTIAL. Inspect the diff and validation notes before applying."
             exec?.status == "BLOCKED" -> "Execution is BLOCKED. Do not apply until the node is revised."
             review?.reviewStatus == "APPROVE" -> "Review approved. Scope compliance: ${review.scopeCompliance.result}."
@@ -2507,7 +2823,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Dependency blockers:\n" +
             readiness.reasons.joinToString("\n") { "- $it" }
         }
-        safetyArea.foreground = if (safetyArea.text.startsWith("-") || safetyArea.text.contains("BLOCKED") || safetyArea.text.contains("PARTIAL")) {
+        safetyArea.foreground = if (safetyArea.text.startsWith("-") ||
+            safetyArea.text.contains("BLOCKED") ||
+            safetyArea.text.contains("PARTIAL") ||
+            safetyArea.text.contains("failed", ignoreCase = true)
+        ) {
             BlueprintTheme.Warning
         } else {
             BlueprintTheme.Success
@@ -2525,6 +2845,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             append(graph.wavePreviewText())
         }
         updateMiniGraph(report)
+        refreshFirstRunScenario()
     }
 
     private fun updateMiniGraph(report: DependencyGraphService.GraphReport) {
@@ -2671,10 +2992,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun updateGuide() {
+        refreshFirstRunScenario()
         when {
+            nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
+                primaryActionButton.text = "Generate Code Diff"
+                guideLabel.text = "Validation failed after apply. Adjust the UML or code, then regenerate a reviewed diff."
+            }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
-                guideLabel.text = "Review approved the generated diff. Apply it to disk, then refresh UML from code."
+                guideLabel.text = "Review approved the generated diff. Apply it to disk; Blueprint will validate the project after apply."
             }
             currentUmlEntityCount() == 0 -> {
             primaryActionButton.text = "Refresh UML From Code"
@@ -2685,6 +3011,41 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             guideLabel.text = "Change the UML with chat or direct edits, then generate a reviewed code diff."
             }
         }
+    }
+
+    private fun shouldShowInviteFirstRunScenario(): Boolean =
+        GuidedInviteScenario.matchesProject(project.name, project.basePath)
+
+    private fun refreshFirstRunScenario() {
+        if (!shouldShowInviteFirstRunScenario()) return
+        val state = currentInviteFirstRunScenarioState()
+        firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
+        firstRunPromptButton.isEnabled = state.codeMapReady && !state.umlDraftReady
+    }
+
+    private fun currentInviteFirstRunScenarioState(): GuidedInviteScenarioState {
+        val ir = project.service<IRStore>().load()
+        val componentNames = ir?.components?.map { it.name }?.toSet().orEmpty()
+        val parsedUml = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
+        val entityNames = parsedUml?.entities?.map { it.name }?.toSet().orEmpty()
+        val hasInvitePolicyLink = parsedUml?.relationships.orEmpty().any { relationship ->
+            setOf(relationship.from, relationship.to) == setOf("Invite", "InvitePolicy")
+        }
+        val reviewedInviteDiff = registry.all().any { node ->
+            registry.getReview(node.id) != null &&
+                registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
+        }
+        val appliedInviteDiff = registry.all().any { node ->
+            node.executionStatus == ExecutionStatus.APPLIED &&
+                registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
+        }
+        return GuidedInviteScenarioState(
+            codeMapReady = setOf("Project", "User", "Invite").all { it in componentNames },
+            umlDraftReady = umlHasPendingEdits && "InvitePolicy" in entityNames && hasInvitePolicyLink,
+            reviewedDiffReady = reviewedInviteDiff,
+            appliedReady = appliedInviteDiff,
+            refreshedCodeMapReady = appliedInviteDiff && !umlHasPendingEdits && "InvitePolicy" in componentNames,
+        )
     }
 
     private fun guidedNextState(): Pair<String, String> {
@@ -2734,6 +3095,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val review = registry.getReview(node.id)
         return when {
             node.executionStatus == ExecutionStatus.APPLIED -> "APPLIED"
+            node.executionStatus == ExecutionStatus.FAILED -> "FAILED"
             node.executionStatus == ExecutionStatus.BLOCKED || exec?.status == "BLOCKED" -> "BLOCKED"
             exec?.status == "PARTIAL" -> "PARTIAL"
             review != null -> "REVIEWED"
@@ -2750,6 +3112,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "EXECUTED" -> BlueprintTheme.AccentSurface
             "PLANNED" -> BlueprintTheme.WarningSurface
             "BLOCKED" -> BlueprintTheme.DangerSurface
+            "FAILED" -> BlueprintTheme.DangerSurface
             "PARTIAL" -> BlueprintTheme.WarningSurface
             else -> BlueprintTheme.Surface
         }
