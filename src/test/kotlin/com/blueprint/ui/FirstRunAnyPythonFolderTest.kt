@@ -90,9 +90,9 @@ class FirstRunAnyPythonFolderTest {
         ).checklistText()
 
         assertTrue(checklist.contains("Run readiness: Blueprint has not inferred a project run command yet."))
-        assertTrue(checklist.contains("Run decision: Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command."))
-        assertTrue(checklist.contains("- Open Likely Entry File to jump into the best candidate."))
-        assertTrue(checklist.contains("- Likely entry files: app/models.py"))
+        assertTrue(checklist.contains("Run decision: Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Try this fallback:"))
+        assertTrue(checklist.contains("1. Open Likely Entry File to jump into the best candidate."))
+        assertTrue(checklist.contains("2. If that is not the right launcher, try one of these likely entry files: app/models.py"))
         assertTrue(checklist.contains("No validation command was inferred. After Apply Approved Changes, verify manually or run your preferred checks."))
     }
 }

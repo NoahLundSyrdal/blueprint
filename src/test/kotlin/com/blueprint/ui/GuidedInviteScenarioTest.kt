@@ -79,10 +79,10 @@ class GuidedInviteScenarioTest {
         assertTrue(first.contains("Try This Change -> load a fresh prompt for the current code map."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
         assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
-        assertTrue(first.contains("Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:"))
-        assertTrue(first.contains("- Refresh UML From Code after you pick the Python folder you want to verify."))
-        assertTrue(first.contains("- Open a likely entry file or package root manually."))
-        assertTrue(first.contains("- Confirm the changed feature exists."))
+        assertTrue(first.contains("Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:"))
+        assertTrue(first.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
+        assertTrue(first.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))
+        assertTrue(first.contains("4. Confirm the changed feature exists."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -254,10 +254,10 @@ class GuidedInviteScenarioTest {
         assertTrue(fresh.contains("Run readiness: Blueprint has not inferred a project run command yet."))
         assertTrue(fresh.contains("Run decision: Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
-        assertTrue(fresh.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:"))
-        assertTrue(fresh.contains("- Refresh UML From Code after you pick the Python folder you want to verify."))
-        assertTrue(fresh.contains("- Open a likely entry file or package root manually."))
-        assertTrue(fresh.contains("- Confirm the changed feature exists."))
+        assertTrue(fresh.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:"))
+        assertTrue(fresh.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
+        assertTrue(fresh.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))
+        assertTrue(fresh.contains("4. Confirm the changed feature exists."))
         assertTrue(fresh.contains("No validation command was inferred."))
 
         val patchReady = FirstRunChecklistState(
@@ -318,10 +318,10 @@ class GuidedInviteScenarioTest {
         ).checklistText()
         assertTrue(noRunCommand.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
         assertTrue(noRunCommand.contains("Run readiness: Blueprint has not inferred a project run command yet."))
-        assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:"))
-        assertTrue(noRunCommand.contains("- Refresh UML From Code after you pick the Python folder you want to verify."))
-        assertTrue(noRunCommand.contains("- Open a likely entry file or package root manually."))
-        assertTrue(noRunCommand.contains("- Confirm the changed feature exists."))
+        assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:"))
+        assertTrue(noRunCommand.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
+        assertTrue(noRunCommand.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))
+        assertTrue(noRunCommand.contains("4. Confirm the changed feature exists."))
         assertTrue(noRunCommand.contains("Validation ran after apply. Review the result before you continue."))
     }
 

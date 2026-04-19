@@ -399,9 +399,9 @@ private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String
             "Project shape hint: Blueprint has not found a likely app launcher yet, so inspect the project root for the main entry path."
     }
     return if (candidates.isEmpty()) {
-        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:\n- Refresh UML From Code after you pick the Python folder you want to verify.\n- Open a likely entry file or package root manually.\n- Confirm the changed feature exists.\n- $projectShape\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
+        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:\n1. Refresh UML From Code after you pick the Python folder you want to verify.\n2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root.\n3. Open the best candidate and run it from the IDE or terminal.\n4. Confirm the changed feature exists.\n5. $projectShape\n6. Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
     } else {
-        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Verify manually with this checklist:\n- Open Likely Entry File to jump into the best candidate.\n- Likely entry files: $candidateList\n- Refresh UML From Code again if you switch to a different Python folder or app root.\n- Confirm the changed feature exists in the running app or CLI output.\n- $projectShape"
+        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Try this fallback:\n1. Open Likely Entry File to jump into the best candidate.\n2. If that is not the right launcher, try one of these likely entry files: $candidateList\n3. Run the best candidate from the IDE or terminal.\n4. Confirm the changed feature exists in the running app or CLI output.\n5. $projectShape\n6. Refresh UML From Code again if you switch to a different Python folder or app root."
     }
 }
 
@@ -4528,14 +4528,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runChecklistActionButton.text = if (genericState.runVerified) "Run The Changed App Again" else "Run The Changed App"
             runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()
             runChecklistActionButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred yet. Refresh UML From Code first, or use Open Likely Entry File to inspect the best candidate manually."
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, then run it from the IDE or terminal if needed."
                 genericState.runVerified -> "Run the inferred command again from the first-run checklist: ${genericState.runCommand}"
                 else -> "Run the inferred command from the first-run checklist: ${genericState.runCommand}"
             }
             runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
             runDemoButton.isEnabled = genericState.codeMapReady
             runDemoButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use Open Likely Entry File to inspect the best candidate, or follow the manual checklist to verify the app from a likely entry file or package root."
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use Open Likely Entry File to inspect the best candidate, then try the other likely entry files from the checklist if needed."
                 genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
                 else -> "Record how you verified the changed app with: ${genericState.runCommand}"
             }
@@ -4574,7 +4574,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         runChecklistActionButton.text = "Run The Changed App"
         runChecklistActionButton.isEnabled = !runCommand.isNullOrBlank()
         runChecklistActionButton.toolTipText = runCommand?.let { "Run the inferred project command from the first-run checklist: $it" }
-            ?: "No run command was inferred yet. Refresh UML From Code first, or use Open Likely Entry File to inspect the best candidate manually."
+            ?: "No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, then run it from the IDE or terminal if needed."
         runAppButton.text = "Run In Blueprint"
         runAppButton.isEnabled = !runCommand.isNullOrBlank()
         runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }

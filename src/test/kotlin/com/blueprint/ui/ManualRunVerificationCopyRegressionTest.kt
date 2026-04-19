@@ -14,8 +14,8 @@ class ManualRunVerificationCopyRegressionTest {
 
         assertTrue(source.contains("private fun missingRunCommandGuidance("))
         assertTrue(source.contains("Run the changed app -> ${'$'}{missingRunCommandChecklist(emptyList())}"))
-        assertTrue(source.contains("No run command was inferred. Use Open Likely Entry File to inspect the best candidate, or follow the manual checklist to verify the app from a likely entry file or package root."))
-        assertTrue(source.contains("Verify manually with this checklist:"))
+        assertTrue(source.contains("No run command was inferred. Use Open Likely Entry File to inspect the best candidate, then try the other likely entry files from the checklist if needed."))
+        assertTrue(source.contains("Try this fallback:"))
         assertTrue(source.contains("private val openLikelyEntryFileButton = JButton(\"Open Likely Entry File\").apply {"))
     }
 }
