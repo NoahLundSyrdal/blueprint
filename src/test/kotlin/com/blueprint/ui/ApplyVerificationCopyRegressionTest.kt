@@ -24,6 +24,6 @@ class ApplyVerificationCopyRegressionTest {
         assertTrue(source.contains("validationReportText(result),"))
         assertTrue(source.contains("val runNote = inferredRunNote(pythonContext)"))
         assertTrue(source.contains("val commandBlock = commandReviewBlock(validationCommand, pythonContext)"))
-        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine, validationBlock)"))
+        assertTrue(source.contains("listOf(nextActionLine, summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine, validationBlock)"))
     }
 }

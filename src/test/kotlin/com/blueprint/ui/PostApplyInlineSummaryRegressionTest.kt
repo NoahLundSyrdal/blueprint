@@ -15,7 +15,10 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("val validationAndPathsLine = buildString {"))
         assertTrue(source.contains("appendLine(result.summaryLine())"))
         assertTrue(source.contains("append(changedFilesText)"))
-        assertTrue(source.contains("validationAndPathsLine = validationAndPathsLine"))
+        assertTrue(source.contains("summaryLine = nextActionLine"))
+        assertTrue(source.contains("appendLine(summaryLine)"))
+        assertTrue(source.contains("validationAndPathsLine = buildString {"))
+        assertTrue(source.contains("append(validationAndPathsLine)"))
         assertTrue(source.contains("nextStepLine = refreshNote"))
     }
 
