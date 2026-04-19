@@ -3915,7 +3915,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 listOf((issues + scopeDrops).distinct().joinToString("\n") { "- $it" }, commandBlock).joinToString("\n\n")
             reviewDetails != null -> listOf(reviewDetails.joinToString("\n"), commandBlock).joinToString("\n\n")
             n.executionStatus == ExecutionStatus.FAILED -> listOf(
-                "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing.",
+                "Validation failed after apply. Generate Code Diff again after you fix the problem, or inspect the related file manually before continuing.",
                 commandBlock,
             ).joinToString("\n\n")
             exec?.status == "PARTIAL" -> listOf(
