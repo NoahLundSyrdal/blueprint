@@ -5349,10 +5349,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         return when {
             lower.startsWith("abstracted code to uml:") -> msg.replaceFirst("Abstracted code to UML:", "Step 1 complete - Scanned project and generated UML:")
             lower.startsWith("updated the uml using") -> "Step complete - Refined the UML draft from chat context and grounded source facts."
-            lower.startsWith("planning code diff for") -> msg.replaceFirst("Planning code diff for", "Step 2 started - Generate Code Diff for")
-            lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Step 2 progress - Planned reviewed code patch for")
-            lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Step 2 complete - Generated reviewed code patch for")
-            lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Step 2 complete - Generated reviewed code patch for")
+            lower.startsWith("planning code diff for") -> msg.replaceFirst("Planning code diff for", "Step 2 started - Preparing reviewed code patch for")
+            lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Step 2 progress - Reviewed code patch plan is ready for")
+            lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Step 2 complete - Reviewed code patch is ready for")
+            lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Step 2 complete - Reviewed code patch is ready for")
             lower.startsWith("generate code diff used existing nodes because") ->
                 "Step 2 blocked - Generate Code Diff kept the last reviewed patch because the current UML could not be parsed."
             lower.startsWith("generate code diff completed with no file changes because") -> "Step 2 complete - $msg"

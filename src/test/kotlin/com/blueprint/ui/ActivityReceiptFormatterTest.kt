@@ -11,7 +11,7 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Abstracted code to UML: 3 class(es), 2 relationship(s)."),
         )
         assertEquals(
-            "Step 2 started - Generate Code Diff for Invite schema with Mode: MOCK.",
+            "Step 2 started - Preparing reviewed code patch for Invite schema with Mode: MOCK.",
             receiptTextForTest("Planning code diff for Invite schema with Mode: MOCK."),
         )
         assertEquals(
@@ -19,7 +19,7 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Generate Code Diff found no UML-backed work items ready to run."),
         )
         assertEquals(
-            "Step 2 complete - Generated reviewed code patch for Invite schema: APPROVE. Files: app/models.py",
+            "Step 2 complete - Reviewed code patch is ready for Invite schema: APPROVE. Files: app/models.py",
             receiptTextForTest("Code diff ready for Invite schema: APPROVE. Files: app/models.py"),
         )
         assertEquals(
