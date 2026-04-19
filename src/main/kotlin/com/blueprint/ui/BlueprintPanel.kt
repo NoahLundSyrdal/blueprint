@@ -1995,6 +1995,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "apply patch",
             "refresh from code",
             "code nodes",
+            "reviewed code diff",
             "apply",
         ).any { it in this }
 
@@ -3363,11 +3364,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     val changedPathsBlock = buildString {
                         appendLine("Changed paths:")
-                        changedPaths.forEach { appendLine("- $it") }
+                        if (changedPaths.isEmpty()) {
+                            appendLine("- None")
+                        } else {
+                            changedPaths.forEach { appendLine("- $it") }
+                        }
                     }.trim()
                     val validationBlock = buildString {
                         appendLine("Validation:")
                         appendLine(validationReportText(result))
+                    }.trim()
+                    val changedFilesText = if (changedPaths.isEmpty()) {
+                        "No changed paths were written."
+                    } else {
+                        buildString {
+                            appendLine("Changed paths:")
+                            changedPaths.forEach { appendLine("- $it") }
+                        }.trim()
+                    }
+                    val changedPathsReceipt = buildString {
+                        appendLine(changedFilesText)
                     }.trim()
                     val verifyChecklist = buildString {
                         appendLine("Verify in UML tab:")
@@ -3404,7 +3420,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         project,
                         listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
                             .filter { it.isNotBlank() }
-                            .joinToString("\n\n") + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
+                            .joinToString("\n\n") + "\n\nRefresh UML From Code to verify." + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
                         "Blueprint - Apply Complete"
                     )
                     SwingUtilities.invokeLater {
@@ -3419,10 +3435,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                         guideLabel.text = listOf(
                             "Apply complete. Review the refreshed code-backed UML now.",
+                            "Refresh UML From Code to verify.",
                             "Verify In UML reruns that code reread when you want an explicit verification click. Refresh UML From Code stays available for the general refresh action.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
+                        changedPathsReceipt.length
                     }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
