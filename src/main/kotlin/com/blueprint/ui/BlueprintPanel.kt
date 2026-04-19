@@ -611,6 +611,7 @@ internal object GuidedInviteScenario {
 internal data class PostApplyInlineSummary(
     val changedPaths: List<String>,
     val summaryLine: String,
+    val receiptSummary: String,
     val validationAndPathsLine: String,
     val nextStepLine: String,
     val verifyChecklist: String,
@@ -622,6 +623,7 @@ internal data class PostApplyInlineSummary(
     fun reviewPanelText(exec: ExecutionArtifact?): String =
         buildString {
             appendLine(summaryLine)
+            appendLine(receiptSummary)
             appendLine(validationAndPathsLine)
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, changedPaths))
@@ -3523,8 +3525,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             changedPaths.forEach { appendLine("- $it") }
                         }.trim()
                     }
+                    val changedPathCountLine = if (changedPaths.isEmpty()) {
+                        "Changed paths: none."
+                    } else {
+                        "Changed paths (${changedPaths.size}): ${changedPaths.joinToString(", ")}"
+                    }
+                    val validationOutcomeLine = when (result.status) {
+                        ProjectValidationService.ValidationResult.Status.PASS -> "Validation outcome: passed."
+                        ProjectValidationService.ValidationResult.Status.SKIPPED ->
+                            if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                                "Validation outcome: skipped because no command was inferred."
+                            } else {
+                                "Validation outcome: skipped."
+                            }
+                        ProjectValidationService.ValidationResult.Status.FAIL -> "Validation outcome: failed."
+                    }
+                    val receiptSummary = buildString {
+                        appendLine("Apply receipt:")
+                        appendLine("- $summaryLine")
+                        appendLine("- $changedPathCountLine")
+                        appendLine("- $validationOutcomeLine")
+                        appendLine("- $nextActionLine")
+                    }.trim()
                     val validationAndPathsLine = buildString {
-                        appendLine(summaryLine)
+                        appendLine(receiptSummary)
                         appendLine(result.summaryLine())
                         appendLine(runBlock)
                         append(changedFilesText)
@@ -3549,16 +3573,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     postApplyInlineSummary = PostApplyInlineSummary(
                         changedPaths = changedPaths,
                         summaryLine = summaryLine,
+                        receiptSummary = receiptSummary,
                         validationAndPathsLine = validationAndPathsLine,
                         nextStepLine = nextActionLine,
                         verifyChecklist = verifyChecklist,
                         copyableResultSummary = buildString {
                             appendLine("Result summary")
                             appendLine("- $summaryLine")
-                            appendLine("- Validation: ${result.summaryLine()}")
+                            appendLine("- $changedPathCountLine")
+                            appendLine("- $validationOutcomeLine")
+                            appendLine("- Validation details: ${result.summaryLine()}")
                             appendLine("- Next: Refresh UML From Code to verify the updated code-backed UML.")
                             appendLine("- Run after apply: $runNote")
-                            appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
                         }.trim(),
                     )
                     copyRunSummaryButton.isEnabled = true
