@@ -33,7 +33,7 @@ tasks {
         untilBuild.set(providers.gradleProperty("pluginUntilBuild"))
     }
     runIde {
-        args(rootProject.layout.projectDirectory.dir("examples/car_company_project").asFile.absolutePath)
+        args(rootProject.layout.projectDirectory.dir("examples/invite_project").asFile.absolutePath)
     }
     buildSearchableOptions { enabled = false }
 }
