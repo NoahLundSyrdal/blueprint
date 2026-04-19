@@ -3340,7 +3340,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             }
                         )
                     }
-                    val refreshNote = "Refresh UML From Code to verify the updated code-backed UML."
+                    val refreshNote = "Refresh UML From Code to verify."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3399,7 +3399,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     SwingUtilities.invokeLater {
                         showArtifactTab("UML")
                         status(summaryLine)
-                        umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram, or use Undo Last Apply to roll it back."
+                        umlStatusLabel.text = "UML: refreshed from code after apply. Refresh UML From Code to verify, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
                             listOf(summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)
@@ -4068,8 +4068,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
-                guideLabel.text = "Review approved the reviewed code patch. Apply Approved Changes to write it to disk, then Blueprint will validate the project."
-                updateNextStepBanner("Next: Apply Approved Changes", "Review approved the current patch, so this is the safe time to write it to disk.")
+                guideLabel.text = "Review approved the reviewed code patch because it stays in scope and has no blocking safety issues. Apply Approved Changes to write it to disk, then Blueprint will validate the project."
+                updateNextStepBanner("Next: Apply Approved Changes", "Review approved the current patch because it stays in scope and has no blocking safety issues, so this is the safe time to write it to disk.")
             }
             currentUmlEntityCount() == 0 -> {
                 primaryActionButton.text = "Refresh UML From Code"
