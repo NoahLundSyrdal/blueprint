@@ -1096,7 +1096,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JLabel("Project: ${project.name}").apply { foreground = Color(0x333333) })
             add(summaryLabel.apply { foreground = Color(0x333333) })
             add(providerLabel.apply { foreground = providerColor() })
-            add(JLabel("Workflow: UML -> code diff -> apply").apply {
+            add(JLabel("Workflow: Refresh UML From Code -> edit UML -> Generate Code Diff -> Apply Approved Changes").apply {
                 foreground = Color(0x555555)
             })
             add(row("Filter", filterCombo))
@@ -1687,7 +1687,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         """
         You are Blueprint, an architecture assistant inside PyCharm.
 
-        The user edits a Mermaid UML classDiagram that will later be converted into scoped code-generation nodes.
+        The user edits a Mermaid UML classDiagram that will later be converted into a reviewed code patch.
         Update the UML according to the user's request.
         Use the grounding context to interpret pronouns like "this", "it", "selected", or "the current class".
 
@@ -2142,7 +2142,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         graphArea.text = result.summary
         appendChat(
             "Blueprint",
-            "Imported $sourceLabel into ${result.nodes.size} reviewed code patch(es). Click Generate Code Diff to preview code changes."
+            "Imported $sourceLabel into ${result.nodes.size} generated node(s). Click Generate Code Diff to preview code changes."
         )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
