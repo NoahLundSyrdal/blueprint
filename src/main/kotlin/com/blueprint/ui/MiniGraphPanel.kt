@@ -78,6 +78,9 @@ class MiniGraphPanel : JPanel() {
     var onNodeSelected: ((String) -> Unit)? = null
     var onNodeOpenSource: ((NodeView) -> Unit)? = null
 
+    // Drag-to-pan state
+    private var dragOrigin: Point? = null
+
     var zoom: Double = 1.0
         private set
     private val zoomMin = 0.25
@@ -110,6 +113,21 @@ class MiniGraphPanel : JPanel() {
         background = Theme.Background
         toolTipText = ""
         addMouseListener(object : MouseAdapter() {
+            override fun mousePressed(e: MouseEvent) {
+                dragOrigin = e.point
+                cursor = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR)
+            }
+
+            override fun mouseReleased(e: MouseEvent) {
+                dragOrigin = null
+                // Restore cursor based on what's under the pointer
+                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
+                    Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+                } else {
+                    Cursor.getDefaultCursor()
+                }
+            }
+
             override fun mouseClicked(e: MouseEvent) {
                 nodeAt(e.point)?.let { node ->
                     if (e.clickCount >= 2 || sourceBadgeAt(e.point)?.id == node.id) {
@@ -133,6 +151,24 @@ class MiniGraphPanel : JPanel() {
                 } else {
                     Cursor.getDefaultCursor()
                 }
+            }
+
+            override fun mouseDragged(e: MouseEvent) {
+                val origin = dragOrigin ?: return
+                val viewport = SwingUtilities.getAncestorOfClass(javax.swing.JViewport::class.java, this@MiniGraphPanel)
+                    as? javax.swing.JViewport ?: return
+                val vp = viewport.viewPosition
+                val dx = origin.x - e.x
+                val dy = origin.y - e.y
+                val maxX = (preferredSize.width - viewport.width).coerceAtLeast(0)
+                val maxY = (preferredSize.height - viewport.height).coerceAtLeast(0)
+                viewport.viewPosition = Point(
+                    (vp.x + dx).coerceIn(0, maxX),
+                    (vp.y + dy).coerceIn(0, maxY),
+                )
+                // dragOrigin stays fixed — delta is relative to the press point,
+                // not accumulated across drag events, so no drift.
+                dragOrigin = e.point
             }
         })
         addMouseWheelListener { e ->
