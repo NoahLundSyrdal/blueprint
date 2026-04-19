@@ -20,6 +20,6 @@ class PostRunNextStepsRegressionTest {
         assertTrue(source.contains("\"- Refresh UML From Code again anytime to re-verify the current code-backed UML.\""))
         assertTrue(source.contains("\"- Refine the UML again when you are ready for another reviewed code patch.\""))
         assertTrue(source.contains("appendLine(recordedSteps)"))
-        assertTrue(source.contains("append(nextSteps)"))
+        assertTrue(source.contains("appendLine(nextSteps)"))
     }
 }

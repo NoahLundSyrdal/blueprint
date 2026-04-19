@@ -602,6 +602,7 @@ internal data class PostApplyInlineSummary(
     val validationAndPathsLine: String,
     val nextStepLine: String,
     val verifyChecklist: String,
+    val copyableResultSummary: String,
 )
 
 internal data class GenerateDiffGuideSummary(
@@ -1173,6 +1174,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val undoLastApplyButton = JButton("Undo Last Apply").apply {
         isEnabled = false
         addActionListener { undoChanges() }
+    }
+    private val copyRunSummaryButton = JButton("Copy Result Summary").apply {
+        isEnabled = false
+        toolTipText = "Copy a plain-English result summary after successful run verification."
+        addActionListener { copyRunResultSummary() }
     }
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
     private val advancedMode = JBCheckBox("Advanced")
@@ -1802,6 +1808,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
                 add(runAppButton)
+                add(copyRunSummaryButton)
                 add(openLikelyEntryFileButton)
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
@@ -3521,6 +3528,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         validationAndPathsLine = validationAndPathsLine,
                         nextStepLine = refreshNote,
                         verifyChecklist = verifyChecklist,
+                        copyableResultSummary = buildString {
+                            appendLine("Result summary")
+                            appendLine("- Validation: ${result.summaryLine()}")
+                            appendLine("- Run after apply: $runNote")
+                            appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
+                        }.trim(),
                     )
                     openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
                     openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
@@ -4615,6 +4628,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
     }
 
+    private fun guidedInviteScenarioState(): GuidedInviteScenarioState =
+        currentInviteFirstRunScenarioState()
+
     private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String =
         when {
             state.resetSuggested ->
@@ -4685,6 +4701,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             "Blueprint completed the path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
         }
+        val copyableSummary = runResultSummary(runCommand, visibleResult, demoFlow)
         val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
         val inspectAction = when (changedPaths.size) {
             0 -> "Inspect the current code in the IDE if you want to confirm the final state file by file."
@@ -4694,6 +4711,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val nextSteps = listOf(
             "Next steps:",
             "- $inspectAction",
+            "- Copy Result Summary if you want a reusable issue-comment or demo recap.",
             "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
             "- Refine the UML again when you are ready for another reviewed code patch.",
         ).joinToString("\n")
@@ -4710,11 +4728,42 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(recordedSteps)
             appendLine()
-            append(nextSteps)
+            appendLine(nextSteps)
+            appendLine()
+            append(copyableSummary)
         }.trim()
+        copyRunSummaryButton.isEnabled = true
         guideLabel.text = banner
         appendChat("Blueprint", banner)
         Messages.showInfoMessage(project, banner, "Blueprint - End-to-End Success")
+    }
+
+    private fun runResultSummary(runCommand: String, visibleResult: String, demoFlow: Boolean): String {
+        val flowLabel = if (demoFlow) "Demo flow" else "Blueprint flow"
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val validationSummary = postApplyInlineSummary?.copyableResultSummary
+            ?: "Result summary\n- Validation: not recorded yet\n- Run after apply: not recorded yet\n- Changed paths: none"
+        return buildString {
+            appendLine("Copyable result summary")
+            appendLine("- $flowLabel completed for the current Python folder.")
+            appendLine("- Run verified with: $runCommand")
+            appendLine("- Visible result: $visibleResult")
+            appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
+            append(validationSummary.removePrefix("Result summary\n"))
+        }.trim()
+    }
+
+    private fun copyRunResultSummary() {
+        val runCommand = project.service<ProjectRunService>().inferredRunCommand()
+        if (runCommand.isNullOrBlank()) {
+            status("No run result summary to copy yet")
+            return
+        }
+        val summary = runResultSummary(runCommand, manualDemoExpectedVisibleResult(guidedInviteScenarioState()), false)
+        val selection = java.awt.datatransfer.StringSelection(summary)
+        java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
+        appendChat("Blueprint", summary)
+        status("Copied result summary")
     }
 
     private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
