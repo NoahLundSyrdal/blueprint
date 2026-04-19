@@ -1,6 +1,7 @@
 package com.blueprint.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -224,11 +225,60 @@ class GuidedInviteScenarioTest {
 
 
     @Test
+    fun `demo receipt summarizes pass wait states and expected visible results`() {
+        val waiting = GuidedInviteScenarioState(
+            codeMapReady = false,
+            prompt = "add an InvitePolicy entity",
+            expectedEntity = "InvitePolicy",
+            expectedRelationSource = "Invite",
+            expectedRelationTarget = "InvitePolicy",
+            resetSuggested = false,
+            resetPath = GuidedInviteScenario.PATCH_PATH,
+            umlDraftReady = false,
+            reviewedDiffReady = false,
+            reviewApprovedReady = false,
+            appliedReady = false,
+            refreshedCodeMapReady = false,
+            runVerified = false,
+            promptReady = false,
+            runCommand = null,
+        ).demoReceiptText()
+        assertTrue(waiting.contains("Demo receipt:"))
+        assertTrue(waiting.contains("[next] Refresh UML From Code -> expected visible result: current code map is loaded."))
+        assertTrue(waiting.contains("[wait] Try This Change -> load the current code map first."))
+        assertTrue(waiting.contains("[wait] Run the changed app -> wait for an inferred run command, then verify the feature manually."))
+
+        val passed = GuidedInviteScenarioState(
+            codeMapReady = true,
+            prompt = "add an InviteReminder entity",
+            expectedEntity = "InviteReminder",
+            expectedRelationSource = "Invite",
+            expectedRelationTarget = "InviteReminder",
+            resetSuggested = false,
+            resetPath = GuidedInviteScenario.PATCH_PATH,
+            umlDraftReady = true,
+            reviewedDiffReady = true,
+            reviewApprovedReady = true,
+            appliedReady = true,
+            refreshedCodeMapReady = true,
+            runVerified = true,
+            promptReady = true,
+            runCommand = "python main.py",
+        ).demoReceiptText()
+        assertTrue(passed.contains("[pass] Refresh UML From Code -> expected visible result: current code map is loaded."))
+        assertTrue(passed.contains("[pass] Try This Change -> expected visible result: add an InviteReminder entity"))
+        assertTrue(passed.contains("[pass] Apply Approved Changes -> expected visible result: code files are written to disk."))
+        assertTrue(passed.contains("[pass] Run the changed app -> verified with: python main.py"))
+        assertFalse(passed.contains("[wait]"))
+    }
+
+    @Test
     fun `reset state switches button copy to reset guidance`() {
         val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("firstRunPromptButton.text = if (state.resetSuggested) \"Show Reset Steps\" else \"Try This Change\""))
         assertTrue(source.contains("runDemoButton.text = if (state.runVerified) \"Demo Run Verified\" else \"Run Demo Step\""))
+        assertTrue(source.contains("demoReceiptArea.text = state.demoReceiptText()"))
         assertTrue(source.contains("All guided demo changes already exist. Restore \${state.resetPath} from git, or pick your own change."))
         assertTrue(source.contains("To get a fresh invite demo path, restore \${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code."))
     }
@@ -244,6 +294,7 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("Fresh demo prompt loaded into chat:"))
         assertTrue(source.contains("Demo e2e step passed: Try This Change prepared"))
         assertTrue(source.contains("Manual demo runner"))
+        assertTrue(source.contains("Demo receipt:"))
         assertTrue(source.contains("Run Demo Step"))
         assertTrue(source.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
     }

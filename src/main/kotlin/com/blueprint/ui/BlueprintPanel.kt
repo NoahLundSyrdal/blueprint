@@ -261,7 +261,31 @@ internal data class GuidedInviteScenarioState(
     val runVerified: Boolean,
     val promptReady: Boolean,
     val runCommand: String?,
-)
+) {
+    fun demoReceiptText(): String {
+        val runLine = when {
+            runCommand.isNullOrBlank() -> "[wait] Run the changed app -> wait for an inferred run command, then verify the feature manually."
+            runVerified -> "[pass] Run the changed app -> verified with: $runCommand"
+            refreshedCodeMapReady -> "[next] Run the changed app -> use: $runCommand"
+            else -> "[wait] Run the changed app -> use: $runCommand after Refresh UML From Code."
+        }
+        val tryChangeLine = when {
+            !codeMapReady -> "[wait] Try This Change -> load the current code map first."
+            promptReady || umlDraftReady -> "[pass] Try This Change -> expected visible result: $prompt"
+            else -> "[next] Try This Change -> expected visible result: $prompt"
+        }
+        return listOf(
+            "Demo receipt:",
+            if (codeMapReady) "[pass] Refresh UML From Code -> expected visible result: current code map is loaded." else "[next] Refresh UML From Code -> expected visible result: current code map is loaded.",
+            tryChangeLine,
+            if (reviewedDiffReady) "[pass] Generate Code Diff -> expected visible result: reviewed code patch is ready." else if (umlDraftReady) "[next] Generate Code Diff -> expected visible result: reviewed code patch is ready." else "[wait] Generate Code Diff -> expected visible result: reviewed code patch is ready.",
+            if (reviewApprovedReady) "[pass] Review approved -> expected visible result: Apply Approved Changes is unlocked." else if (reviewedDiffReady) "[next] Review approved -> expected visible result: Apply Approved Changes is unlocked." else "[wait] Review approved -> expected visible result: Apply Approved Changes is unlocked.",
+            if (appliedReady) "[pass] Apply Approved Changes -> expected visible result: code files are written to disk." else if (reviewApprovedReady) "[next] Apply Approved Changes -> expected visible result: code files are written to disk." else "[wait] Apply Approved Changes -> expected visible result: code files are written to disk.",
+            if (refreshedCodeMapReady) "[pass] Refresh UML From Code again -> expected visible result: code-backed UML reflects the applied change." else if (appliedReady) "[next] Refresh UML From Code again -> expected visible result: code-backed UML reflects the applied change." else "[wait] Refresh UML From Code again -> expected visible result: code-backed UML reflects the applied change.",
+            runLine,
+        ).joinToString("\n")
+    }
+}
 
 internal object GuidedInviteScenario {
     const val PATCH_PATH = "blueprint_demo/imported_invite/models.py"
@@ -794,6 +818,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         lineWrap = true
         wrapStyleWord = true
         rows = 5
+    }
+    private val demoReceiptArea = JBTextArea(6, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        rows = 6
     }
     private val firstRunPromptButton = JButton("Try This Change").apply {
         addActionListener {
@@ -1386,11 +1417,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(
                     JPanel(BorderLayout(6, 6)).apply {
                         border = BorderFactory.createTitledBorder("First-Run Demo")
-                        add(firstRunScenarioArea, BorderLayout.CENTER)
+                        add(
+                            JPanel(GridLayout(2, 1, 0, 6)).apply {
+                                add(firstRunScenarioArea)
+                                add(demoReceiptArea)
+                            },
+                            BorderLayout.CENTER,
+                        )
                         add(
                             JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
                                 add(firstRunPromptButton)
-            add(runDemoButton)
+                                add(runDemoButton)
                             },
                             BorderLayout.SOUTH,
                         )
@@ -3637,6 +3674,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!shouldShowInviteFirstRunScenario()) return
         val state = currentInviteFirstRunScenarioState()
         firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
+        demoReceiptArea.text = state.demoReceiptText()
         firstRunPromptButton.text = if (state.resetSuggested) "Show Reset Steps" else "Try This Change"
         firstRunPromptButton.isEnabled = state.codeMapReady
         firstRunPromptButton.toolTipText = if (state.resetSuggested) {
