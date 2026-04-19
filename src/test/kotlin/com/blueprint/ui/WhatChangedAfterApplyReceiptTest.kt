@@ -12,8 +12,9 @@ class WhatChangedAfterApplyReceiptTest {
     fun `apply chat summary reuses what changed summary and refreshed uml confirmation`() {
         val source = Files.readString(sourcePath)
 
-        assertTrue(source.contains("appendChat(\"Blueprint\", \"\$summaryLine\\n\$whatChanged\\n\$refreshNote\\n\$umlRefreshLine\")"))
+        assertTrue(source.contains("appendChat(\"Blueprint\", \"\$summaryLine\\n\$whatChanged\\n\$refreshNote\\n\$undoNote\\n\$umlRefreshLine\")"))
         assertTrue(source.contains("val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)"))
+        assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("val umlRefreshLine = \"Code-backed UML was refreshed from disk after apply.\""))
     }
 }

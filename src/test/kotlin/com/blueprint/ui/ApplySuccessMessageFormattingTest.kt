@@ -27,9 +27,10 @@ class ApplySuccessMessageFormattingTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("val refreshNote = \"Refresh UML From Code to verify.\""))
+        assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("val umlRefreshLine = \"Code-backed UML was refreshed from disk after apply.\""))
         assertTrue(source.contains("val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)"))
-        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, umlRefreshLine, validationBlock)"))
+        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, undoNote, umlRefreshLine, validationBlock)"))
         assertFalse(source.contains("Applied semantic changes:"))
         assertFalse(source.contains("fields changed"))
     }

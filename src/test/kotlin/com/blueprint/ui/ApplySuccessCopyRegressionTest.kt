@@ -18,8 +18,11 @@ class ApplySuccessCopyRegressionTest {
         assertTrue(source.contains("val validationBlock = buildString {"))
         assertTrue(source.contains("appendLine(\"Validation:\")"))
         assertTrue(source.contains("appendLine(validationReportText(result))"))
-        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, umlRefreshLine, validationBlock)"))
+        assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
+        assertTrue(source.contains("Undo Last Apply is available if you want to roll back this reviewed code patch."))
+        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, undoNote, umlRefreshLine, validationBlock)"))
         assertTrue(source.contains("status(summaryLine)"))
-        assertTrue(source.contains("appendChat(\"Blueprint\", \"\$summaryLine\\n\$whatChanged\\n\$refreshNote\\n\$umlRefreshLine\")"))
+        assertTrue(source.contains("guideLabel.text = \"Apply complete. Refresh UML From Code to verify, or use Undo Last Apply to roll back this reviewed code patch.\""))
+        assertTrue(source.contains("appendChat(\"Blueprint\", \"\$summaryLine\\n\$whatChanged\\n\$refreshNote\\n\$undoNote\\n\$umlRefreshLine\")"))
     }
 }

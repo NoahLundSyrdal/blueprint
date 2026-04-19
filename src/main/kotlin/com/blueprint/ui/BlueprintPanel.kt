@@ -2963,6 +2963,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                     }
                     val refreshNote = "Refresh UML From Code to verify."
+                    val undoNote = if (undoLastApplyButton.isEnabled) {
+                        "Undo Last Apply is available if you want to roll back this reviewed code patch."
+                    } else {
+                        "Undo Last Apply is not available for this apply result."
+                    }
                     val umlRefreshLine = "Code-backed UML was refreshed from disk after apply."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     val changedPathsBlock = buildString {
@@ -2975,15 +2980,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     Messages.showInfoMessage(
                         project,
-                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, umlRefreshLine, validationBlock)
+                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, undoNote, umlRefreshLine, validationBlock)
                             .joinToString("\n\n"),
                         "Blueprint - Apply Complete"
                     )
                     SwingUtilities.invokeLater {
                         showArtifactTab("UML")
                         status(summaryLine)
-                        umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram."
-                        appendChat("Blueprint", "$summaryLine\n$whatChanged\n$refreshNote\n$umlRefreshLine")
+                        umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram, or use Undo Last Apply to roll it back."
+                        appendChat("Blueprint", "$summaryLine\n$whatChanged\n$refreshNote\n$undoNote\n$umlRefreshLine")
+                        guideLabel.text = "Apply complete. Refresh UML From Code to verify, or use Undo Last Apply to roll back this reviewed code patch."
                     }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
