@@ -57,6 +57,8 @@ import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -1089,6 +1091,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val secondaryTabs = JTabbedPane()
     private val validationResults = mutableMapOf<String, ProjectValidationService.ValidationResult>()
     private val lastReviewedUmlByNodeId = mutableMapOf<String, String>()
+    private val reviewedAtByNodeId = mutableMapOf<String, Instant>()
     private var refreshedAfterApply = false
     private var postApplyChangedPaths: List<String> = emptyList()
     private var postApplyHighlightMessage: String? = null
@@ -2417,6 +2420,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 project.service<ReviewService>().reviewAsync(n, changedExec) { review ->
                     registry.setReview(n.id, review)
                     lastReviewedUmlByNodeId[n.id] = normalizedUmlText()
+                    reviewedAtByNodeId[n.id] = Instant.now()
                     refreshedAfterApply = false
                     postApplyInlineSummary = null
                     reviewArea.text = review.rawJson.ifBlank { JsonExtractor.toJson(review) }
@@ -3712,7 +3716,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             n.executionStatus == ExecutionStatus.FAILED -> "Validation Failed"
             else -> "Apply Blocked By Review"
         }
-        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
+        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | ${reviewFreshness.reviewedAtLine.lowercase(Locale.US)} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         val inlineSummary = postApplyInlineSummary
         reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
             postApplyReviewSummary(exec, inlineSummary)
@@ -4295,30 +4299,37 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private data class ReviewFreshnessState(
         val badge: String,
         val warning: String,
+        val reviewedAtLine: String,
     )
 
     private fun reviewFreshnessFor(node: BlueprintNode, exec: ExecutionArtifact?): ReviewFreshnessState {
+        val reviewedAt = reviewedAtByNodeId[node.id]
+        val reviewedAtLine = reviewedAtLine(reviewedAt)
         if (exec?.patches.isNullOrEmpty()) {
             return ReviewFreshnessState(
                 badge = "NONE",
                 warning = "No reviewed code patch yet. Generate Code Diff after you refine the UML.",
+                reviewedAtLine = reviewedAtLine,
             )
         }
         if (node.executionStatus == ExecutionStatus.APPLIED && refreshedAfterApply && !umlHasPendingEdits) {
             return ReviewFreshnessState(
                 badge = "FRESH",
                 warning = "This reviewed code patch matches the refreshed code-backed UML. Refresh UML From Code again anytime to verify after more edits.",
+                reviewedAtLine = reviewedAtLine,
             )
         }
         if (normalizedUmlText() != lastReviewedUmlByNodeId[node.id].orEmpty()) {
             return ReviewFreshnessState(
                 badge = "STALE",
                 warning = "This reviewed code patch is stale because the UML changed after review. Generate Code Diff again before Apply Approved Changes.",
+                reviewedAtLine = reviewedAtLine,
             )
         }
         return ReviewFreshnessState(
             badge = "FRESH",
             warning = "This reviewed code patch matches the current UML. Apply Approved Changes, or keep editing and then Generate Code Diff again.",
+            reviewedAtLine = reviewedAtLine,
         )
     }
 
@@ -4332,6 +4343,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
             appendLine("Diff status: ${freshness.badge}")
+            appendLine(freshness.reviewedAtLine)
             appendLine(freshness.warning)
             approvalSentence?.let {
                 appendLine()
@@ -4380,6 +4392,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun refreshReviewFreshnessState() {
         if (nodeList.selectedValue != null) {
             refreshArtifactSummary()
+        }
+    }
+
+    private fun reviewedAtLine(reviewedAt: Instant?): String =
+        if (reviewedAt == null) {
+            "Reviewed at not available yet"
+        } else {
+            "Reviewed at ${DateTimeFormatter.ofPattern("HH:mm:ss").format(reviewedAt.atZone(java.time.ZoneId.systemDefault()))} (${reviewAgeText(reviewedAt)})"
+        }
+
+    private fun reviewAgeText(reviewedAt: Instant, now: Instant = Instant.now()): String {
+        val duration = Duration.between(reviewedAt, now).abs()
+        val minutes = duration.toMinutes()
+        val hours = duration.toHours()
+        val days = duration.toDays()
+        return when {
+            duration.seconds < 60 -> "reviewed just now"
+            minutes < 60 -> "reviewed $minutes min ago"
+            hours < 24 -> "reviewed $hours hr ago"
+            else -> "reviewed $days day${if (days == 1L) "" else "s"} ago"
         }
     }
 
