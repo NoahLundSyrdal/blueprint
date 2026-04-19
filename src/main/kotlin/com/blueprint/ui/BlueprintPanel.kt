@@ -1786,7 +1786,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 generated.warnings.forEach { appendLine("- $it") }
             }
         }.trim()
-        appendChat("Blueprint", "I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+        val refreshMessage = buildString {
+            append("I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+            if (generated.warnings.isNotEmpty()) {
+                append("\n\nNotes:\n")
+                generated.warnings.take(3).forEach { append("- $it\n") }
+            }
+        }.trim()
+        appendChat("Blueprint", refreshMessage)
         logActivity("Abstracted code to UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s).")
         status("Code abstracted to UML")
     }

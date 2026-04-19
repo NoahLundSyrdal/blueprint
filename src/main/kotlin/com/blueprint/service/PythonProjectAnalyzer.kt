@@ -75,7 +75,7 @@ class PythonProjectAnalyzer(private val project: Project) {
                     add("Test roots exist but pytest dependency was not detected; verify test runner before generating tests.")
                 }
                 if (sourceRoots.isEmpty()) {
-                    add("No package roots with __init__.py were detected; generated Python file scopes should be explicit.")
+                    add("No Python source roots were detected; open a folder with .py files, src/, app/, or package directories so Blueprint can map code to UML.")
                 }
                 if (configFiles.isEmpty()) {
                     add("No pyproject/setup/requirements files were detected; infer dependencies from local files only.")
@@ -153,6 +153,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             "django" to listOf("django", "django-admin", "manage.py"),
             "flask" to listOf("flask", "from flask", "import flask"),
             "pydantic" to listOf("pydantic", "basemodel"),
+            "attrs" to listOf("attrs", "import attr", "from attr", "from attrs", "@define", "@attr.s"),
             "sqlalchemy" to listOf("sqlalchemy", "declarative_base"),
             "typer" to listOf("typer", "import typer"),
             "click" to listOf("click", "import click"),
