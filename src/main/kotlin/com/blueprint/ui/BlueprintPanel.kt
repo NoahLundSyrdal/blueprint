@@ -4685,6 +4685,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             "Blueprint completed the path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
         }
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val inspectAction = when (changedPaths.size) {
+            0 -> "Inspect the current code in the IDE if you want to confirm the final state file by file."
+            1 -> "Use Open Changed File if you want to inspect ${changedPaths.first()} in the IDE."
+            else -> "Use Open Changed Files if you want to inspect the ${changedPaths.size} changed paths in the IDE."
+        }
+        val nextSteps = listOf(
+            "Next steps:",
+            "- $inspectAction",
+            "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
+            "- Refine the UML again when you are ready for another reviewed code patch.",
+        ).joinToString("\n")
         val recordedSteps = listOf(
             "- Code-backed UML is loaded for the current Python folder.",
             "- UML changes were refined into a reviewed code patch.",
@@ -4696,7 +4708,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine("End-to-end success")
             appendLine(flowSummary)
             appendLine()
-            append(recordedSteps)
+            appendLine(recordedSteps)
+            appendLine()
+            append(nextSteps)
         }.trim()
         guideLabel.text = banner
         appendChat("Blueprint", banner)
