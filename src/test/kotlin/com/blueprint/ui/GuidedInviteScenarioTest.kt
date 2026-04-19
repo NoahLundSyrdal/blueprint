@@ -388,10 +388,10 @@ class GuidedInviteScenarioTest {
     }
 
     @Test
-    fun `fresh guided prompt copy stays discoverable in ui source`() {
+    fun `fresh guided prompt copy stays available outside the main workflow surface`() {
         val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
-        assertTrue(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
+        assertFalse(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
         assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file and removed the guided change that was already there. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make a different UML-backed change instead."))
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(source.contains("Freshness: this guided prompt already appears in \${state.resetPath}, so Reset Demo Sandbox is recommended to remove that existing change before a predictable fresh demo run."))

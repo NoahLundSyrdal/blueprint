@@ -2065,35 +2065,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     BorderLayout.CENTER,
                 )
             })
-            if (shouldShowInviteFirstRunScenario()) {
-                add(
-                    JPanel(BorderLayout(6, 6)).apply {
-                        border = BorderFactory.createTitledBorder("First-Run Demo")
-                        alignmentX = Component.LEFT_ALIGNMENT
-                        maximumSize = Dimension(Int.MAX_VALUE, 150)
-                        preferredSize = Dimension(520, 130)
-                        add(
-                            JPanel(GridLayout(2, 1, 0, 6)).apply {
-                                add(JBScrollPane(firstRunScenarioArea).apply {
-                                    verticalScrollBar.unitIncrement = 16
-                                })
-                                add(JBScrollPane(demoReceiptArea).apply {
-                                    verticalScrollBar.unitIncrement = 16
-                                })
-                            },
-                            BorderLayout.CENTER,
-                        )
-                        add(
-                            JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
-                                add(firstRunPromptButton)
-                                add(runChecklistActionButton)
-                                add(runDemoButton)
-                            },
-                            BorderLayout.SOUTH,
-                        )
-                    },
-                )
-            }
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 alignmentX = Component.LEFT_ALIGNMENT
                 maximumSize = Dimension(Int.MAX_VALUE, 40)
@@ -2106,6 +2077,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 maximumSize = Dimension(Int.MAX_VALUE, 40)
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
                 add(runAppButton)
+                add(runChecklistActionButton)
                 add(copyRunSummaryButton)
                 add(openLikelyEntryFileButton)
             })
@@ -2351,11 +2323,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 changedFileSummary(registry.getExecution(node.id))
             }
             "uml" in lower || "diagram" in lower -> {
-                if (shouldShowInviteFirstRunScenario()) {
-                    "The main canvas is editable Mermaid UML. For the guided invite demo, use Try This Change for a fresh prompt based on the current sandbox state, or try '${currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"}', then click Generate Code Diff."
-                } else {
-                    "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
-                }
+                "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
             }
             selected != null -> {
                 val readiness = graph.readinessFor(selected)

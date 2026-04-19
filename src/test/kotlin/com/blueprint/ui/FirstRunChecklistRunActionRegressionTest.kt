@@ -9,7 +9,7 @@ class FirstRunChecklistRunActionRegressionTest {
     private val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
     @Test
-    fun `first run checklist shows a dedicated run action near the checklist`() {
+    fun `changed app run action stays in the main workflow controls`() {
         assertTrue(source.contains("private val runChecklistActionButton = JButton(\"Run The Changed App\")"))
         assertTrue(source.contains("add(runChecklistActionButton)"))
         assertTrue(source.contains("toolTipText = \"Run the inferred project command from the first-run checklist when one is available.\""))
@@ -18,7 +18,7 @@ class FirstRunChecklistRunActionRegressionTest {
     }
 
     @Test
-    fun `first run checklist keeps copy honest when no run command is inferred`() {
+    fun `changed app run action keeps copy honest when no run command is inferred`() {
         assertTrue(source.contains("runChecklistActionButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()"))
         assertTrue(source.contains("runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()"))
         assertTrue(source.contains("Refresh UML From Code first so Blueprint can infer a run command for the current project."))

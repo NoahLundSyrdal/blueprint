@@ -28,11 +28,11 @@ class DiagramScrollAndNoiseRegressionTest {
     }
 
     @Test
-    fun `receipt and first run panels stay compact around the diagram`() {
+    fun `receipt stays compact and demo copy stays out of the main workflow`() {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("preferredSize = Dimension(0, 190)"))
         assertTrue(source.contains("maximumSize = Dimension(Int.MAX_VALUE, 64)"))
-        assertTrue(source.contains("maximumSize = Dimension(Int.MAX_VALUE, 150)"))
+        assertFalse(source.contains("BorderFactory.createTitledBorder(\"First-Run Demo\")"))
     }
 }
