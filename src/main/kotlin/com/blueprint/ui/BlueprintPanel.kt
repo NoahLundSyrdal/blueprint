@@ -3369,6 +3369,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
                     val commandBlock = commandReviewBlock(validationCommand, pythonContext)
+                    val runBlock = buildString {
+                        appendLine("Run after apply:")
+                        appendLine(runNote)
+                    }.trim()
                     val undoNote = if (undoLastApplyButton.isEnabled) {
                         "Undo Last Apply is available if you want to roll back this reviewed code patch."
                     } else {
@@ -3399,6 +3403,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }
                     val validationAndPathsLine = buildString {
                         appendLine(result.summaryLine())
+                        appendLine(runBlock)
                         append(changedFilesText)
                     }.trim()
                     val verifyChecklist = buildString {
@@ -3532,7 +3537,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nVerified receipt:\n- Review the changed paths and validation result above.\n- Refresh UML From Code to verify the updated code-backed UML.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
+            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Refresh UML From Code to verify the updated code-backed UML.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =

@@ -17,6 +17,7 @@ class ApplySuccessCopyRegressionTest {
         assertTrue(source.contains("changedPaths.forEach { appendLine(\"- \$it\") }"))
         assertTrue(source.contains("val validationBlock = buildString {"))
         assertTrue(source.contains("appendLine(\"Validation:\")"))
+        assertTrue(source.contains("appendLine(\"Run after apply:\")"))
         assertTrue(source.contains("appendLine(validationReportText(result))"))
         assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("Undo Last Apply is available if you want to roll back this reviewed code patch."))
