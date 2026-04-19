@@ -3532,7 +3532,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nRefresh UML From Code lets you rerun the UML reload when you want an explicit verification step. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
+            append("\nVerified receipt:\n- Review the changed paths and validation result above.\n- Refresh UML From Code to verify the updated code-backed UML.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =

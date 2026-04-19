@@ -13,6 +13,6 @@ class RefreshUmlVerificationCopyRegressionTest {
         assertTrue(source.contains("toolTipText = \"Rerun Refresh UML From Code after apply so you can verify the changed files in the code-backed UML again.\""))
         assertTrue(source.contains("appendLine(\"Refresh UML From Code verification:\")"))
         assertTrue(source.contains("Click Refresh UML From Code when you want to verify that reload yourself."))
-        assertTrue(source.contains("Refresh UML From Code lets you rerun the UML reload when you want an explicit verification step."))
+        assertTrue(source.contains("- Refresh UML From Code to verify the updated code-backed UML."))
     }
 }
