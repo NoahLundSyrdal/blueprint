@@ -1250,7 +1250,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "uml" in lower || "diagram" in lower -> {
                 if (shouldShowInviteFirstRunScenario()) {
-                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${GuidedInviteScenario.PROMPT}', then generate a reviewed code diff."
+                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${GuidedInviteScenario.PROMPT}', then click Generate Code Diff."
                 } else {
                     "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
                 }
@@ -2569,6 +2569,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine(refreshNote)
                             appendLine(refreshedNote)
                             appendLine()
+                            appendLine("Validation:")
                             append(validationReportText(result))
                         }.trim(),
                         "Blueprint - Apply Complete"
