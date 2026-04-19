@@ -2373,6 +2373,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val context = project.service<PythonProjectAnalyzer>().analyze()
         setUmlEditorText(generated.text, pendingEdits = false)
         focusChangedEntityAfterRefresh()
+        if (refreshedAfterApply) {
+            skippedPathInlineSummary(context, prefix = "Refresh scope:")
+                .takeIf { it.isNotBlank() }
+                ?.let { summary ->
+                    postApplyVerifyState = listOfNotNull(postApplyVerifyState, summary).joinToString(" ")
+                }
+        }
         umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()}"
         scopeReceiptArea.text = buildString {
             appendLine("Current Scope Receipt")
@@ -4380,15 +4387,23 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         return "Current folder: $folderLabel. $pythonScope"
     }
 
-    private fun emptyStatePartialRefreshNote(context: PythonProjectAnalyzer.PythonProjectContext): String {
+    private fun skippedPathInlineSummary(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+        prefix: String,
+        topReasonLimit: Int = 2,
+        examplePathLimit: Int = 2,
+    ): String {
         if (context.skippedFiles.isEmpty()) return ""
         val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
             .entries.sortedByDescending { it.value }
-            .take(2)
+            .take(topReasonLimit)
             .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
-        val examplePaths = context.skippedFiles.take(2).joinToString(", ") { it.path }
-        return "Partial refresh note: ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
+        val examplePaths = context.skippedFiles.take(examplePathLimit).joinToString(", ") { it.path }
+        return "$prefix ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
     }
+
+    private fun emptyStatePartialRefreshNote(context: PythonProjectAnalyzer.PythonProjectContext): String =
+        skippedPathInlineSummary(context, prefix = "Partial refresh note:")
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let {
