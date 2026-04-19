@@ -760,6 +760,7 @@ internal data class PostApplyInlineSummary(
     val changedPaths: List<String>,
     val summaryLine: String,
     val receiptSummary: String,
+    val validationDetailsText: String,
     val validationAndPathsLine: String,
     val nextStepLine: String,
     val verifyChecklist: String,
@@ -3802,6 +3803,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         changedPaths = changedPaths,
                         summaryLine = summaryLine,
                         receiptSummary = receiptSummary,
+                        validationDetailsText = validationDetailsText,
                         validationAndPathsLine = validationAndPathsLine,
                         nextStepLine = nextActionLine,
                         verifyChecklist = verifyChecklist,
@@ -3924,8 +3926,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
 
-    private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String =
-        summary.reviewPanelText(exec)
+    private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String {
+        val reviewText = summary.reviewPanelText(exec)
+        if (reviewText.contains(summary.validationDetailsText)) return reviewText
+        val insertionPoint = summary.receiptSummary
+        val validationBlock = buildString {
+            appendLine(summary.receiptSummary)
+            appendLine(summary.validationDetailsText)
+        }.trim()
+        return reviewText.replaceFirst(insertionPoint, validationBlock)
+    }
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
         buildString {
