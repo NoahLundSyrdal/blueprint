@@ -4250,11 +4250,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val folderSummary = emptyStateFolderSummary(context)
         if (context.isPythonLikely()) {
             val runGuide = inferredRunGuideText(context)
+            val partialRefreshNote = emptyStatePartialRefreshNote(context)
             return listOf(
                 "No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram.",
                 folderSummary,
                 "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
                 "Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet.",
+                partialRefreshNote,
                 "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
                 "After that, refine the UML, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and Run In Blueprint.",
                 "Next steps: review the inferred source roots, open a Python file to confirm the folder you want, or keep editing the project and refresh again.",
@@ -4283,6 +4285,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "0 Python files detected in this folder so far."
         }
         return "Current folder: $folderLabel. $pythonScope"
+    }
+
+    private fun emptyStatePartialRefreshNote(context: PythonProjectAnalyzer.PythonProjectContext): String {
+        if (context.skippedFiles.isEmpty()) return ""
+        val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .take(2)
+            .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+        val examplePaths = context.skippedFiles.take(2).joinToString(", ") { it.path }
+        return "Partial refresh note: ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths before Generate Code Diff if the UML looks incomplete, or Refresh UML From Code to verify after you adjust the folder or files."
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
