@@ -61,6 +61,7 @@ class GuidedInviteScenarioTest {
                 resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
+                reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = false,
@@ -86,6 +87,24 @@ class GuidedInviteScenarioTest {
                 resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
+                reviewApprovedReady = false,
+                appliedReady = false,
+                refreshedCodeMapReady = false,
+                promptReady = true,
+            ),
+        )
+        val approved = GuidedInviteScenario.checklistText(
+            GuidedInviteScenarioState(
+                codeMapReady = true,
+                prompt = "add an InviteReminder entity",
+                expectedEntity = "InviteReminder",
+                expectedRelationSource = "Invite",
+                expectedRelationTarget = "InviteReminder",
+                resetSuggested = false,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
+                umlDraftReady = true,
+                reviewedDiffReady = true,
+                reviewApprovedReady = true,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,
@@ -97,9 +116,11 @@ class GuidedInviteScenarioTest {
         assertTrue(middleLines[2].startsWith("[next]"))
         assertTrue(middle.contains("Try This Change: \"add an InviteReminder entity\""))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
-        assertTrue(middle.contains("Blueprint reviews the code patch before apply."))
-        assertTrue(middle.indexOf("Generate Code Diff -> expect a reviewed code patch") < middle.indexOf("Blueprint reviews the code patch before apply."))
-        assertTrue(middle.indexOf("Blueprint reviews the code patch before apply.") < middle.indexOf("Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
+        assertTrue(middle.contains("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
+        assertTrue(middle.indexOf("Generate Code Diff -> expect a reviewed code patch") < middle.indexOf("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
+        assertTrue(middle.indexOf("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked.") < middle.indexOf("Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
+        assertTrue(approved.contains("[done] Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
+        assertTrue(approved.contains("[next] Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
 
         val loadedPrompt = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
@@ -112,6 +133,7 @@ class GuidedInviteScenarioTest {
                 resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
+                reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = false,
@@ -130,6 +152,7 @@ class GuidedInviteScenarioTest {
                 resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
+                reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,
@@ -149,6 +172,7 @@ class GuidedInviteScenarioTest {
                 resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
+                reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,

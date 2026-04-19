@@ -255,6 +255,7 @@ internal data class GuidedInviteScenarioState(
     val resetPath: String,
     val umlDraftReady: Boolean,
     val reviewedDiffReady: Boolean,
+    val reviewApprovedReady: Boolean,
     val appliedReady: Boolean,
     val refreshedCodeMapReady: Boolean,
     val promptReady: Boolean,
@@ -338,8 +339,9 @@ internal object GuidedInviteScenario {
             !state.codeMapReady -> 1
             !state.umlDraftReady -> 2
             !state.reviewedDiffReady -> 3
-            !state.appliedReady -> 4
-            !state.refreshedCodeMapReady -> 5
+            !state.reviewApprovedReady -> 4
+            !state.appliedReady -> 5
+            !state.refreshedCodeMapReady -> 6
             else -> 0
         }
         val expectedResult = when {
@@ -363,9 +365,9 @@ internal object GuidedInviteScenario {
                 "${stepMarker(2, currentStep, false)} Try This Change -> use the button to load the fresh prompt into chat first."
             },
             "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed code patch for $PATCH_PATH.",
-            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Blueprint reviews the code patch before apply.",
-            "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
-            "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
+            "${stepMarker(4, currentStep, state.reviewApprovedReady)} Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked.",
+            "${stepMarker(5, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
+            "${stepMarker(6, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
             "",
             "Your own change:",
             "[next] Edit the UML directly or ask chat for a different architecture change when you are not following the demo prompt.",
@@ -3603,6 +3605,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             registry.getReview(node.id) != null &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
         }
+        val approvedInviteDiff = registry.all().any { node ->
+            reviewAllowsApply(registry.getReview(node.id)) &&
+                registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
+        }
         val appliedInviteDiff = registry.all().any { node ->
             node.executionStatus == ExecutionStatus.APPLIED &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
@@ -3637,6 +3643,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             resetPath = GuidedInviteScenario.PATCH_PATH,
             umlDraftReady = hasExpectedDraft,
             reviewedDiffReady = reviewedInviteDiff,
+            reviewApprovedReady = approvedInviteDiff,
             appliedReady = appliedInviteDiff,
             refreshedCodeMapReady = refreshedReady,
             promptReady = promptReady,
@@ -3678,12 +3685,24 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun buildReviewSummary(exec: ExecutionArtifact?, freshness: ReviewFreshnessState): String {
         val summary = PatchChangeSummary.reviewSummary(exec)
+        val scopeSentence = reviewScopeSentence(exec)
         return buildString {
             appendLine("Diff status: ${freshness.badge}")
             appendLine(freshness.warning)
             appendLine()
+            appendLine(scopeSentence)
+            appendLine()
             append(summary)
         }.trim()
+    }
+
+    private fun reviewScopeSentence(exec: ExecutionArtifact?): String {
+        val paths = exec?.patches.orEmpty().map { it.path }.distinct()
+        return when (paths.size) {
+            0 -> "No files will change in this reviewed code patch."
+            1 -> "Only 1 file will change: ${paths.first()}"
+            else -> "${paths.size} files will change: ${paths.joinToString(", ")}"
+        }
     }
 
     private fun refreshReviewFreshnessState() {
