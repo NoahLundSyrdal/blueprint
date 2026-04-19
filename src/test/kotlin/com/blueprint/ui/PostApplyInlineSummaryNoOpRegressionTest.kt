@@ -15,6 +15,8 @@ class PostApplyInlineSummaryNoOpRegressionTest {
         assertTrue(source.contains("val validationAndPathsLine = buildString {"))
         assertTrue(source.contains("appendLine(result.summaryLine())"))
         assertTrue(source.contains("append(writtenPathsText)"))
-        assertTrue(source.contains("appendLine(validationAndPathsLine)"))
+        assertTrue(source.contains("appendLine(resultDetailsSection())"))
+        assertTrue(source.contains("private fun resultDetailsSection(): String ="))
+        assertTrue(source.contains("validationAndPathsLine.removePrefix(receiptSummary).trimStart('\\n')"))
     }
 }

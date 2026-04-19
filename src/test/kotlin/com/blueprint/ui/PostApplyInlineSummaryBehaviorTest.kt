@@ -39,6 +39,7 @@ class PostApplyInlineSummaryBehaviorTest {
         assertTrue(reviewPanelText.contains("Plain-English summary after apply:"))
         assertTrue(reviewPanelText.contains("Refresh UML From Code verification:"))
         assertFalse(reviewPanelText.lines().first().contains("Next: Refresh UML From Code"))
+        assertTrue(reviewPanelText.split("Apply receipt:").size == 2)
     }
 
     @Test

@@ -655,12 +655,15 @@ internal data class PostApplyInlineSummary(
         buildString {
             appendLine(summaryLine)
             appendLine(receiptSummary)
-            appendLine(validationAndPathsLine)
+            appendLine(resultDetailsSection())
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, changedPaths))
             appendLine(verifyChecklist)
             append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Blueprint already refreshed the code-backed UML automatically after apply.\n- Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.")
         }.trim()
+
+    private fun resultDetailsSection(): String =
+        validationAndPathsLine.removePrefix(receiptSummary).trimStart('\n')
 }
 
 internal data class GenerateDiffGuideSummary(
