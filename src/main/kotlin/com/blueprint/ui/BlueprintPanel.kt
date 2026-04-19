@@ -4448,6 +4448,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app flow."
         }
 
+    private fun manualDemoWhatToLookForChecklist(state: GuidedInviteScenarioState): String =
+        when {
+            state.resetSuggested -> listOf(
+                "- Reset Demo Sandbox restored the invite demo baseline before you verify again.",
+                "- Refresh UML From Code before rerunning the prompt.",
+                "- Click Try This Change again so the next demo prompt is fresh.",
+            )
+            state.expectedEntity == "Invite" && state.prompt.contains("expires_at") -> listOf(
+                "- Invite shows expires_at in the refreshed UML.",
+                "- The changed app path shows the new expires_at behavior.",
+                "- The visible result matches the reviewed code patch you just applied.",
+            )
+            state.expectedRelationSource != null && state.expectedRelationTarget != null -> listOf(
+                "- ${state.expectedRelationSource} shows ${state.expectedEntity} in the refreshed UML.",
+                "- The changed app flow shows the new ${state.expectedEntity} behavior.",
+                "- The visible result matches the reviewed code patch you just applied.",
+            )
+            else -> listOf(
+                "- ${state.expectedEntity} appears in the refreshed UML.",
+                "- The changed app flow shows the new ${state.expectedEntity} behavior.",
+                "- The visible result matches the reviewed code patch you just applied.",
+            )
+        }.joinToString("\n")
+
     private fun runDemoVerificationStep() {
         val state = currentInviteFirstRunScenarioState()
         val runCommand = state.runCommand
@@ -4461,9 +4485,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return
         }
         val expectedVisibleResult = manualDemoExpectedVisibleResult(state)
+        val whatToLookForChecklist = manualDemoWhatToLookForChecklist(state)
         Messages.showInfoMessage(
             project,
-            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in the changed app.\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
+            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in the changed app.\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
             "Blueprint - Run Demo Step"
         )
         logActivity("Demo e2e step passed: Run the changed app with $runCommand. Confirmed visible result: $expectedVisibleResult")
