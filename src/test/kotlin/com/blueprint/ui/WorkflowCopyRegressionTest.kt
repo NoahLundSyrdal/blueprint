@@ -23,10 +23,7 @@ class WorkflowCopyRegressionTest {
     fun `legacy code nodes phrases stay internal and default copy stays product friendly`() {
         val source = Files.readString(sourcePath)
 
-        assertTrue(source.contains("private fun String.containsWorkflowQuestion(): Boolean ="))
-        assertTrue(source.contains("\"generate patch\""))
-        assertTrue(source.contains("\"apply patch\""))
-        assertTrue(source.contains("\"refresh from code\""))
+        assertTrue(source.contains("WorkflowIntentRouting.isWorkflowQuestion(this)"))
         assertFalse(source.contains("reviewed code diff when users may type code nodes"))
         assertFalse(source.contains("Create Code Nodes when ready."))
         assertFalse(source.contains("click Create Code Nodes"))

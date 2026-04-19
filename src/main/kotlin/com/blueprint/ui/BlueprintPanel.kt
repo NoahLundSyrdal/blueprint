@@ -2111,21 +2111,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "explain" !in lower
     }
 
-    private fun String.containsWorkflowQuestion(): Boolean =
-        listOf(
-            "run",
-            "next",
-            "why",
-            "blocked",
-            "diff",
-            "changed",
-            "generate code",
-            "generate patch",
-            "create patch",
-            "apply patch",
-            "refresh from code",
-            "apply",
-        ).any { it in this }
+    private fun String.containsWorkflowQuestion(): Boolean = WorkflowIntentRouting.isWorkflowQuestion(this)
 
     private fun refineUmlWithChat(message: String) {
         status("Refining UML with ${providerText()}...")
