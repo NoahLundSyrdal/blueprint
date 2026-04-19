@@ -14,6 +14,9 @@ class GenerateDiffGuideSummaryRegressionTest {
 
         assertTrue(source.contains("private fun generateDiffGuideSummary("))
         assertTrue(source.contains("val lines = mutableListOf(\"Change the UML with chat or direct edits, then Generate Code Diff.\")"))
+        assertTrue(source.contains("lines += generateDiffValidationHint(validationCommand)"))
+        assertTrue(source.contains("Generate Code Diff will prepare a patch that Blueprint validates after apply with: \$it"))
+        assertTrue(source.contains("Generate Code Diff can still prepare a reviewed code patch, but Blueprint did not infer a validation command yet, so verify manually if you need extra checks."))
         assertTrue(source.contains("Generate Code Diff will create a reviewed code patch for your current UML edits."))
         assertTrue(source.contains("lines += validationCommandReviewText(validationCommand)"))
         assertTrue(source.contains("lines += runCommandReviewText(context)"))

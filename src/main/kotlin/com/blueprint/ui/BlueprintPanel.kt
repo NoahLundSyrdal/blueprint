@@ -4173,6 +4173,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         validationCommand: String? = project.service<ProjectValidationService>().selectedCommand(),
     ): GenerateDiffGuideSummary {
         val lines = mutableListOf("Change the UML with chat or direct edits, then Generate Code Diff.")
+        lines += generateDiffValidationHint(validationCommand)
         if (umlHasPendingEdits) {
             lines += "Generate Code Diff will create a reviewed code patch for your current UML edits."
         }
@@ -4187,6 +4188,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         return GenerateDiffGuideSummary(guideText, nextStepDetail, commandSummary)
     }
+
+    private fun generateDiffValidationHint(command: String?): String =
+        command?.takeIf { it.isNotBlank() }
+            ?.let { "Generate Code Diff will prepare a patch that Blueprint validates after apply with: $it" }
+            ?: "Generate Code Diff can still prepare a reviewed code patch, but Blueprint did not infer a validation command yet, so verify manually if you need extra checks."
 
     private fun validationCommandReviewText(command: String?): String =
         command?.takeIf { it.isNotBlank() }
