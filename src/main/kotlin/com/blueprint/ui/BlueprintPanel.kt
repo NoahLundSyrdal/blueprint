@@ -754,6 +754,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val statusLabel = JLabel("No node selected")
     private val selectedLabel = JLabel("Selected: none")
     private val artifactLabel = JLabel("Artifacts: not planned")
+    private val groundingSummaryArea = JBTextArea(4, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+    }
     private val reviewSummaryArea = JBTextArea(3, 40).apply {
         isEditable = false
         lineWrap = true
@@ -1191,7 +1197,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(artifactLabel)
             }
             add(labels, BorderLayout.NORTH)
-            add(JBScrollPane(reviewSummaryArea), BorderLayout.CENTER)
+            val center = JPanel(GridLayout(2, 1, 0, 6)).apply {
+                add(JBScrollPane(groundingSummaryArea))
+                add(JBScrollPane(reviewSummaryArea))
+            }
+            add(center, BorderLayout.CENTER)
             val lower = JPanel(GridLayout(1, 3, 6, 0)).apply {
                 add(JBScrollPane(safetyArea))
                 add(JBScrollPane(dependencyBlockArea))
@@ -1706,10 +1716,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
                 setUmlEditorText(nextUml, pendingEdits = true)
                 umlStatusLabel.text = "UML: refined by chat. Generate Code Diff when ready, or keep editing."
+                groundingSummaryArea.text = grounding.summaryText
                 appendChat(
                     "Blueprint",
-                    "Updated the UML using ${grounding.selectedLabel}, so the edit stays tied to the selected source facts, fields, methods, and relationships. Review it in the main canvas, then keep refining or click Generate Code Diff."
+                    if (grounding.selectedId == null) {
+                        "Updated the UML using whole-diagram context. Select a UML card if you want the next edit grounded to one entity's source file, fields, and relationships."
+                    } else {
+                        "Updated the UML using ${grounding.selectedLabel}. Blueprint grounded this edit to the selected source file, fields, methods, and relationships before rewriting the UML."
+                    }
                 )
+                logActivity("Chat refined the UML using ${grounding.activityLabel}.")
                 updateGuide()
                 status("UML refined")
             }
@@ -1787,6 +1803,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             selectedCanvasId = selectedCanvasId,
             viewingUmlDraft = umlHasPendingEdits,
         )
+    }
+
+    private fun refreshGroundingSummary() {
+        groundingSummaryArea.text = chatGrounding().summaryText
     }
 
     private fun extractMermaid(text: String): String {
@@ -3355,6 +3375,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         reviewSummaryArea.text = buildReviewSummary(exec, review, reviewFreshness)
+        refreshGroundingSummary()
 
         val issues = buildList {
             if (plan != null) addAll(JsonExtractor.planIssues(plan))
