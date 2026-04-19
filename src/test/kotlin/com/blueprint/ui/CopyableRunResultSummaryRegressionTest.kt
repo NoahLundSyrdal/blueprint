@@ -20,10 +20,13 @@ class CopyableRunResultSummaryRegressionTest {
         assertTrue(source.contains("append(copyableSummary)"))
         assertTrue(source.contains("copyRunSummaryButton.isEnabled = true"))
         assertTrue(source.contains("appendLine(\"Copyable issue comment\")"))
-        assertTrue(source.contains("appendLine(\"- Run verified with: \$runCommand\")"))
-        assertTrue(source.contains("appendLine(\"- Visible result: \$visibleResult\")"))
+        assertTrue(source.contains("appendLine(\"- Current verification state:\")"))
+        assertTrue(source.contains("appendLine(\"  - Code-backed UML was refreshed from code after apply and the run result was verified.\")"))
+        assertTrue(source.contains("appendLine(\"  - Run verified with: \$runCommand\")"))
+        assertTrue(source.contains("appendLine(\"  - Visible result: \$visibleResult\")"))
+        assertTrue(source.contains("appendLine(\"  - Changed paths: \${if (changedPaths.isEmpty()) \"none\" else changedPaths.joinToString(\", \")}\")"))
+        assertTrue(source.contains("appendLine(\"- Next verification action: Refresh UML From Code to verify again, or rerun \$runCommand after the next approved change.\")"))
         assertTrue(source.contains("appendLine(\"- Rerun ready: reuse \$runCommand after the next approved change when you want to confirm the next iteration quickly.\")"))
-        assertTrue(source.contains("appendLine(\"- Changed paths: \${if (changedPaths.isEmpty()) \"none\" else changedPaths.joinToString(\", \")}\")"))
         assertTrue(source.contains("append(validationSummary.removePrefix(\"Result summary\\n\"))"))
     }
 }

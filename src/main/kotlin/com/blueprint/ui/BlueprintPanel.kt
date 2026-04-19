@@ -5039,35 +5039,51 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
         val runConfidence = verifiedRunCommandReason(runCommand, pythonContext.runEntryCandidates)
         val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val changedPathsLine = if (changedPaths.isEmpty()) {
+            "- Changed paths: none recorded for this run."
+        } else {
+            "- Changed paths: ${changedPaths.joinToString(", ")}"
+        }
         val inspectAction = when (changedPaths.size) {
             0 -> "Inspect the current code in the IDE if you want to confirm the final state file by file."
             1 -> "Verify in code: Use Open Changed File to inspect ${changedPaths.first()} in the IDE. This does not apply or refresh anything."
             else -> "Verify in code: Use Open Changed Files to inspect the ${changedPaths.size} changed paths in the IDE. This does not apply or refresh anything."
         }
         val rerunAction = "Rerun ready: use Run In Blueprint to rerun $runCommand after your next approved change, or rerun the same command in your app, browser, or terminal when you want to confirm the next iteration quickly."
+        val verificationActions = listOf(
+            "Verify now:",
+            changedPathsLine,
+            "- $inspectAction",
+            "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
+            "- Run verified with: $runCommand",
+            "- Visible result: $visibleResult",
+        ).joinToString("\n")
         val nextSteps = listOf(
             "Next steps:",
-            "- $inspectAction",
             "- Copy Issue Comment if you want a reusable issue-comment or demo recap.",
             "- $runConfidence",
             "- $rerunAction",
-            "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
             "- Refine the UML again when you are ready for another reviewed code patch.",
         ).joinToString("\n")
-        val recordedSteps = listOf(
+        val proofReceipt = listOf(
+            "Proof recorded:",
             "- Code-backed UML is loaded for the current Python folder.",
             "- UML changes were refined into a reviewed code patch.",
             "- Approved changes were applied and UML was refreshed from code.",
+            changedPathsLine,
             "- Run verified with: $runCommand",
             "- Visible result: $visibleResult",
         ).joinToString("\n")
         val banner = buildString {
             appendLine("End-to-end success")
-            appendLine(flowSummary)
-            appendLine()
-            appendLine(recordedSteps)
+            appendLine(verificationActions)
             appendLine()
             appendLine(nextSteps)
+            appendLine()
+            appendLine("Summary")
+            appendLine(flowSummary)
+            appendLine()
+            appendLine(proofReceipt)
             appendLine()
             append(copyableSummary)
         }.trim()
@@ -5087,12 +5103,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val runConfidence = verifiedRunCommandReason(runCommand, project.service<PythonProjectAnalyzer>().analyze().runEntryCandidates)
         return buildString {
             appendLine("Copyable issue comment")
+            appendLine("- Current verification state:")
+            appendLine("  - Code-backed UML was refreshed from code after apply and the run result was verified.")
+            appendLine("  - Run verified with: $runCommand")
+            appendLine("  - Visible result: $visibleResult")
+            appendLine("  - Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
+            appendLine("- Next verification action: Refresh UML From Code to verify again, or rerun $runCommand after the next approved change.")
             appendLine("- $flowLabel completed for the current Python folder.")
-            appendLine("- Run verified with: $runCommand")
             appendLine("- $runConfidence")
-            appendLine("- Visible result: $visibleResult")
             appendLine("- Rerun ready: reuse $runCommand after the next approved change when you want to confirm the next iteration quickly.")
-            appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
             append(validationSummary.removePrefix("Result summary\n"))
         }.trim()
     }
