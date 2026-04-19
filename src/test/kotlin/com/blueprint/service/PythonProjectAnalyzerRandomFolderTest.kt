@@ -41,6 +41,22 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertEquals(listOf("python -m pytest"), context.testCommands)
     }
 
+    @Test
+    fun `detects setup cfg src package layouts and skips vendor roots`() {
+        val fixture = Path.of("src/test/resources/random_python_setup_cfg_pkg").toAbsolutePath().normalize()
+        val context = PythonProjectAnalyzer(fakeProject(fixture)).analyze()
+
+        assertEquals(listOf("setup.cfg"), context.configFiles)
+        assertTrue(context.sourceRoots.contains("src"))
+        assertTrue(context.sourceRoots.contains("src/orders"))
+        assertTrue(context.testRoots.contains("tests"))
+        assertEquals("unknown", context.packageManager)
+        assertTrue(context.frameworks.contains("flask"))
+        assertEquals(listOf("python -m pytest"), context.testCommands)
+        assertFalse(context.sourceRoots.any { it.contains("site-packages") })
+        assertFalse(context.sourceRoots.any { it.contains("build") })
+    }
+
     private fun fakeProject(basePath: Path): Project =
         Proxy.newProxyInstance(
             javaClass.classLoader,

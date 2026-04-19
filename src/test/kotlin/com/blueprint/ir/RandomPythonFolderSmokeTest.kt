@@ -42,6 +42,23 @@ class RandomPythonFolderSmokeTest {
         assertTrue(mermaid.contains("class update_inventory {"))
     }
 
+    @Test
+    fun `setup cfg src package random folder refreshes into useful uml`() {
+        val fixture = Path.of("src/test/resources/random_python_setup_cfg_pkg").toAbsolutePath().normalize()
+        val files = pythonFiles(fixture)
+        val parsed = PythonAstParser.parse(fixture, files)
+        assumeTrue("python3 is required for random-folder extraction", parsed.usedAst)
+
+        val symbols = parsed.symbols
+        assertTrue(symbols.any { it.name == "OrderRecord" && it.decorators.contains("dataclass") })
+        assertTrue(symbols.any { it.name == "OrderService" })
+        assertTrue(symbols.any { it.name == "test_reopen_returns_order_record" })
+
+        val mermaid = MermaidProjection.render(fixtureIrFromSymbols("random-setup-cfg-pkg", symbols), "random-setup-cfg-pkg", files.size)
+        assertTrue(mermaid.contains("class OrderRecord {"))
+        assertTrue(mermaid.contains("class OrderService {"))
+    }
+
     private fun pythonFiles(root: Path): List<Path> =
         Files.walk(root).use { stream ->
             stream
