@@ -13,7 +13,8 @@ class ManualRunVerificationCopyRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private fun missingRunCommandGuidance("))
-        assertTrue(source.contains("Run the changed app -> Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists."))
+        assertTrue(source.contains("Run the changed app -> ${'$'}{missingRunCommandChecklist(emptyList())}"))
         assertTrue(source.contains("No run command was inferred. Use this checklist to verify one of the likely entry files manually."))
+        assertTrue(source.contains("Verify manually with this checklist:"))
     }
 }

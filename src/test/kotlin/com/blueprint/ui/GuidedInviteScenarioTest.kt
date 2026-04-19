@@ -78,7 +78,9 @@ class GuidedInviteScenarioTest {
         assertTrue(first.contains("Try This Change -> load a fresh prompt for the current code map."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
         assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
-        assertTrue(first.contains("Run the changed app -> Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."))
+        assertTrue(first.contains("Run the changed app -> Blueprint could not infer a run command yet. Verify manually with this checklist:"))
+        assertTrue(first.contains("- Open the likely entrypoint manually."))
+        assertTrue(first.contains("- Confirm the changed feature exists."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -243,7 +245,9 @@ class GuidedInviteScenarioTest {
         ).checklistText()
         assertTrue(fresh.contains("First-run checklist:"))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
-        assertTrue(fresh.contains("Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."))
+        assertTrue(fresh.contains("Blueprint could not infer a run command yet. Verify manually with this checklist:"))
+        assertTrue(fresh.contains("- Open the likely entrypoint manually."))
+        assertTrue(fresh.contains("- Confirm the changed feature exists."))
         assertTrue(fresh.contains("No validation command was inferred."))
 
         val patchReady = FirstRunChecklistState(
@@ -297,7 +301,9 @@ class GuidedInviteScenarioTest {
             validationPassed = false,
             runVerified = false,
         ).checklistText()
-        assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."))
+        assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet. Verify manually with this checklist:"))
+        assertTrue(noRunCommand.contains("- Open the likely entrypoint manually."))
+        assertTrue(noRunCommand.contains("- Confirm the changed feature exists."))
         assertTrue(noRunCommand.contains("Validation ran after apply. Review the result before you continue."))
     }
 

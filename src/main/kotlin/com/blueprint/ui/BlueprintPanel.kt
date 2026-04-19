@@ -257,6 +257,7 @@ internal data class FirstRunChecklistState(
     val appliedReady: Boolean,
     val refreshedCodeMapReady: Boolean,
     val runCommand: String?,
+    val runEntryCandidates: List<String> = emptyList(),
     val validationCommand: String?,
     val validationReady: Boolean,
     val validationPassed: Boolean,
@@ -296,7 +297,7 @@ internal data class FirstRunChecklistState(
         }
         val runLine = when {
             runCommand.isNullOrBlank() ->
-                "Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+                missingRunCommandChecklist(runEntryCandidates)
             runVerified ->
                 "Run verified with: $runCommand"
             else ->
@@ -334,6 +335,15 @@ internal data class FirstRunChecklistState(
             step == currentStep -> "[next]"
             else -> "[wait]"
         }
+}
+
+private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
+    val candidates = runEntryCandidates.take(4)
+    return if (candidates.isEmpty()) {
+        "Blueprint could not infer a run command yet. Verify manually with this checklist:\n- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
+    } else {
+        "Blueprint could not infer a run command yet. Verify manually with this checklist:\n- Open one of these likely entry files: ${candidates.joinToString(", ")}.\n- Confirm the changed feature exists."
+    }
 }
 
 internal data class GuidedInviteScenarioState(
@@ -447,7 +457,7 @@ internal object GuidedInviteScenario {
 
     fun checklistText(state: GuidedInviteScenarioState): String {
         val runStep = when {
-            state.runCommand.isNullOrBlank() -> "Run the changed app -> Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+            state.runCommand.isNullOrBlank() -> "Run the changed app -> ${missingRunCommandChecklist(emptyList())}"
             state.runVerified -> "Run the changed app -> pass. Verified with: ${state.runCommand}"
             else -> "Run the changed app -> start with: ${state.runCommand}; verify the new feature appears."
         }
@@ -4322,14 +4332,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun missingRunCommandGuidance(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
-    ): String {
-        val candidates = context.runEntryCandidates.take(4)
-        return if (candidates.isEmpty()) {
-            "Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
-        } else {
-            "Blueprint could not infer a run command yet. Open one of these likely entry files manually and verify the changed feature exists: ${candidates.joinToString(", ")}."
-        }
-    }
+    ): String = missingRunCommandChecklist(context.runEntryCandidates)
 
     private fun currentInvitePrompt(): String? =
         currentInvitePromptPlan()?.prompt
@@ -4361,6 +4364,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appliedReady = selected?.executionStatus == ExecutionStatus.APPLIED,
             refreshedCodeMapReady = refreshedAfterApply && !umlHasPendingEdits,
             runCommand = runner.inferredRunCommand().orEmpty().ifBlank { context.runCommands.firstOrNull() },
+            runEntryCandidates = context.runEntryCandidates,
             validationCommand = project.service<ProjectValidationService>().selectedCommand(),
             validationReady = validation != null,
             validationPassed = validation?.status == ProjectValidationService.ValidationResult.Status.PASS,

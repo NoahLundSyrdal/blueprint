@@ -14,6 +14,7 @@ class ReviewCommandGuidanceRegressionTest {
 
         assertTrue(source.contains("private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String ="))
         assertTrue(source.contains("Run after apply is unavailable. "+"${'$'}{missingRunCommandGuidance(context)}"))
-        assertTrue(source.contains("Open one of these likely entry files manually and verify the changed feature exists"))
+        assertTrue(source.contains("Verify manually with this checklist:"))
+        assertTrue(source.contains("- Open one of these likely entry files: "))
     }
 }

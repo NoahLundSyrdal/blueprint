@@ -13,8 +13,10 @@ class RunCommandGuidanceRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private fun missingRunCommandGuidance("))
-        assertTrue(source.contains("Open one of these likely entry files manually and verify the changed feature exists"))
-        assertTrue(source.contains("Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \\\"__main__\\\" entrypoints."))
+        assertTrue(source.contains("private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String"))
+        assertTrue(source.contains("Verify manually with this checklist:"))
+        assertTrue(source.contains("- Open one of these likely entry files: "))
+        assertTrue(source.contains("- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \\\"__main__\\\"."))
         assertTrue(source.contains("Run after apply is unavailable. "+"${'$'}{missingRunCommandGuidance(context)}"))
     }
 }

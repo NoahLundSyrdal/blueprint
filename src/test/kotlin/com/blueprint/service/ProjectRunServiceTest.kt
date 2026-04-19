@@ -26,7 +26,7 @@ class ProjectRunServiceTest {
         val context = context(runCommands = emptyList(), runEntryCandidates = listOf("app.py", "src/server.py"))
 
         assertEquals(
-            "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. Open one of these likely entry files manually: app.py, src/server.py.",
+            "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually with this checklist:\n- Open one of these likely entry files: app.py, src/server.py.\n- Confirm the changed feature exists.",
             ProjectRunServiceInvariants.noCommandSummary(context),
         )
     }
@@ -36,7 +36,7 @@ class ProjectRunServiceTest {
         val context = context(runCommands = emptyList(), runEntryCandidates = emptyList())
 
         assertEquals(
-            "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints.",
+            "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually with this checklist:\n- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\".",
             ProjectRunServiceInvariants.noCommandSummary(context),
         )
     }
@@ -138,11 +138,11 @@ private object ProjectRunServiceInvariants {
     fun noCommandSummary(context: PythonProjectAnalyzer.PythonProjectContext): String {
         val candidates = context.runEntryCandidates.take(4)
         val candidateText = if (candidates.isEmpty()) {
-            "Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+            "- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
         } else {
-            "Open one of these likely entry files manually: ${candidates.joinToString(", ")}."
+            "- Open one of these likely entry files: ${candidates.joinToString(", ")}.\n- Confirm the changed feature exists."
         }
-        return "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. $candidateText"
+        return "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually with this checklist:\n$candidateText"
     }
 
     fun isRunning(process: Process?): Boolean = process?.isAlive == true
