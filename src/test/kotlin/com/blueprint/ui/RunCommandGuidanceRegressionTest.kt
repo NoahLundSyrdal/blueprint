@@ -18,6 +18,8 @@ class RunCommandGuidanceRegressionTest {
         assertTrue(source.contains("When you want to run the app, start with:"))
         assertTrue(source.contains("Run the changed app with:"))
         assertTrue(source.contains("Blueprint could not infer a run command yet."))
-        assertTrue(source.contains("It looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \\\"__main__\\\" entrypoints."))
+        assertTrue(source.contains("Blueprint could not infer a run command, so open the project entrypoint or main screen manually and verify the changed feature exists."))
+        assertTrue(source.contains("Open the project entrypoint or main screen manually and verify the changed feature exists."))
+        assertTrue(source.contains("Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \\\"__main__\\\" entrypoints."))
     }
 }

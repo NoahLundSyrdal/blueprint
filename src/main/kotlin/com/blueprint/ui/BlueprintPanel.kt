@@ -295,7 +295,7 @@ internal data class FirstRunChecklistState(
         }
         val runLine = when {
             runCommand.isNullOrBlank() ->
-                "Open the project entrypoint manually and verify the changed feature exists."
+                "No run command was inferred. Open the project entrypoint or main screen manually and verify the changed feature exists."
             runVerified ->
                 "Run verified with: $runCommand"
             else ->
@@ -434,7 +434,7 @@ internal object GuidedInviteScenario {
 
     fun checklistText(state: GuidedInviteScenarioState): String {
         val runStep = when {
-            state.runCommand.isNullOrBlank() -> "Run the changed app -> no run command was inferred yet, so open the project entrypoint manually to verify the feature."
+            state.runCommand.isNullOrBlank() -> "Run the changed app -> no run command was inferred yet, so open the project entrypoint or main screen manually to verify the feature."
             state.runVerified -> "Run the changed app -> pass. Verified with: ${state.runCommand}"
             else -> "Run the changed app -> start with: ${state.runCommand}; verify the new feature appears."
         }
@@ -4061,7 +4061,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }.orEmpty()
+        context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }
+            ?: "Blueprint could not infer a run command, so open the project entrypoint or main screen manually and verify the changed feature exists."
 
     private fun generateDiffGuideSummary(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
@@ -4102,7 +4103,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here." }
-            ?: "Blueprint could not infer a run command yet. It looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+            ?: "Blueprint could not infer a run command yet. Open the project entrypoint or main screen manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =
         GuidedInviteScenario.matchesProject(project.name, project.basePath)

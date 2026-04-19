@@ -77,7 +77,7 @@ class GuidedInviteScenarioTest {
         assertTrue(first.contains("Try This Change -> available after the current code map loads."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
         assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
-        assertTrue(first.contains("Run the changed app -> no run command was inferred yet, so open the project entrypoint manually to verify the feature."))
+        assertTrue(first.contains("Run the changed app -> no run command was inferred yet, so open the project entrypoint or main screen manually to verify the feature."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -240,7 +240,7 @@ class GuidedInviteScenarioTest {
         ).checklistText()
         assertTrue(fresh.contains("First-run checklist:"))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
-        assertTrue(fresh.contains("Open the project entrypoint manually and verify the changed feature exists."))
+        assertTrue(fresh.contains("No run command was inferred. Open the project entrypoint or main screen manually and verify the changed feature exists."))
         assertTrue(fresh.contains("No validation command was inferred."))
 
         val patchReady = FirstRunChecklistState(
@@ -288,7 +288,7 @@ class GuidedInviteScenarioTest {
             validationPassed = false,
             runVerified = false,
         ).checklistText()
-        assertTrue(noRunCommand.contains("[next] Run the changed app -> Open the project entrypoint manually and verify the changed feature exists."))
+        assertTrue(noRunCommand.contains("[next] Run the changed app -> No run command was inferred. Open the project entrypoint or main screen manually and verify the changed feature exists."))
         assertTrue(noRunCommand.contains("Validation ran after apply. Review the result before you continue."))
     }
 
