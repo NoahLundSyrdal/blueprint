@@ -76,6 +76,7 @@ import javax.swing.JPanel
 import javax.swing.JPasswordField
 import javax.swing.JScrollPane
 import javax.swing.Scrollable
+import javax.swing.JSeparator
 import javax.swing.JSplitPane
 import javax.swing.SwingConstants
 import javax.swing.JTabbedPane
@@ -897,6 +898,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         lineWrap = true
         wrapStyleWord = true
     }
+    private val changedFilesPanel = JPanel().apply {
+        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+        isOpaque = false
+    }
+    private val changedFilesScrollPane = JBScrollPane(changedFilesPanel).apply {
+        border = BorderFactory.createEmptyBorder()
+        viewport.isOpaque = false
+        viewport.background = BlueprintTheme.Panel
+        isOpaque = false
+        preferredSize = Dimension(0, 110)
+        minimumSize = Dimension(0, 80)
+    }
     private val safetyArea = JBTextArea(4, 40).apply {
         isEditable = false
         lineWrap = true
@@ -1353,8 +1366,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             add(center, BorderLayout.CENTER)
             val lower = JPanel(GridLayout(1, 3, 6, 0)).apply {
+                add(changedFilesScrollPane)
                 add(JBScrollPane(safetyArea))
-                add(JBScrollPane(dependencyBlockArea))
                 add(JBScrollPane(graphArea))
             }
             add(lower, BorderLayout.SOUTH)
@@ -3420,30 +3433,73 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return
         }
         val sourceFile = resolveProjectFile(sourcePath)
+        if (!openProjectFile(sourceFile, sourcePath, node.sourceLine)) return
+        selectedCanvasId = node.id
+        status("Opened source: ${node.sourceDescriptionForStatus()}")
+        logActivity("Opened source for ${node.title}: ${node.sourceDescriptionForStatus()}")
+    }
+
+    private fun openProjectFile(sourceFile: File, displayPath: String, lineNumber: Int? = null): Boolean {
         if (!sourceFile.isFile) {
-            status("Could not find source: $sourcePath")
+            status("Could not find source: $displayPath")
             Messages.showWarningDialog(
                 project,
-                "Could not find source file:\n$sourcePath",
+                "Could not find source file:\n$displayPath\n\nOpening a file here does not apply changes. Generate Code Diff and Apply Approved Changes are still separate steps.",
                 "Blueprint - Source Not Found",
             )
-            return
+            return false
         }
         val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(sourceFile)
         if (virtualFile == null) {
             status("Could not open source: ${sourceFile.path}")
             Messages.showWarningDialog(
                 project,
-                "Could not open source file:\n${sourceFile.path}",
+                "Could not open source file:\n${sourceFile.path}\n\nOpening a file here does not apply changes. Generate Code Diff and Apply Approved Changes are still separate steps.",
                 "Blueprint - Source Not Found",
             )
-            return
+            return false
         }
-        val zeroBasedLine = (node.sourceLine ?: 1).coerceAtLeast(1) - 1
+        val zeroBasedLine = (lineNumber ?: 1).coerceAtLeast(1) - 1
         OpenFileDescriptor(project, virtualFile, zeroBasedLine, 0).navigate(true)
-        selectedCanvasId = node.id
-        status("Opened source: ${node.sourceDescriptionForStatus()}")
-        logActivity("Opened source for ${node.title}: ${node.sourceDescriptionForStatus()}")
+        return true
+    }
+
+    private fun openChangedFile(path: String) {
+        val sourceFile = resolveProjectFile(path)
+        if (!openProjectFile(sourceFile, path)) return
+        status("Opened changed file: $path")
+        logActivity("Opened changed file from review: $path")
+    }
+
+    private fun refreshChangedFilesPanel(exec: ExecutionArtifact?) {
+        changedFilesPanel.removeAll()
+        val changedPaths = exec?.patches.orEmpty().map { it.path }.distinct().sorted()
+        if (changedPaths.isEmpty()) {
+            changedFilesPanel.add(JLabel("Changed files appear here after Generate Code Diff.").apply {
+                foreground = BlueprintTheme.Muted
+                font = BlueprintTheme.font(12f)
+            })
+        } else {
+            changedFilesPanel.add(JLabel("Changed files (open to inspect, not apply):").apply {
+                foreground = BlueprintTheme.TextStrong
+                font = BlueprintTheme.font(12f, Font.BOLD)
+            })
+            changedFilesPanel.add(JSeparator().apply { foreground = BlueprintTheme.Border })
+            changedPaths.forEach { path ->
+                changedFilesPanel.add(JButton(path).apply {
+                    alignmentX = Component.LEFT_ALIGNMENT
+                    horizontalAlignment = SwingConstants.LEFT
+                    isFocusPainted = false
+                    foreground = BlueprintTheme.Accent
+                    background = BlueprintTheme.Panel
+                    border = BorderFactory.createEmptyBorder(4, 0, 4, 0)
+                    toolTipText = "Open this changed file in the IDE. This does not apply the reviewed code patch."
+                    addActionListener { openChangedFile(path) }
+                })
+            }
+        }
+        changedFilesPanel.revalidate()
+        changedFilesPanel.repaint()
     }
 
     private fun resolveProjectFile(path: String): File {
@@ -3501,6 +3557,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             selectedLabel.text = "Selected: none"
             artifactLabel.text = "Artifacts: not planned"
             reviewSummaryArea.text = "No node selected."
+            refreshChangedFilesPanel(null)
             safetyArea.text = "Select or seed a node to begin."
             dependencyBlockArea.text = "No dependency status yet."
             graphArea.text = "No graph yet. Seed a sample or create nodes."
@@ -3563,6 +3620,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         reviewSummaryArea.text = buildReviewSummary(exec, review, reviewFreshness)
+        refreshChangedFilesPanel(exec)
         refreshGroundingSummary()
 
         val issues = buildList {
