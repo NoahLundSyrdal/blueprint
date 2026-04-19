@@ -3315,11 +3315,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     )
                     openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
                     openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
+                    val openChangedFilesNote = when (changedPaths.size) {
+                        0 -> ""
+                        1 -> "Next: Open Changed File to inspect what Blueprint wrote before you rerun the app."
+                        else -> "Next: Open Changed Files to inspect what Blueprint wrote before you rerun the app."
+                    }
                     Messages.showInfoMessage(
                         project,
                         listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
                             .filter { it.isNotBlank() }
-                            .joinToString("\n\n"),
+                            .joinToString("\n\n") + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
                         "Blueprint - Apply Complete"
                     )
                     SwingUtilities.invokeLater {
