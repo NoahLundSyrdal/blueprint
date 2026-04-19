@@ -311,20 +311,8 @@ internal data class FirstRunChecklistState(
                 "Freshness: the code-backed UML is refreshed from the current files on disk."
             else -> null
         }
-        val runReadinessLine = when {
-            runCommand.isNullOrBlank() ->
-                "Run readiness: Blueprint has not inferred a project run command yet."
-            runVerified ->
-                "Run readiness: verified with $runCommand."
-            else ->
-                "Run readiness: Blueprint inferred $runCommand for this project."
-        }
-        val runDecisionLine = when {
-            runCommand.isNullOrBlank() ->
-                "Run decision: ${missingRunCommandChecklist(runEntryCandidates)}"
-            else ->
-                "Run decision: ${inferredRunCommandReason(runCommand, runEntryCandidates)}"
-        }
+        val runReadinessLine = runReadinessSummary(runCommand, runEntryCandidates, runVerified)
+        val runDecisionLine = runDecisionSummary(runCommand, runEntryCandidates, runVerified)
         return buildList {
             add("First-run checklist:")
             resetAdviceLine?.let { add(it) }
@@ -372,6 +360,7 @@ private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: Lis
     }
     val alternatives = runCommandAlternatives(runEntryCandidates)
     return buildString {
+        append("Run decision: ")
         append(candidateReason)
         append(" Recommended command: $runCommand.")
         alternatives?.let { append(" $it") }
@@ -382,17 +371,30 @@ private fun verifiedRunCommandReason(runCommand: String, runEntryCandidates: Lis
     val candidates = runEntryCandidates.take(3)
     val confidence = when {
         candidates.isEmpty() ->
-            "Run command confidence: Blueprint verified $runCommand and did not detect competing entry files, so it remains the recommended default."
+            "Run decision: Blueprint verified $runCommand and did not detect competing entry files, so it remains the recommended default."
         candidates.size == 1 ->
-            "Run command confidence: Blueprint verified $runCommand against the strongest entry file signal (${candidates.first()}), so it remains the recommended default."
+            "Run decision: Blueprint verified $runCommand against the strongest entry file signal (${candidates.first()}), so it remains the recommended default."
         else ->
-            "Run command confidence: Blueprint verified $runCommand against the strongest entry-file signals (${candidates.joinToString(", ")}), so it remains the recommended default for now."
+            "Run decision: Blueprint verified $runCommand against the strongest entry-file signals (${candidates.joinToString(", ")}), so it remains the recommended default for now."
     }
     val alternatives = runCommandAlternatives(runEntryCandidates)
     return buildString {
         append(confidence)
         alternatives?.let { append(" $it") }
     }
+}
+
+private fun runReadinessSummary(runCommand: String?, runEntryCandidates: List<String>, runVerified: Boolean = false): String = when {
+    !runCommand.isNullOrBlank() && runVerified -> "Run readiness: verified. Blueprint verified $runCommand for this project."
+    !runCommand.isNullOrBlank() -> "Run readiness: ready. Blueprint inferred $runCommand for this project."
+    runEntryCandidates.isEmpty() -> "Run readiness: no runnable Python entrypoint inferred yet."
+    else -> "Run readiness: likely entry files found, but no single safe default command yet."
+}
+
+private fun runDecisionSummary(runCommand: String?, runEntryCandidates: List<String>, runVerified: Boolean = false): String = when {
+    !runCommand.isNullOrBlank() && runVerified -> verifiedRunCommandReason(runCommand, runEntryCandidates)
+    !runCommand.isNullOrBlank() -> inferredRunCommandReason(runCommand, runEntryCandidates)
+    else -> missingRunCommandChecklist(runEntryCandidates)
 }
 
 private fun runCommandAlternatives(runEntryCandidates: List<String>): String? {
@@ -404,6 +406,13 @@ private fun runCommandAlternatives(runEntryCandidates: List<String>): String? {
         "Other likely entry files: ${alternatives.joinToString(", ")}."
     }
 }
+
+private fun manualVerificationNextStep(runEntryCandidates: List<String>): String =
+    if (runEntryCandidates.isEmpty()) {
+        "Next: Refresh UML From Code, then inspect a likely entry file manually if needed."
+    } else {
+        "Next: Open Likely Entry File, then Refresh UML From Code again if you changed folders."
+    }
 
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
@@ -4718,11 +4727,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         context: PythonProjectAnalyzer.PythonProjectContext,
         runCommand: String?,
     ): String = when {
-        !runCommand.isNullOrBlank() -> "Run readiness: ready. Click Run In Blueprint to launch $runCommand."
-        context.runEntryCandidates.isEmpty() ->
-            "Run readiness: no runnable Python entrypoint inferred yet. Next: Refresh UML From Code, then inspect a likely entry file manually if needed."
-        else ->
-            "Run readiness: Blueprint found likely entry files but no single safe default command yet. Next: Open Likely Entry File or Refresh UML From Code if you changed folders."
+        !runCommand.isNullOrBlank() -> "${runReadinessSummary(runCommand, context.runEntryCandidates)} Click Run In Blueprint to launch $runCommand."
+        else -> "${runReadinessSummary(null, context.runEntryCandidates)} ${manualVerificationNextStep(context.runEntryCandidates)}"
     }
 
     private fun missingRunCommandGuidance(
@@ -5042,10 +5048,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         return buildString {
             appendLine("Copyable issue comment")
+            appendLine("- ${runReadinessSummary(null, context.runEntryCandidates)}")
             appendLine("- $flowLabel is ready for manual verification because Blueprint could not infer a project run command yet.")
             appendLine("- Refresh UML From Code to verify the current code-backed UML before you inspect the app manually.")
             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
             appendLine(likelyEntryLine)
+            appendLine("- ${manualVerificationNextStep(context.runEntryCandidates)}")
             appendLine("- Next action: inspect the changed paths and likely entry files side by side until you confirm the feature exists.")
             append(validationSummary.removePrefix("Result summary\n"))
         }.trim()

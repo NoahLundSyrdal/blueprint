@@ -13,9 +13,9 @@ class RunCommandConfidenceRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private fun verifiedRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String"))
-        assertTrue(source.contains("\"Run command confidence: Blueprint verified \$runCommand and did not detect competing entry files, so it remains the recommended default.\""))
-        assertTrue(source.contains("\"Run command confidence: Blueprint verified \$runCommand against the strongest entry file signal (\${candidates.first()}), so it remains the recommended default.\""))
-        assertTrue(source.contains("\"Run command confidence: Blueprint verified \$runCommand against the strongest entry-file signals (\${candidates.joinToString(\", \")}), so it remains the recommended default for now.\""))
+        assertTrue(source.contains("\"Run decision: Blueprint verified \$runCommand and did not detect competing entry files, so it remains the recommended default.\""))
+        assertTrue(source.contains("\"Run decision: Blueprint verified \$runCommand against the strongest entry file signal (\${candidates.first()}), so it remains the recommended default.\""))
+        assertTrue(source.contains("\"Run decision: Blueprint verified \$runCommand against the strongest entry-file signals (\${candidates.joinToString(\", \")}), so it remains the recommended default for now.\""))
         assertTrue(source.contains("val alternatives = runCommandAlternatives(runEntryCandidates)"))
         assertTrue(source.contains("val runConfidence = verifiedRunCommandReason(runCommand, pythonContext.runEntryCandidates)"))
         assertTrue(source.contains("\"- \$runConfidence\""))

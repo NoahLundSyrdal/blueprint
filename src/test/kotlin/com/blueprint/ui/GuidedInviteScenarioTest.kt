@@ -251,8 +251,8 @@ class GuidedInviteScenarioTest {
             runVerified = false,
         ).checklistText()
         assertTrue(fresh.contains("First-run checklist:"))
-        assertTrue(fresh.contains("Run readiness: Blueprint has not inferred a project run command yet."))
-        assertTrue(fresh.contains("Run decision: Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
+        assertTrue(fresh.contains("Run readiness: no runnable Python entrypoint inferred yet."))
+        assertTrue(fresh.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
         assertTrue(fresh.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:"))
         assertTrue(fresh.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
@@ -278,7 +278,7 @@ class GuidedInviteScenarioTest {
                 PythonProjectAnalyzer.SkippedFile("notes.txt.py", "unsupported or non-importable Python file"),
             ),
         ).checklistText()
-        assertTrue(patchReady.contains("Run readiness: Blueprint inferred python main.py for this project."))
+        assertTrue(patchReady.contains("Run readiness: ready. Blueprint inferred python main.py for this project."))
         assertTrue(patchReady.contains("Run decision: Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as app/main.py, app.py, manage.py. Recommended command: python main.py. Other likely entry files: app.py, manage.py."))
         assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
         assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). The current UML still reflects the Python files Blueprint could read. Inspect skipped paths like generated/schema.py, build/tmp.py, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."))
@@ -298,7 +298,7 @@ class GuidedInviteScenarioTest {
             runVerified = true,
         ).checklistText()
         assertTrue(applied.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
-        assertTrue(applied.contains("Run readiness: verified with python main.py."))
+        assertTrue(applied.contains("Run readiness: verified. Blueprint verified python main.py for this project."))
         assertTrue(applied.contains("[done] Apply Approved Changes -> write the approved code patch to disk."))
         assertTrue(applied.contains("[done] Refresh UML From Code -> verify the code-backed UML after apply."))
         assertTrue(applied.contains("[done] Run the changed app -> Run verified with: python main.py"))
@@ -317,7 +317,7 @@ class GuidedInviteScenarioTest {
             runVerified = false,
         ).checklistText()
         assertTrue(noRunCommand.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
-        assertTrue(noRunCommand.contains("Run readiness: Blueprint has not inferred a project run command yet."))
+        assertTrue(noRunCommand.contains("Run readiness: no runnable Python entrypoint inferred yet."))
         assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Try this fallback:"))
         assertTrue(noRunCommand.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
         assertTrue(noRunCommand.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))

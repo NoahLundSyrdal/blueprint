@@ -14,6 +14,8 @@ class CopyableManualVerificationReceiptRegressionTest {
         assertTrue(source.contains("Copyable issue comment"))
         assertTrue(source.contains("Blueprint could not infer a project run command yet"))
         assertTrue(source.contains("Refresh UML From Code to verify the current code-backed UML before you inspect the app manually."))
+        assertTrue(source.contains("manualVerificationNextStep(context.runEntryCandidates)"))
+        assertTrue(source.contains("runReadinessSummary(null, context.runEntryCandidates)"))
         assertTrue(source.contains("- Changed paths: \${if (changedPaths.isEmpty()) \"none\" else changedPaths.joinToString(\", \")}"))
         assertTrue(source.contains("- Next action: inspect the changed paths and likely entry files side by side until you confirm the feature exists."))
         assertTrue(source.contains("val summary = if (runCommand.isNullOrBlank()) {"))
