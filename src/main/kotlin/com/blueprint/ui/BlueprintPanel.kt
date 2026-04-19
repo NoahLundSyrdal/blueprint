@@ -436,6 +436,41 @@ private fun validationFailureNextStepDetail(reviewFreshnessBadge: String?): Stri
     else -> "Validation failed after apply. Inspect the related file manually first, then Generate Code Diff again if the fix changed the UML or code."
 }
 
+private data class RefreshExplanation(
+    val summary: String,
+    val detail: String,
+)
+
+private fun refreshScopeSummary(context: PythonProjectAnalyzer.PythonProjectContext): String {
+    if (context.skippedFiles.isEmpty()) return "Refresh scope: no Python paths were skipped."
+    val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
+        .entries.sortedByDescending { it.value }
+        .take(2)
+        .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+    val examplePaths = context.skippedFiles.take(2).joinToString(", ") { it.path }
+    return "Refresh scope: ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
+}
+
+private fun refreshExplanation(
+    generated: PythonUmlGenerator.GeneratedUml,
+    context: PythonProjectAnalyzer.PythonProjectContext,
+    highlightMessage: String?,
+    verifyState: String?,
+): RefreshExplanation {
+    val scopeDetail = if (context.skippedFiles.isEmpty()) {
+        "Refresh UML From Code reloaded ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), and ${generated.filesScanned} file(s) from the current Python folder."
+    } else {
+        "Refresh UML From Code reloaded ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), and ${generated.filesScanned} readable file(s) from the current Python folder while skipping ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) "" else "s"}."
+    }
+    val changedEntityDetail = highlightMessage?.takeIf { it.isNotBlank() }
+        ?: verifyState?.takeIf { it.isNotBlank() }
+        ?: "Blueprint refreshed the code-backed UML from the current files on disk."
+    return RefreshExplanation(
+        summary = "$scopeDetail ${context.scopeSummaryLine().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }}",
+        detail = "$changedEntityDetail ${refreshScopeSummary(context)}",
+    )
+}
+
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
     val candidateList = candidates.joinToString(", ")
@@ -2501,8 +2536,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 generated.warnings.forEach { appendLine("- $it") }
             }
         }.trim()
+        val refreshExplanation = refreshExplanation(generated, context, postApplyHighlightMessage, postApplyVerifyState)
         val refreshMessage = buildString {
-            append("I abstracted the current Python code into UML. ${context.scopeSummaryLine().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }}. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+            append("I abstracted the current Python code into UML. ${refreshExplanation.summary} Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+            append("\n\n${refreshExplanation.detail}")
             if (context.skippedFiles.isNotEmpty()) {
                 append("\n\nSome Python paths were skipped during Refresh UML From Code. The current UML still reflects the Python files Blueprint could read. If the UML looks incomplete or you need higher confidence, inspect these skipped paths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff:\n")
                 context.skippedFiles.take(3).forEach { append("- ${it.path}: ${it.reason}\n") }
@@ -5272,6 +5309,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun refreshUmlAfterApplyVerification() {
         verifyInUmlButton.isEnabled = false
         postApplyVerifyState = "Blueprint reran Refresh UML From Code after apply and verified the latest code-backed UML."
+        postApplyHighlightMessage = "Refresh UML From Code will now explain exactly what changed in the refreshed code-backed UML."
         logActivity("Refresh UML From Code reran after apply and verified the changed code-backed UML from disk.")
         status("Verifying updated code-backed UML after apply")
         generateProjectUml()
