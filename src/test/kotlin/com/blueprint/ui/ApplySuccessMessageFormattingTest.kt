@@ -29,7 +29,7 @@ class ApplySuccessMessageFormattingTest {
         assertTrue(source.contains("val refreshNote = \"Refresh UML From Code to verify.\""))
         assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("val umlRefreshLine = \"Code-backed UML was refreshed from disk after apply.\""))
-        assertTrue(source.contains("val highlightLine = \"Blueprint highlighted the best-matching changed entity when it could.\""))
+        assertTrue(source.contains("val highlightLine = postApplyHighlightMessage ?: \"Blueprint refreshed the code-backed UML after apply.\""))
         assertTrue(source.contains("val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)"))
         assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
         assertFalse(source.contains("Applied semantic changes:"))

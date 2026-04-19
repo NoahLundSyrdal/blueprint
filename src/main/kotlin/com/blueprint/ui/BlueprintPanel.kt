@@ -856,6 +856,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val lastReviewedUmlByNodeId = mutableMapOf<String, String>()
     private var refreshedAfterApply = false
     private var postApplyChangedPaths: List<String> = emptyList()
+    private var postApplyHighlightMessage: String? = null
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -2975,7 +2976,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         "Undo Last Apply is not available for this apply result."
                     }
                     val umlRefreshLine = "Code-backed UML was refreshed from disk after apply."
-                    val highlightLine = "Blueprint highlighted the best-matching changed entity when it could."
+                    val highlightLine = postApplyHighlightMessage ?: "Blueprint refreshed the code-backed UML after apply."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     val changedPathsBlock = buildString {
                         appendLine("Changed paths:")
@@ -3031,6 +3032,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun refreshUmlAfterSuccessfulApply() {
         umlHasPendingEdits = false
         refreshedAfterApply = true
+        postApplyHighlightMessage = null
         val generated = project.service<PythonUmlGenerator>().generate()
         loadGeneratedUml(generated)
         showArtifactTab("UML")
@@ -3771,13 +3773,23 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun focusChangedEntityAfterRefresh() {
-        val changedPath = postApplyChangedPaths.firstOrNull() ?: return
+        val changedPaths = postApplyChangedPaths
+        if (changedPaths.isEmpty()) return
         val ir = project.service<IRStore>().load() ?: return
-        val matched = ir.components.firstOrNull { component ->
-            val sourcePath = component.sourceRef?.path
-            sourcePath != null && changedPath.endsWith(sourcePath)
-        } ?: return
+        val match = changedPaths.firstNotNullOfOrNull { changedPath ->
+            ir.components.firstOrNull { component ->
+                val sourcePath = component.sourceRef?.path
+                sourcePath != null && changedPath.endsWith(sourcePath)
+            }?.let { matched -> changedPath to matched }
+        }
         postApplyChangedPaths = emptyList()
+        if (match == null) {
+            postApplyHighlightMessage = "Blueprint refreshed the code-backed UML after apply, but did not find a matching UML entity to highlight from the changed paths."
+            logActivity("Refreshed UML after apply but did not find a changed entity to highlight.")
+            return
+        }
+        val (changedPath, matched) = match
+        postApplyHighlightMessage = "Blueprint highlighted ${matched.name} from $changedPath after refresh."
         selectedCanvasId = matched.id
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
         status("Refreshed UML and highlighted ${matched.name} from $changedPath")
