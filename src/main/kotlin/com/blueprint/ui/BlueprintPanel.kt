@@ -388,10 +388,20 @@ private fun verifiedRunCommandReason(runCommand: String, runEntryCandidates: Lis
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
     val candidateList = candidates.joinToString(", ")
+    val projectShape = when {
+        candidates.any { it.endsWith("app.py") || it.endsWith("main.py") } ->
+            "Project shape hint: this looks most like an app or CLI entry flow, so verify the feature in the running output or UI."
+        candidates.any { it.endsWith("__main__.py") } ->
+            "Project shape hint: this looks most like a package-style app entry, so verify the feature from the package entrypoint output."
+        candidates.isNotEmpty() ->
+            "Project shape hint: Blueprint found Python files but no obvious app launcher, so verify from the strongest likely entry file first."
+        else ->
+            "Project shape hint: Blueprint has not found a likely app launcher yet, so inspect the project root for the main entry path."
+    }
     return if (candidates.isEmpty()) {
-        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:\n- Refresh UML From Code after you pick the Python folder you want to verify.\n- Open a likely entry file or package root manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
+        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:\n- Refresh UML From Code after you pick the Python folder you want to verify.\n- Open a likely entry file or package root manually.\n- Confirm the changed feature exists.\n- $projectShape\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
     } else {
-        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Verify manually with this checklist:\n- Open Likely Entry File to jump into the best candidate.\n- Likely entry files: $candidateList\n- Refresh UML From Code again if you switch to a different Python folder or app root.\n- Confirm the changed feature exists in the running app or CLI output."
+        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Verify manually with this checklist:\n- Open Likely Entry File to jump into the best candidate.\n- Likely entry files: $candidateList\n- Refresh UML From Code again if you switch to a different Python folder or app root.\n- Confirm the changed feature exists in the running app or CLI output.\n- $projectShape"
     }
 }
 
