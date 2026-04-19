@@ -1290,9 +1290,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             %% 1. Click "Refresh UML From Code" to read this Python project.
             %% 2. Edit the UML directly or ask chat to refine it.
             %% 3. Click "Generate Code Diff" when the design is ready.
+            %% 4. Click "Apply Approved Changes" after review says the patch is safe.
+            %% 5. Click "Refresh UML From Code" to verify the updated code-backed UML.
             %%
             %% This loop can run anytime:
-            %% codebase -> UML -> chat refinement -> Generate Code Diff -> Apply Approved Changes -> UML again
+            %% codebase -> UML -> chat refinement -> Generate Code Diff -> Apply Approved Changes -> Refresh UML From Code
         """.trimIndent()
     }
 
