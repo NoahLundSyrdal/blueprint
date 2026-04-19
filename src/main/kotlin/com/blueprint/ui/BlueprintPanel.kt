@@ -5729,8 +5729,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("validation skipped:") -> "Step 4 validation skipped - " + msg.removePrefix("Validation skipped: ")
             lower.startsWith("validation failed:") -> "Step 4 validation failed - " + msg.removePrefix("Validation failed: ")
             lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Step 5 complete - Refreshed UML from code after apply:")
+            lower.startsWith("demo e2e step passed: reset invite demo sandbox at") ->
+                "Step 0 reset complete - " + msg.removePrefix("Demo e2e step passed: ")
+            lower.startsWith("demo e2e step passed: try this change prepared") ->
+                "Step 1 demo prompt ready - " + msg.removePrefix("Demo e2e step passed: ")
             lower.startsWith("demo e2e step passed:") -> "Step 6 complete - " + msg.removePrefix("Demo e2e step passed: ")
             lower.startsWith("demo e2e step failed:") -> "Step 6 blocked - " + msg.removePrefix("Demo e2e step failed: ")
+            lower.startsWith("first-run checklist run blocked:") ->
+                msg.replaceFirst("First-run checklist run blocked:", "Step 6 blocked - Run the changed app could not start:")
+            lower.startsWith("first-run checklist run launched:") ->
+                msg.replaceFirst("First-run checklist run launched:", "Step 6 run started - Checklist command:")
+            lower.startsWith("stopped in-app run for the inferred python command.") ->
+                "Step 6 run stopped - Stopped the in-app run for the inferred Python command."
+            lower.startsWith("in-app run failed:") ->
+                msg.replaceFirst("In-app run failed:", "Step 6 blocked - In-app run failed:")
+            lower.startsWith("in-app run finished:") ->
+                msg.replaceFirst("In-app run finished:", "Step 6 run finished - In-app run finished:")
+            lower.startsWith("in-app run stopped:") ->
+                msg.replaceFirst("In-app run stopped:", "Step 6 run stopped - In-app run stopped:")
+            lower.startsWith("started in-app run for") ->
+                msg.replaceFirst("Started in-app run for", "Step 6 run started - In-app run:")
             lower.startsWith("opened diff preview for") -> msg.replaceFirst("Opened diff preview for", "Opened reviewed diff for")
             lower.startsWith("inspected the only changed file after apply:") -> "Optional inspection - $msg"
             lower.startsWith("inspected one changed file after apply from the chooser:") -> "Optional inspection - $msg"

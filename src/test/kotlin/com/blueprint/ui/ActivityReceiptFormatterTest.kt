@@ -83,6 +83,14 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Demo e2e step failed: Run the changed app could not start because no run command was inferred."),
         )
         assertEquals(
+            "Step 0 reset complete - Reset invite demo sandbox at blueprint_demo/imported_invite/models.py.",
+            receiptTextForTest("Demo e2e step passed: Reset invite demo sandbox at blueprint_demo/imported_invite/models.py."),
+        )
+        assertEquals(
+            "Step 1 demo prompt ready - Try This Change prepared \"add an InviteReminder entity\".",
+            receiptTextForTest("Demo e2e step passed: Try This Change prepared \"add an InviteReminder entity\"."),
+        )
+        assertEquals(
             "Opened source file for Invite: app/models.py:12",
             receiptTextForTest("Opened source for Invite: app/models.py:12"),
         )
@@ -129,6 +137,34 @@ class ActivityReceiptFormatterTest {
         assertEquals(
             "Optional run check - Opened likely entry file for manual verification: app/main.py",
             receiptTextForTest("Opened likely entry file for manual verification: app/main.py"),
+        )
+        assertEquals(
+            "Step 6 blocked - Run the changed app could not start: no inferred project run command was available.",
+            receiptTextForTest("First-run checklist run blocked: no inferred project run command was available."),
+        )
+        assertEquals(
+            "Step 6 run started - Checklist command: python main.py",
+            receiptTextForTest("First-run checklist run launched: python main.py"),
+        )
+        assertEquals(
+            "Step 6 run started - In-app run: python main.py",
+            receiptTextForTest("Started in-app run for python main.py"),
+        )
+        assertEquals(
+            "Step 6 blocked - In-app run failed: exit code 1",
+            receiptTextForTest("In-app run failed: exit code 1"),
+        )
+        assertEquals(
+            "Step 6 run finished - In-app run finished: python main.py",
+            receiptTextForTest("In-app run finished: python main.py"),
+        )
+        assertEquals(
+            "Step 6 run stopped - In-app run stopped: python main.py",
+            receiptTextForTest("In-app run stopped: python main.py"),
+        )
+        assertEquals(
+            "Step 6 run stopped - Stopped the in-app run for the inferred Python command.",
+            receiptTextForTest("Stopped in-app run for the inferred Python command."),
         )
         assertEquals(
             "Optional advanced view - Refreshed dependency wave preview",
