@@ -19,7 +19,7 @@ class PatchChangeSummaryBehaviorTest {
         )
 
         assertEquals(
-            listOf("InvitePolicy + name: str"),
+            listOf("Added class InvitePolicy", "InvitePolicy + name: str"),
             PatchChangeSummary.semanticChangeLines(exec, listOf("app/policy.py")),
         )
     }
@@ -120,6 +120,7 @@ class PatchChangeSummaryBehaviorTest {
         val summary = PatchChangeSummary.reviewSummary(exec)
 
         assertTrue(summary.contains("Invite + accepted_at: datetime | None"))
+        assertTrue(summary.contains("Added class InvitePolicy"))
         assertTrue(summary.contains("InvitePolicy + id: str"))
         assertTrue(summary.contains("Changed files (2):"))
     }

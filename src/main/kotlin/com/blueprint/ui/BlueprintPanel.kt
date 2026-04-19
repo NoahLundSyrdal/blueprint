@@ -628,7 +628,7 @@ internal object PatchChangeSummary {
     private fun patchSemanticChanges(patch: Patch): List<String> {
         val changedLines = meaningfulChangedLines(patch)
         if (changedLines.isEmpty()) return listOf(fallbackPatchSummary(patch))
-        val classes = mutableMapOf<String, MutableList<String>>()
+        val classes = linkedMapOf<String, MutableList<String>>()
         var currentClass: String? = null
         for (line in changedLines) {
             val trimmed = line.trim()
@@ -641,11 +641,19 @@ internal object PatchChangeSummary {
             val owner = currentClass ?: continue
             fieldSummary(trimmed)?.let { classes.getOrPut(owner) { mutableListOf() }.add(it) }
         }
+        val action = patch.action.lowercase()
         val summaries = classes.entries.flatMap { (name, fields) ->
-            if (fields.isEmpty()) listOf("$name updated") else fields.distinct().map { "$name + $it" }
+            summarizeClassChange(name, fields.distinct(), action)
         }
         return if (summaries.isNotEmpty()) summaries else listOf(fallbackPatchSummary(patch))
     }
+    private fun summarizeClassChange(name: String, fields: List<String>, action: String): List<String> =
+        when {
+            action == "create" && fields.isEmpty() -> listOf("Added class $name")
+            action == "create" -> listOf("Added class $name") + fields.map { "$name + $it" }
+            fields.isEmpty() -> listOf("Updated class $name")
+            else -> fields.map { "$name + $it" }
+        }
 
     private fun meaningfulChangedLines(patch: Patch): List<String> {
         val lines = patch.content.replace("\r\n", "\n").replace("\r", "\n").lines()
