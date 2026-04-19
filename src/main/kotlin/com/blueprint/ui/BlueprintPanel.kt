@@ -4343,6 +4343,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val badge: String,
         val warning: String,
         val reviewedAtLine: String,
+        val bannerHint: String,
     )
 
     private fun reviewFreshnessFor(node: BlueprintNode, exec: ExecutionArtifact?): ReviewFreshnessState {
@@ -4353,6 +4354,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 badge = "NONE",
                 warning = "No reviewed code patch yet. Generate Code Diff after you refine the UML.",
                 reviewedAtLine = reviewedAtLine,
+                bannerHint = "No reviewed patch yet.",
             )
         }
         if (node.executionStatus == ExecutionStatus.APPLIED && refreshedAfterApply && !umlHasPendingEdits) {
@@ -4360,6 +4362,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 badge = "FRESH",
                 warning = "This reviewed code patch matches the refreshed code-backed UML. Refresh UML From Code again anytime to verify after more edits.",
                 reviewedAtLine = reviewedAtLine,
+                bannerHint = "Reviewed patch is fresh.",
             )
         }
         if (normalizedUmlText() != lastReviewedUmlByNodeId[node.id].orEmpty()) {
@@ -4367,12 +4370,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 badge = "STALE",
                 warning = "This reviewed code patch is stale because the UML changed after review. Generate Code Diff again before Apply Approved Changes.",
                 reviewedAtLine = reviewedAtLine,
+                bannerHint = "Reviewed patch is stale.",
             )
         }
         return ReviewFreshnessState(
             badge = "FRESH",
             warning = "This reviewed code patch matches the current UML. Apply Approved Changes, or keep editing and then Generate Code Diff again.",
             reviewedAtLine = reviewedAtLine,
+            bannerHint = "Reviewed patch is fresh.",
         )
     }
 
@@ -4485,8 +4490,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun normalizedUmlText(): String = PatchFreshness.normalize(umlEditor.text)
 
     private fun updateNextStepBanner(title: String, detail: String) {
+        val freshnessHint = nextStepFreshnessHint()
         nextStepTitleLabel.text = title
-        nextStepDetailLabel.text = detail
+        nextStepDetailLabel.text = listOf(detail, freshnessHint).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
+    private fun nextStepFreshnessHint(): String {
+        val selected = nodeList.selectedValue ?: return ""
+        val exec = registry.getExecution(selected.id)
+        if (exec?.patches.isNullOrEmpty()) return reviewFreshnessFor(selected, exec).bannerHint
+        val freshness = reviewFreshnessFor(selected, exec)
+        val reviewedAtHint = freshness.reviewedAtLine
+            .takeUnless { it.equals("Reviewed at not available yet.", ignoreCase = true) }
+            ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
+            .orEmpty()
+        return listOf(freshness.bannerHint, reviewedAtHint).filter { it.isNotBlank() }.joinToString(" ")
     }
 
     private fun guidedNextState(): Pair<String, String> {
