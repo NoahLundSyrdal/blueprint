@@ -1022,7 +1022,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         isEditable = false
         lineWrap = true
         wrapStyleWord = false
-        text = "Run output will appear here after Blueprint starts the inferred project command."
+        text = runOutputIdleHint()
     }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
@@ -4091,6 +4091,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         runAppButton.isEnabled = !runCommand.isNullOrBlank()
         runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }
             ?: runner.noCommandSummary()
+        if (runOutputArea.text.isBlank() || runOutputArea.text == "Preparing inferred run command...") {
+            runOutputArea.text = runOutputIdleHint()
+        }
     }
 
     private fun toggleRunInBlueprint() {
@@ -4124,7 +4127,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     logActivity("In-app run stopped: ${state.command}")
                 }
                 ProjectRunService.RunState.Status.RUNNING -> {
-                    runOutputArea.text = if (state.output.isBlank()) state.summary else state.output
+                    runOutputArea.text = if (state.output.isBlank()) state.summary else listOf(
+                        state.output,
+                        "",
+                        "Blueprint is still streaming output. Long-running apps can stay here until you click Stop Run.",
+                    ).joinToString("\n")
                     status("Streaming app output")
                 }
                 ProjectRunService.RunState.Status.STARTING -> {
@@ -4136,6 +4143,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             refreshRunControls()
         }
+    }
+
+    private fun runOutputIdleHint(): String {
+        val runner = project.service<ProjectRunService>()
+        val runCommand = runner.inferredRunCommand()
+        return runCommand?.let {
+            "Run Output\n\nClick Run In Blueprint to start: $it\nBlueprint will stream stdout and stderr here. If the app keeps running, use Stop Run when you are done verifying the feature."
+        } ?: "Run Output\n\n${runner.noCommandSummary()}\nWhen a command is available, Run In Blueprint will stream stdout and stderr here."
     }
 
     private fun currentInvitePrompt(): String? =
