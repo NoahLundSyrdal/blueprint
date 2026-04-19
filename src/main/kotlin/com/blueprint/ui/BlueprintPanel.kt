@@ -3523,11 +3523,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun emptyUmlGuideText(): String {
         val context = project.service<PythonProjectAnalyzer>().analyze()
-        return if (context.isPythonLikely()) {
-            "Start by reading the current project into an editable UML diagram."
-        } else {
-            "Blueprint has not found enough Python project structure yet. Open a Python folder or add .py files, then click Refresh UML From Code again."
+        if (context.isPythonLikely()) {
+            return "Start by reading the current project into an editable UML diagram."
         }
+        val nextStep = context.notes.firstOrNull()
+            ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
+        return "Blueprint has not found enough Python project structure yet. $nextStep"
     }
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =

@@ -16,6 +16,15 @@ class EmptyStateGuidanceRegressionTest {
         assertTrue(source.contains("private fun emptyUmlGuideText(): String"))
         assertTrue(source.contains("if (context.isPythonLikely()) {"))
         assertTrue(source.contains("Start by reading the current project into an editable UML diagram."))
-        assertTrue(source.contains("Blueprint has not found enough Python project structure yet. Open a Python folder or add .py files, then click Refresh UML From Code again."))
+        assertTrue(source.contains("Blueprint has not found enough Python project structure yet."))
+    }
+
+    @Test
+    fun `unsupported python guidance uses analyzer notes for next steps`() {
+        val source = Files.readString(sourcePath)
+
+        assertTrue(source.contains("val nextStep = context.notes.firstOrNull()"))
+        assertTrue(source.contains("?: \"Open a Python folder or add .py files, then click Refresh UML From Code again.\""))
+        assertTrue(source.contains("return \"Blueprint has not found enough Python project structure yet. \$nextStep\""))
     }
 }
