@@ -12,6 +12,7 @@ class WorkflowIntentRoutingTest {
         assertTrue(WorkflowIntentRouting.isWorkflowQuestion("how do I apply patch after review?"))
         assertTrue(WorkflowIntentRouting.isWorkflowQuestion("should I refresh from code now?"))
         assertTrue(WorkflowIntentRouting.isWorkflowQuestion("do I need code nodes first?"))
+        assertTrue(WorkflowIntentRouting.isWorkflowQuestion("should I create code nodes first?"))
     }
 
     @Test

@@ -14,6 +14,7 @@ internal object WorkflowIntentRouting {
         "apply patch",
         "refresh from code",
         "code nodes",
+        "create code nodes",
         "apply",
     )
 
