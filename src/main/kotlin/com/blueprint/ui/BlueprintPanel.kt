@@ -2947,22 +2947,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val refreshNote = "Refresh UML From Code to verify."
                     val umlRefreshLine = "Code-backed UML was refreshed from disk after apply."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
+                    val changedPathsBlock = buildString {
+                        appendLine("Changed paths:")
+                        changedPaths.forEach { appendLine("- $it") }
+                    }.trim()
+                    val validationBlock = buildString {
+                        appendLine("Validation:")
+                        appendLine(validationReportText(result))
+                    }.trim()
                     Messages.showInfoMessage(
                         project,
-                        buildString {
-                            appendLine(summaryLine)
-                            appendLine()
-                            appendLine(whatChanged)
-                            appendLine()
-                            appendLine("Changed paths:")
-                            changedPaths.forEach { appendLine("- $it") }
-                            appendLine()
-                            appendLine(refreshNote)
-                            appendLine("Code-backed UML was refreshed from disk after apply.")
-                            appendLine()
-                            appendLine("Validation:")
-                            appendLine(validationReportText(result))
-                        }.trim(),
+                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, umlRefreshLine, validationBlock)
+                            .joinToString("\n\n"),
                         "Blueprint - Apply Complete"
                     )
                     SwingUtilities.invokeLater {
