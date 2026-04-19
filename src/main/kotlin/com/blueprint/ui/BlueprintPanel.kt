@@ -323,10 +323,12 @@ internal data class FirstRunChecklistState(
         if (skippedFiles.isEmpty()) return null
         val reasonSummary = skippedFiles.groupingBy { it.reason }.eachCount()
             .entries.sortedByDescending { it.value }
+            .take(2)
             .joinToString(", ") { (reason, count) ->
                 if (count == 1) reason else "$count $reason"
             }
-        return "- Scope note: ${skippedFiles.size} Python path${if (skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($reasonSummary). Review skipped paths if the UML looks incomplete."
+        val examplePaths = skippedFiles.take(2).joinToString(", ") { it.path }
+        return "- Scope note: ${skippedFiles.size} Python path${if (skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($reasonSummary). Inspect Skipped paths like $examplePaths if the UML looks incomplete."
     }
 
     private fun markerForStep(step: Int, currentStep: Int, done: Boolean): String =
@@ -2234,7 +2236,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     .entries.sortedByDescending { it.value }
                     .take(3)
                     .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+                appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code.")
                 appendLine("- Top skipped reasons: $topReasons")
+                appendLine("- If the UML looks incomplete, inspect the skipped paths below.")
             }
             if (context.filesAnalyzed.isNotEmpty()) {
                 appendLine("- Included paths:")
@@ -2260,7 +2264,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val refreshMessage = buildString {
             append("I abstracted the current Python code into UML. ${context.scopeSummaryLine().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }}. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
             if (context.skippedFiles.isNotEmpty()) {
-                append("\n\nSkipped paths:\n")
+                append("\n\nSome Python paths were skipped during Refresh UML From Code. If the UML looks incomplete, inspect these skipped paths:\n")
                 context.skippedFiles.take(3).forEach { append("- ${it.path}: ${it.reason}\n") }
             }
             if (generated.warnings.isNotEmpty()) {

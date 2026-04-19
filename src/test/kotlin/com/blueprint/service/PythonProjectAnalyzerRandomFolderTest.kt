@@ -106,6 +106,8 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.skippedFiles.any { it.path == "vendor/third_party.py" })
         assertTrue(context.scopeSummaryLine().contains("3 Python files analyzed, 2 skipped"))
         assertTrue(context.scopeReceipt().contains("Files analyzed: 3"))
+        assertTrue(context.scopeReceipt().contains("Scope note: Some Python paths were skipped during Refresh UML From Code"))
+        assertTrue(context.scopeReceipt().contains("Inspect the skipped paths below if the UML looks incomplete."))
         assertTrue(context.scopeReceipt().contains("generated/client_pb2.py"))
         assertTrue(context.promptContext().contains("skippedFiles:"))
     }

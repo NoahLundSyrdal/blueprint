@@ -43,6 +43,6 @@ class FirstRunChecklistScopeNoteTest {
             ),
         ).checklistText()
 
-        assertTrue(text.contains("- Scope note: 1 Python path was skipped during Refresh UML From Code (unsupported or non-importable Python file). Review skipped paths if the UML looks incomplete."))
+        assertTrue(text.contains("- Scope note: 1 Python path was skipped during Refresh UML From Code (unsupported or non-importable Python file). Inspect Skipped paths like scripts/bootstrap.py if the UML looks incomplete."))
     }
 }

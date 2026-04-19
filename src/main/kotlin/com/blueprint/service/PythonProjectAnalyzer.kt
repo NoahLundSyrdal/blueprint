@@ -81,6 +81,13 @@ class PythonProjectAnalyzer(private val project: Project) {
                 appendLine("Scope summary")
                 appendLine("- Files analyzed: ${filesAnalyzed.size}")
                 appendLine("- Files skipped: ${skippedFiles.size}")
+                if (skippedFiles.isNotEmpty()) {
+                    val topReasons = skippedFiles.groupingBy { it.reason }.eachCount()
+                        .entries.sortedByDescending { it.value }
+                        .take(2)
+                        .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+                    appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code ($topReasons). Inspect the skipped paths below if the UML looks incomplete.")
+                }
                 if (filesAnalyzed.isNotEmpty()) {
                     appendLine("- Included paths:")
                     filesAnalyzed.take(6).forEach { appendLine("  - $it") }
