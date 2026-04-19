@@ -39,13 +39,13 @@ class PatchChangeSummaryBehaviorTest {
         val exec = ExecutionArtifact(
             summary = "Touched module exports.",
             patches = listOf(
-                Patch(path = "app/__init__.py", action = PatchAction.update.name, content = "from .models import Invite\n__all__ = ['Invite']"),
+                Patch(path = "app/__init__.py", action = PatchAction.update.name, content = "from .models import Invite\n__all__: list[str] = ['Invite']"),
             ),
         )
 
         val summary = PatchChangeSummary.reviewSummary(exec)
 
-        assertTrue(summary.contains("__init__.py updated"))
+        assertTrue(summary.contains("__init__.py + __all__: list[str]"))
     }
 
     @Test
@@ -53,13 +53,13 @@ class PatchChangeSummaryBehaviorTest {
         val exec = ExecutionArtifact(
             summary = "Updated package exports.",
             patches = listOf(
-                Patch(path = "app/__init__.py", action = PatchAction.update.name, content = "from .models import Invite\n__all__ = ['Invite']"),
+                Patch(path = "app/__init__.py", action = PatchAction.update.name, content = "from .models import Invite\n__all__: list[str] = ['Invite']"),
             ),
         )
 
         val summary = PatchChangeSummary.applySummary(exec, listOf("app/__init__.py"))
 
-        assertTrue(summary.contains("__init__.py updated"))
+        assertTrue(summary.contains("__init__.py + __all__: list[str]"))
     }
 
     @Test

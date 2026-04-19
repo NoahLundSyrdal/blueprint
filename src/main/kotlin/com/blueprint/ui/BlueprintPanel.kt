@@ -757,22 +757,30 @@ internal object PatchChangeSummary {
     private fun patchSemanticChanges(patch: Patch): List<String> {
         val changedLines = meaningfulChangedLines(patch)
         if (changedLines.isEmpty()) return listOf(fallbackPatchSummary(patch))
-        val classes = linkedMapOf<String, MutableList<String>>()
+        val classChanges = linkedMapOf<String, MutableList<String>>()
+        val moduleChanges = mutableListOf<String>()
         var currentClass: String? = null
         for (line in changedLines) {
             val trimmed = line.trim()
             val className = Regex("^class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(trimmed)?.groupValues?.get(1)
             if (className != null) {
                 currentClass = className
-                classes.getOrPut(className) { mutableListOf() }
+                classChanges.getOrPut(className) { mutableListOf() }
                 continue
             }
-            val owner = currentClass ?: continue
-            fieldSummary(trimmed)?.let { classes.getOrPut(owner) { mutableListOf() }.add(it) }
+            fieldSummary(trimmed)?.let { field ->
+                val owner = currentClass
+                if (owner == null) {
+                    moduleChanges += field
+                } else {
+                    classChanges.getOrPut(owner) { mutableListOf() }.add(field)
+                }
+            }
         }
         val action = patch.action.lowercase()
-        val summaries = classes.entries.flatMap { (name, fields) ->
-            summarizeClassChange(name, fields.distinct(), action)
+        val summaries = buildList {
+            addAll(classChanges.entries.flatMap { (name, fields) -> summarizeClassChange(name, fields.distinct(), action) })
+            moduleChanges.distinct().forEach { add(summarizeModuleChange(patch, it)) }
         }
         return if (summaries.isNotEmpty()) summaries else listOf(fallbackPatchSummary(patch))
     }
@@ -807,6 +815,11 @@ internal object PatchChangeSummary {
         val name = fieldMatch.groupValues[1]
         if (name == "return") return null
         return "$name: ${fieldMatch.groupValues[2].trim()}"
+    }
+
+    private fun summarizeModuleChange(patch: Patch, field: String): String {
+        val target = patch.path.substringAfterLast('/').ifBlank { patch.path }
+        return "$target + $field"
     }
 
     private fun fallbackPatchSummary(patch: Patch): String {
