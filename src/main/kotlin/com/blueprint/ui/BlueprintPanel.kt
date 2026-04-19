@@ -3935,17 +3935,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val selected = nodeList.selectedValue ?: graph.readyNodes().firstOrNull() ?: allNodes.first()
         val shortTitle = selected.title.ifBlank { selected.id.take(8) }
+        val review = registry.getReview(selected.id)
+        val reviewApproved = reviewAllowsApply(review)
         return when {
-            registry.getPlan(selected.id) == null ->
-                "Next: Generate Plan" to "Plan the selected node: $shortTitle."
             registry.getExecution(selected.id) == null ->
-                "Next: Execute Node" to "Generate scoped patches for: $shortTitle."
-            registry.getReview(selected.id) == null ->
-                "Next: Review Changes" to "Check generated patches before applying."
+                "Next: Generate Code Diff" to "Create a reviewed code patch for: $shortTitle."
+            !reviewApproved ->
+                "Next: Review approved" to "Wait for review approval, then Apply Approved Changes for: $shortTitle."
             selected.executionStatus != ExecutionStatus.APPLIED ->
-                "Next: Apply Approved Changes" to "Apply reviewed changes for: $shortTitle."
+                "Next: Apply Approved Changes" to "Apply the approved reviewed code patch for: $shortTitle."
             graph.readyNodes().any { it.id != selected.id } ->
-                "Next: Select Ready Node" to "Move to the next dependency-ready node."
+                "Next: Generate Code Diff" to "Another UML-backed change is ready when you want a new reviewed code patch."
             else ->
                 "Next: Refresh UML From Code" to "All current work is applied. Re-abstract the updated codebase."
         }
