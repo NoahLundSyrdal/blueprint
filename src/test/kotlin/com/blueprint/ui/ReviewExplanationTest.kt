@@ -80,6 +80,42 @@ class ReviewExplanationTest {
         assertTrue(text.contains("- Validation status: will run after apply"))
     }
 
+
+    @Test
+    fun `approval summary covers skipped validation and fallback safety text`() {
+        val text = ReviewExplanation.summary(
+            nodeTitle = "Invite update",
+            exec = ExecutionArtifact(
+                patches = listOf(
+                    Patch(
+                        path = "app/models.py",
+                        action = "update",
+                        content = """
+                            class Invite:
+                                accepted_at: datetime
+                        """.trimIndent(),
+                    ),
+                ),
+                summary = "Add accepted_at to Invite.",
+            ),
+            review = ReviewArtifact(
+                reviewStatus = "APPROVE",
+                summary = "Patch is scoped and safe.",
+                scopeCompliance = ScopeCompliance(result = "PASS"),
+                positiveSignals = emptyList(),
+                recommendedNextAction = "apply",
+            ),
+            readiness = DependencyGraphService.NodeReadiness(nodeId = "invite-update", ready = true, reasons = emptyList(), wave = 1),
+            validation = ProjectValidationService.ValidationResult(
+                status = ProjectValidationService.ValidationResult.Status.SKIPPED,
+                reason = "No command inferred.",
+            ),
+        )
+
+        assertTrue(text.contains("- Safety: No concrete safety issues were reported."))
+        assertTrue(text.contains("- Validation status: skipped after apply."))
+    }
+
     @Test
     fun `rejection status line summarizes blocker and fix`() {
         val text = ReviewExplanation.statusLine(
