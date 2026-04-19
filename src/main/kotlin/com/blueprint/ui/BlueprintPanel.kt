@@ -411,7 +411,14 @@ private fun manualVerificationNextStep(runEntryCandidates: List<String>): String
     if (runEntryCandidates.isEmpty()) {
         "Next: Refresh UML From Code, then inspect a likely entry file manually if needed."
     } else {
-        "Next: Open Likely Entry File, then Refresh UML From Code again if you changed folders."
+        "Next: Open Likely Entry File, run the best candidate manually, confirm the feature, then Refresh UML From Code if you changed folders."
+    }
+
+private fun manualVerificationTooltip(hasLikelyEntryFiles: Boolean): String =
+    if (hasLikelyEntryFiles) {
+        "No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, run it manually, confirm the feature, then Refresh UML From Code if you changed folders."
+    } else {
+        "No run command was inferred yet. Refresh UML From Code, inspect a likely entry file manually, run it, and confirm the feature."
     }
 
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
@@ -4606,14 +4613,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runChecklistActionButton.text = if (genericState.runVerified) "Run The Changed App Again" else "Run The Changed App"
             runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()
             runChecklistActionButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, then run it from the IDE or terminal if needed."
+                genericState.runCommand.isNullOrBlank() -> manualVerificationTooltip(genericState.runEntryCandidates.isNotEmpty())
                 genericState.runVerified -> "Run the inferred command again from the first-run checklist: ${genericState.runCommand}"
                 else -> "Run the inferred command from the first-run checklist: ${genericState.runCommand}"
             }
             runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
             runDemoButton.isEnabled = genericState.codeMapReady
             runDemoButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use Open Likely Entry File to inspect the best candidate, then try the other likely entry files from the checklist if needed."
+                genericState.runCommand.isNullOrBlank() -> manualVerificationTooltip(genericState.runEntryCandidates.isNotEmpty())
                 genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
                 else -> "Record how you verified the changed app with: ${genericState.runCommand}"
             }
@@ -4653,7 +4660,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         runChecklistActionButton.text = "Run The Changed App"
         runChecklistActionButton.isEnabled = !runCommand.isNullOrBlank()
         runChecklistActionButton.toolTipText = runCommand?.let { "Run the inferred project command from the first-run checklist: $it" }
-            ?: "No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, then run it from the IDE or terminal if needed."
+            ?: manualVerificationTooltip(context.runEntryCandidates.isNotEmpty())
         runAppButton.text = "Run In Blueprint"
         runAppButton.isEnabled = !runCommand.isNullOrBlank()
         runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }
@@ -4747,7 +4754,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val firstCandidate = context.runEntryCandidates.firstOrNull()
         body.text = buildString {
             appendLine("Blueprint could not run this app automatically yet.")
-            appendLine("What Blueprint can do now: Refresh UML From Code to re-check the current Python folder and Open Likely Entry File to inspect the strongest launcher candidate.")
+            appendLine("Manual verification path: inspect the likely entry file, run it manually, confirm the feature, then Refresh UML From Code if you changed folders.")
+            appendLine("What Blueprint can do now: Refresh UML From Code re-checks the current Python folder, and Open Likely Entry File opens the strongest launcher candidate in the IDE.")
             append(missingRunCommandChecklist(context.runEntryCandidates))
             if (firstCandidate != null) {
                 append("\n\nLikely entry file action: Open Likely Entry File (${firstCandidate.substringAfterLast('/')}) opens $firstCandidate in the IDE without running or applying anything.")
@@ -5054,7 +5062,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
             appendLine(likelyEntryLine)
             appendLine("- ${manualVerificationNextStep(context.runEntryCandidates)}")
-            appendLine("- Next action: inspect the changed paths and likely entry files side by side until you confirm the feature exists.")
+            appendLine("- Next action: inspect the likely entry file, run it manually, confirm the feature exists, then compare that result with the changed paths above.")
             append(validationSummary.removePrefix("Result summary\n"))
         }.trim()
     }

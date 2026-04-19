@@ -17,7 +17,7 @@ class CopyableManualVerificationReceiptRegressionTest {
         assertTrue(source.contains("manualVerificationNextStep(context.runEntryCandidates)"))
         assertTrue(source.contains("runReadinessSummary(null, context.runEntryCandidates)"))
         assertTrue(source.contains("- Changed paths: \${if (changedPaths.isEmpty()) \"none\" else changedPaths.joinToString(\", \")}"))
-        assertTrue(source.contains("- Next action: inspect the changed paths and likely entry files side by side until you confirm the feature exists."))
+        assertTrue(source.contains("- Next action: inspect the likely entry file, run it manually, confirm the feature exists, then compare that result with the changed paths above."))
         assertTrue(source.contains("val summary = if (runCommand.isNullOrBlank()) {"))
         assertTrue(source.contains("manualVerificationReceipt(context, false)"))
         assertTrue(source.contains("status(if (runCommand.isNullOrBlank()) \"Copied issue comment for manual verification\" else \"Copied issue comment\")"))

@@ -22,7 +22,7 @@ class FirstRunChecklistRunActionRegressionTest {
         assertTrue(source.contains("runChecklistActionButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()"))
         assertTrue(source.contains("runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()"))
         assertTrue(source.contains("Refresh UML From Code first so Blueprint can infer a run command for the current project."))
-        assertTrue(source.contains("No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, then run it from the IDE or terminal if needed."))
+        assertTrue(source.contains("No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, run it manually, confirm the feature, then Refresh UML From Code if you changed folders."))
     }
 
     @Test

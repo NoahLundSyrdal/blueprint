@@ -28,7 +28,7 @@ class NoRunCommandFallbackRegressionTest {
 
     @Test
     fun `no-run-command tooltips point to likely-entry fallback instead of dead-end messaging`() {
-        assertTrue(source.contains("No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, then run it from the IDE or terminal if needed."))
-        assertTrue(source.contains("No run command was inferred. Use Open Likely Entry File to inspect the best candidate, then try the other likely entry files from the checklist if needed."))
+        assertTrue(source.contains("No run command was inferred yet. Use Open Likely Entry File to inspect the best candidate, run it manually, confirm the feature, then Refresh UML From Code if you changed folders."))
+        assertTrue(source.contains("No run command was inferred yet. Refresh UML From Code, inspect a likely entry file manually, run it, and confirm the feature."))
     }
 }
