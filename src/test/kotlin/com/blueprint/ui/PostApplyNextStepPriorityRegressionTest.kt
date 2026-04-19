@@ -24,7 +24,7 @@ class PostApplyNextStepPriorityRegressionTest {
 
     @Test
     fun `all applied next step banner uses product language instead of re abstract`() {
-        assertTrue(source.contains("\"Next: Refresh UML From Code\" to \"All current work is applied. Blueprint already refreshed the code-backed UML automatically after apply. Refresh UML From Code to run a separate verification refresh, then run the changed app or make another change.\""))
+        assertTrue(source.contains("\"Next: Refresh UML From Code\" to \"All current work is applied. Blueprint already refreshed the code-backed UML automatically after apply. Refresh UML From Code to verify the updated code-backed UML again, then run the changed app or make another change.\""))
         assertFalse(source.contains("All current work is applied. Re-abstract the updated codebase."))
     }
 }

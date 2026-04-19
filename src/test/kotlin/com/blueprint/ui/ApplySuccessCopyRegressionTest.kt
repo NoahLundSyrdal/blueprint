@@ -47,7 +47,7 @@ class ApplySuccessCopyRegressionTest {
         assertTrue(source.contains("\"Next: Refresh UML From Code to verify the updated code-backed UML.\""))
         assertTrue(source.contains("summaryLine,"))
         assertTrue(source.contains("verifyStateLine,"))
-        assertTrue(source.contains("\"Refresh UML From Code runs a separate verification refresh when you want to confirm it yourself.\""))
+        assertTrue(source.contains("\"Refresh UML From Code verifies the updated code-backed UML again whenever you want to confirm it yourself.\""))
         assertTrue(source.contains("\"Use Undo Last Apply to roll back this reviewed code patch.\""))
         assertTrue(source.contains("appendChat("))
         assertTrue(source.contains("listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine)"))
