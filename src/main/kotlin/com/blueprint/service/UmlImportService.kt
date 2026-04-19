@@ -229,7 +229,7 @@ class UmlImportService(private val project: Project) {
         val entities = mutableListOf<ParsedEntity>()
         var currentName: String? = null
         var fields = mutableListOf<String>()
-        val start = Regex("""^(?:class|entity|interface)?\s*([A-Z][A-Za-z0-9_]*)\s*\{\s*$""")
+        val start = Regex("""^(?:class|entity|interface)?\s*([A-Z][A-Za-z0-9_]*)(?:\s+(?:<<[^>]+>>|&lt;&lt;[^&]+&gt;&gt;))*\s*\{\s*$""")
 
         fun closeCurrent() {
             val name = currentName ?: return
@@ -307,8 +307,8 @@ class UmlImportService(private val project: Project) {
         return relationships
     }
 
-    private fun cleanField(raw: String): String =
-        raw.trim()
+    private fun cleanField(raw: String): String {
+        val cleaned = raw.trim()
             .removePrefix("-")
             .removePrefix("+")
             .removePrefix("#")
@@ -316,6 +316,9 @@ class UmlImportService(private val project: Project) {
             .substringBefore("//")
             .substringBefore("'")
             .trim()
+        if (cleaned.matches(Regex("""(?:<<[^>]+>>|&lt;&lt;[^&]+&gt;&gt;)"""))) return ""
+        return cleaned
+    }
 
     private fun String.isIgnoredLine(): Boolean {
         if (isBlank()) return false
