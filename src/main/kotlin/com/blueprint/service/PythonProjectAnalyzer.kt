@@ -18,6 +18,11 @@ import java.util.Locale
 @Service(Service.Level.PROJECT)
 class PythonProjectAnalyzer(private val project: Project) {
 
+    data class SkippedFile(
+        val path: String,
+        val reason: String,
+    )
+
     data class PythonProjectContext(
         val basePath: String,
         val configFiles: List<String>,
@@ -28,6 +33,8 @@ class PythonProjectAnalyzer(private val project: Project) {
         val testCommands: List<String>,
         val runCommands: List<String>,
         val notes: List<String>,
+        val filesAnalyzed: List<String> = emptyList(),
+        val skippedFiles: List<SkippedFile> = emptyList(),
     ) {
         fun isPythonLikely(): Boolean =
             configFiles.isNotEmpty() || sourceRoots.isNotEmpty() || testRoots.isNotEmpty()
@@ -41,6 +48,47 @@ class PythonProjectAnalyzer(private val project: Project) {
                 appendLine("- Source roots: ${sourceRoots.joinToString(", ").ifBlank { "No Python source roots detected yet." }}")
                 appendLine("- Validation command: ${testCommands.firstOrNull() ?: "No validation command inferred yet."}")
                 appendLine("- Run command: ${runCommands.firstOrNull() ?: "No run command inferred yet."}")
+                appendLine("- Scope summary: ${scopeSummaryLine()}")
+            }.trim()
+
+        /**
+         * Returns a concise plain-English scope summary for the current Python folder.
+         */
+        fun scopeSummaryLine(): String =
+            buildString {
+                append("${filesAnalyzed.size} Python file")
+                if (filesAnalyzed.size != 1) append('s')
+                append(" analyzed")
+                if (skippedFiles.isNotEmpty()) {
+                    append(", ${skippedFiles.size} skipped")
+                }
+                val topReasons = skippedFiles.groupingBy { it.reason }.eachCount()
+                    .entries.sortedByDescending { it.value }
+                    .take(2)
+                    .joinToString(", ") { "${it.value} ${it.key}" }
+                if (topReasons.isNotBlank()) {
+                    append(" (${topReasons})")
+                }
+            }
+
+        /**
+         * Returns a multi-line human-readable scope receipt for onboarding and refresh UI.
+         */
+        fun scopeReceipt(): String =
+            buildString {
+                appendLine("Scope summary")
+                appendLine("- Files analyzed: ${filesAnalyzed.size}")
+                appendLine("- Files skipped: ${skippedFiles.size}")
+                if (filesAnalyzed.isNotEmpty()) {
+                    appendLine("- Included paths:")
+                    filesAnalyzed.take(6).forEach { appendLine("  - $it") }
+                    if (filesAnalyzed.size > 6) appendLine("  - …and ${filesAnalyzed.size - 6} more")
+                }
+                if (skippedFiles.isNotEmpty()) {
+                    appendLine("- Skipped paths:")
+                    skippedFiles.take(6).forEach { appendLine("  - ${it.path} — ${it.reason}") }
+                    if (skippedFiles.size > 6) appendLine("  - …and ${skippedFiles.size - 6} more")
+                }
             }.trim()
 
         /**
@@ -59,6 +107,14 @@ class PythonProjectAnalyzer(private val project: Project) {
                 appendLine("frameworkHints: ${frameworks.joinToString(", ").ifBlank { "(none found)" }}")
                 appendLine("suggestedTestCommands: ${testCommands.joinToString(" && ").ifBlank { "(none inferred)" }}")
                 appendLine("suggestedRunCommands: ${runCommands.joinToString(" && ").ifBlank { "(none inferred)" }}")
+                appendLine("scopeSummary: ${scopeSummaryLine()}")
+                if (filesAnalyzed.isNotEmpty()) {
+                    appendLine("filesAnalyzed: ${filesAnalyzed.joinToString(", ")}")
+                }
+                if (skippedFiles.isNotEmpty()) {
+                    appendLine("skippedFiles:")
+                    skippedFiles.forEach { appendLine("- ${it.path}: ${it.reason}") }
+                }
                 if (notes.isNotEmpty()) {
                     appendLine("notes:")
                     notes.forEach { appendLine("- $it") }
@@ -89,6 +145,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             val packageManager = detectPackageManager(configFiles, text)
             val testCommands = inferTestCommands(packageManager, configFiles, frameworks, testRoots)
             val runCommands = inferRunCommands(base, sourceRoots, frameworks)
+            val scopeScan = scanProjectScope(base, sourceRoots, maxDepth)
             val notes = buildList {
                 if ("pytest" !in frameworks && testRoots.isNotEmpty()) {
                     add("Test roots exist but pytest dependency was not detected; Blueprint will validate with a built-in fallback or import/compile checks if needed.")
@@ -102,6 +159,9 @@ class PythonProjectAnalyzer(private val project: Project) {
                 if (sourceRoots.size > 6) {
                     add("Multiple Python source roots were detected. Review the generated UML and scope changes to the relevant package before applying.")
                 }
+                if (scopeScan.skipped.isNotEmpty()) {
+                    add("Scope summary: ${scopeScan.filesAnalyzed.size} Python files analyzed, ${scopeScan.skipped.size} skipped. Review skipped paths if the UML looks incomplete.")
+                }
             }
             PythonProjectContext(
                 basePath = basePath,
@@ -113,12 +173,19 @@ class PythonProjectAnalyzer(private val project: Project) {
                 testCommands = testCommands,
                 runCommands = runCommands,
                 notes = notes,
+                filesAnalyzed = scopeScan.filesAnalyzed,
+                skippedFiles = scopeScan.skipped,
             )
         } catch (t: Throwable) {
             log.warn("Failed analyzing Python project", t)
             emptyContext(basePath).copy(notes = listOf("Python analyzer failed: ${t.message ?: t.javaClass.simpleName}"))
         }
     }
+
+    private data class ScopeScan(
+        val filesAnalyzed: List<String>,
+        val skipped: List<SkippedFile>,
+    )
 
     private fun detectConfigFiles(base: Path): List<String> =
         knownConfigFiles.filter { Files.isRegularFile(base.resolve(it)) }
@@ -347,6 +414,34 @@ class PythonProjectAnalyzer(private val project: Project) {
         }
     }
 
+    private fun scanProjectScope(base: Path, sourceRoots: List<String>, maxDepth: Int): ScopeScan {
+        if (!Files.isDirectory(base)) return ScopeScan(emptyList(), emptyList())
+        val analyzed = mutableSetOf<String>()
+        val skipped = mutableListOf<SkippedFile>()
+        val includedRoots = sourceRoots.mapNotNull { root ->
+            when {
+                root == "." || root.isBlank() -> base
+                else -> base.resolve(root).normalize().takeIf { Files.isDirectory(it) && it.startsWith(base) }
+            }
+        }.ifEmpty { listOf(base) }
+
+        Files.walk(base, maxDepth).use { stream ->
+            stream.filter { Files.isRegularFile(it) }.forEach { path ->
+                val relPath = base.relativize(path).toString().replace('\\', '/')
+                val fileName = path.fileName.toString()
+                val isPython = fileName.endsWith(".py")
+                when {
+                    !isPython -> Unit
+                    base.relativize(path).any { shouldSkipDir(it.toString()) } -> skipped += SkippedFile(relPath, "ignored build or virtual-env path")
+                    isLikelyGenerated(fileName) -> skipped += SkippedFile(relPath, "generated Python file")
+                    includedRoots.none { path.startsWith(it) } -> skipped += SkippedFile(relPath, "outside inferred Python scope")
+                    else -> analyzed += relPath
+                }
+            }
+        }
+        return ScopeScan(analyzed.toList().sorted(), skipped.distinctBy { "${it.path}:${it.reason}" }.sortedBy { it.path })
+    }
+
     private fun nearestPackageRoot(base: Path, file: Path): String? {
         var current = file.parent ?: return null
         var lastPackage: Path? = null
@@ -423,6 +518,9 @@ class PythonProjectAnalyzer(private val project: Project) {
 
     private fun shouldSkipDir(name: String): Boolean =
         name in skippedDirectories || name.startsWith(".")
+
+    private fun isLikelyGenerated(fileName: String): Boolean =
+        fileName.endsWith("_pb2.py") || fileName.endsWith("_pb2_grpc.py")
 
     private companion object {
         val knownConfigFiles = listOf(

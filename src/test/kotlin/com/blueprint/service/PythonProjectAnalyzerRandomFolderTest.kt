@@ -94,6 +94,22 @@ class PythonProjectAnalyzerRandomFolderTest {
         }
     }
 
+    @Test
+    fun `scope summary reports analyzed and skipped files for mixed folders`() {
+        val fixture = Path.of("src/test/resources/random_python_mixed_scope").toAbsolutePath().normalize()
+        val context = PythonProjectAnalyzer(fakeProject(fixture)).analyze()
+
+        assertTrue(context.filesAnalyzed.contains("app/models.py"))
+        assertTrue(context.filesAnalyzed.contains("app/api/server.py"))
+        assertTrue(context.filesAnalyzed.contains("tests/test_server.py"))
+        assertTrue(context.skippedFiles.any { it.path == "generated/client_pb2.py" })
+        assertTrue(context.skippedFiles.any { it.path == "vendor/third_party.py" })
+        assertTrue(context.scopeSummaryLine().contains("3 Python files analyzed, 2 skipped"))
+        assertTrue(context.scopeReceipt().contains("Files analyzed: 3"))
+        assertTrue(context.scopeReceipt().contains("generated/client_pb2.py"))
+        assertTrue(context.promptContext().contains("skippedFiles:"))
+    }
+
     private fun fakeProject(basePath: Path): Project =
         Proxy.newProxyInstance(
             javaClass.classLoader,

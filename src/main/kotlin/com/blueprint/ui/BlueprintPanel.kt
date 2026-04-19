@@ -2050,14 +2050,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun loadGeneratedUml(generated: PythonUmlGenerator.GeneratedUml) {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
         setUmlEditorText(generated.text, pendingEdits = false)
         focusChangedEntityAfterRefresh()
-        umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
+        umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()}"
         graphArea.text = buildString {
             appendLine("Abstracted Python codebase to editable UML.")
             appendLine("Classes: ${generated.classCount}")
             appendLine("Relationships: ${generated.relationshipCount}")
             appendLine("Files scanned: ${generated.filesScanned}")
+            appendLine(context.scopeReceipt())
             if (generated.warnings.isNotEmpty()) {
                 appendLine()
                 appendLine("Warnings:")
@@ -2065,9 +2067,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         }.trim()
         val refreshMessage = buildString {
-            append("I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+            append("I abstracted the current Python code into UML. ${context.scopeSummaryLine().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }}. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
+            if (context.skippedFiles.isNotEmpty()) {
+                append("\n\nSkipped paths:\n")
+                context.skippedFiles.take(3).forEach { append("- ${it.path}: ${it.reason}\n") }
+            }
             if (generated.warnings.isNotEmpty()) {
-                append("\n\nNotes:\n")
+                append("\nNotes:\n")
                 generated.warnings.take(3).forEach { append("- $it\n") }
             }
         }.trim()

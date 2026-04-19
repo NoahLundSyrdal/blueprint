@@ -16,12 +16,16 @@ class PythonProjectAnalyzerContextSummaryTest {
             testCommands = emptyList(),
             runCommands = emptyList(),
             notes = emptyList(),
+            filesAnalyzed = emptyList(),
+            skippedFiles = emptyList(),
         ).promptContext()
 
         assertTrue(prompt.contains("Python quick checklist"))
         assertTrue(prompt.contains("- Source roots: No Python source roots detected yet."))
         assertTrue(prompt.contains("- Validation command: No validation command inferred yet."))
         assertTrue(prompt.contains("- Run command: No run command inferred yet."))
+        assertTrue(prompt.contains("- Scope summary: 0 Python files analyzed"))
+        assertTrue(prompt.contains("scopeSummary: 0 Python files analyzed"))
         assertTrue(prompt.contains("PYTHON_PROJECT_CONTEXT"))
     }
 }
