@@ -399,8 +399,15 @@ internal object PatchChangeSummary {
     private fun changedFilesSummary(patches: List<Patch>): String =
         buildString {
             appendLine("Changed files (${patches.size}):")
-            patches.forEach { appendLine("- ${it.action} ${it.path}") }
+            patches.forEach { appendLine("- ${fileActionLabel(it.action)} ${it.path}") }
         }.trim()
+
+    private fun fileActionLabel(action: String): String =
+        when (action.lowercase()) {
+            "create" -> "create"
+            "delete" -> "delete"
+            else -> "update"
+        }
 
     private fun semanticChanges(patches: List<Patch>, fallbackSummary: String): List<String> {
         val changes = patches
@@ -2006,7 +2013,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
 
                 status("Reviewing code diff for ${n.title.ifBlank { n.id.take(8) }}...")
-                reviewSummaryArea.text = "Patch generated. Reviewing scope and safety before apply..."
+                reviewSummaryArea.text = PatchChangeSummary.reviewSummary(changedExec)
                 logActivity("Patch generated for ${n.title.ifBlank { n.id.take(8) }}: ${changedExec.patches.size} file(s). Reviewing safety.")
                 project.service<ReviewService>().reviewAsync(n, changedExec) { review ->
                     registry.setReview(n.id, review)

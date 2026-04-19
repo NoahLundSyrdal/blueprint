@@ -13,6 +13,7 @@ class ReviewTabCopyRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(exec)"))
+        assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(changedExec)"))
         assertTrue(source.contains("ReviewExplanation.details("))
         assertTrue(source.contains("reviewDetails.joinToString(\"\\n\")"))
         assertTrue(source.contains("\"Why is it safe to apply?\""))

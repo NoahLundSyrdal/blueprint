@@ -40,6 +40,24 @@ class PatchChangeSummaryTest {
     }
 
     @Test
+    fun `review summary lists create update and delete actions`() {
+        val exec = ExecutionArtifact(
+            summary = "Update invite files.",
+            patches = listOf(
+                Patch(path = "app/new_models.py", action = PatchAction.create.name, content = "class InvitePolicy:\n    id: str"),
+                Patch(path = "app/models.py", action = PatchAction.update.name, content = "class Invite:\n    accepted_at: datetime"),
+                Patch(path = "app/old_models.py", action = PatchAction.delete.name, content = ""),
+            ),
+        )
+
+        val summary = PatchChangeSummary.reviewSummary(exec)
+
+        assertTrue(summary.contains("- create app/new_models.py"))
+        assertTrue(summary.contains("- update app/models.py"))
+        assertTrue(summary.contains("- delete app/old_models.py"))
+    }
+
+    @Test
     fun `apply summary filters to applied paths and falls back cleanly`() {
         val exec = ExecutionArtifact(
             summary = "No-op after review.",
