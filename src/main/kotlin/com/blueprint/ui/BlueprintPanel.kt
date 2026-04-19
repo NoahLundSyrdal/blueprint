@@ -615,7 +615,20 @@ internal data class PostApplyInlineSummary(
     val nextStepLine: String,
     val verifyChecklist: String,
     val copyableResultSummary: String,
-)
+) {
+    /**
+     * Builds the persisted review-panel text shown after apply completes.
+     */
+    fun reviewPanelText(exec: ExecutionArtifact?): String =
+        buildString {
+            appendLine(summaryLine)
+            appendLine(validationAndPathsLine)
+            appendLine()
+            appendLine(PatchChangeSummary.applySummary(exec, changedPaths))
+            appendLine(verifyChecklist)
+            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Blueprint already refreshed the code-backed UML automatically after apply.\n- Refresh UML From Code to run a separate manual verification refresh.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.")
+        }.trim()
+}
 
 internal data class GenerateDiffGuideSummary(
     val guideText: String,
@@ -3643,14 +3656,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
 
     private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String =
-        buildString {
-            appendLine(summary.summaryLine)
-            appendLine(summary.validationAndPathsLine)
-            appendLine()
-            appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
-            appendLine(summary.verifyChecklist)
-            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Blueprint already refreshed the code-backed UML automatically after apply.\n- Refresh UML From Code to run a separate manual verification refresh.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.")
-        }.trim()
+        summary.reviewPanelText(exec)
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
         buildString {

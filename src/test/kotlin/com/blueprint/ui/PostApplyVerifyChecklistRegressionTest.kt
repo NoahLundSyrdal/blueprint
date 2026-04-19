@@ -24,7 +24,7 @@ class PostApplyVerifyChecklistRegressionTest {
 
     @Test
     fun `post apply review summary renders the verify checklist`() {
-        assertTrue(source.contains("appendLine(summary.verifyChecklist)"))
+        assertTrue(source.contains("appendLine(verifyChecklist)"))
         assertTrue(source.contains("val verifyChecklist: String,"))
     }
 }
