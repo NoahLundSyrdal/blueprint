@@ -59,6 +59,23 @@ class RandomPythonFolderSmokeTest {
         assertTrue(mermaid.contains("class OrderService {"))
     }
 
+    @Test
+    fun `setup py namespace random folder refreshes into useful uml`() {
+        val fixture = Path.of("src/test/resources/random_python_setup_py_namespace").toAbsolutePath().normalize()
+        val files = pythonFiles(fixture)
+        val parsed = PythonAstParser.parse(fixture, files)
+        assumeTrue("python3 is required for random-folder extraction", parsed.usedAst)
+
+        val symbols = parsed.symbols
+        assertTrue(symbols.any { it.name == "Shipment" && it.decorators.contains("dataclass") })
+        assertTrue(symbols.any { it.name == "WarehouseService" })
+        assertTrue(symbols.any { it.name == "test_create_shipment_returns_shipment" })
+
+        val mermaid = MermaidProjection.render(fixtureIrFromSymbols("random-setup-py-namespace", symbols), "random-setup-py-namespace", files.size)
+        assertTrue(mermaid.contains("class Shipment {"))
+        assertTrue(mermaid.contains("class WarehouseService {"))
+    }
+
     private fun pythonFiles(root: Path): List<Path> =
         Files.walk(root).use { stream ->
             stream

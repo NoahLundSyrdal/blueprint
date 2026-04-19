@@ -55,6 +55,21 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertEquals(listOf("python -m pytest"), context.testCommands)
         assertFalse(context.sourceRoots.any { it.contains("site-packages") })
         assertFalse(context.sourceRoots.any { it.contains("build") })
+        assertFalse(context.sourceRoots.any { it.contains("vendor") })
+    }
+
+    @Test
+    fun `detects setup py namespace package layouts`() {
+        val fixture = Path.of("src/test/resources/random_python_setup_py_namespace").toAbsolutePath().normalize()
+        val context = PythonProjectAnalyzer(fakeProject(fixture)).analyze()
+
+        assertEquals(listOf("setup.py"), context.configFiles)
+        assertTrue(context.isPythonLikely())
+        assertTrue(context.sourceRoots.contains("warehouse"))
+        assertTrue(context.sourceRoots.contains("warehouse") || context.sourceRoots.contains("warehouse/domain"))
+        assertTrue(context.testRoots.contains("tests"))
+        assertEquals("unknown", context.packageManager)
+        assertEquals(listOf("python -m pytest"), context.testCommands)
     }
 
     private fun fakeProject(basePath: Path): Project =

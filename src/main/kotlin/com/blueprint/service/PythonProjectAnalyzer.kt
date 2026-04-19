@@ -72,13 +72,16 @@ class PythonProjectAnalyzer(private val project: Project) {
             val testCommands = inferTestCommands(packageManager, configFiles, frameworks, testRoots)
             val notes = buildList {
                 if ("pytest" !in frameworks && testRoots.isNotEmpty()) {
-                    add("Test roots exist but pytest dependency was not detected; verify test runner before generating tests.")
+                    add("Test roots exist but pytest dependency was not detected; Blueprint will validate with a built-in fallback or import/compile checks if needed.")
                 }
                 if (sourceRoots.isEmpty()) {
                     add("No Python source roots were detected; open a folder with .py files, src/, app/, or package directories so Blueprint can map code to UML.")
                 }
                 if (configFiles.isEmpty()) {
                     add("No pyproject/setup/requirements files were detected; infer dependencies from local files only.")
+                }
+                if (sourceRoots.size > 6) {
+                    add("Multiple Python source roots were detected. Review the generated UML and scope changes to the relevant package before applying.")
                 }
             }
             PythonProjectContext(
@@ -274,6 +277,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             "setup.py",
             "setup.cfg",
             "requirements.txt",
+            "requirements.in",
             "requirements-dev.txt",
             "dev-requirements.txt",
             "poetry.lock",
@@ -295,8 +299,10 @@ class PythonProjectAnalyzer(private val project: Project) {
             "__pycache__",
             "build",
             "dist",
+            "generated",
             "node_modules",
             "site-packages",
+            "vendor",
             "venv",
         )
     }

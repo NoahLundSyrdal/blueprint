@@ -29,5 +29,8 @@ class PythonProjectAnalyzerDetectionTest {
         assertTrue(source.contains("listOf(\"src\", \"app\")"))
         assertTrue(source.contains("return namespaceSourceRoot(base, file)"))
         assertTrue(source.contains("private fun containsPythonSources(dir: Path, maxDepth: Int): Boolean"))
+        assertTrue(source.contains("\"generated\""))
+        assertTrue(source.contains("\"vendor\""))
+        assertTrue(source.contains("sourceRoots.size > 6"))
     }
 }
