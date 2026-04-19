@@ -25,6 +25,6 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("postApplyReviewSummary(exec, inlineSummary)"))
         assertTrue(source.contains("appendLine(summary.validationAndPathsLine)"))
         assertTrue(source.contains("appendLine(summary.verifyChecklist)"))
-        assertTrue(source.contains("append(\"\\nVerify In UML reruns the refresh when you want an explicit verification click. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.\")"))
+        assertTrue(source.contains("append(\"\\nVerify In UML lets you rerun the UML reload when you want an explicit verification step. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.\")"))
     }
 }

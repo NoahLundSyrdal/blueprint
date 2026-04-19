@@ -1067,7 +1067,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
     private val verifyInUmlButton = JButton("Verify In UML").apply {
         isEnabled = false
-        toolTipText = "Refresh UML From Code to reread the changed files from disk and verify the updated code-backed UML after apply."
+        toolTipText = "Reload the changed files into the code-backed UML so you can verify the applied result after apply."
         addActionListener { refreshUmlAfterApplyVerification() }
     }
     private val openLikelyEntryFileButton = JButton("Open Likely Entry File").apply {
@@ -3403,8 +3403,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     val verifyChecklist = buildString {
                         appendLine("Verify in UML tab:")
-                        appendLine("- Automatic refresh after apply already reread the changed code from disk.")
-                        appendLine("- Refresh UML From Code reruns the refresh when you want an explicit verification click.")
+                        appendLine("- Blueprint already reloaded the changed code into the UML after apply.")
+                        appendLine("- Click Refresh UML From Code when you want to verify that reload yourself.")
                         appendLine("- $summaryLine")
                         appendLine("- ${result.summaryLine()}")
                         if (changedPaths.isEmpty()) {
@@ -3452,7 +3452,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         guideLabel.text = listOf(
                             "Apply complete. Review the refreshed code-backed UML now.",
                             "Refresh UML From Code to verify.",
-                            "Refresh UML From Code reruns the refresh when you want an explicit verification click.",
+                            "Refresh UML From Code lets you verify the reload yourself.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
@@ -3532,7 +3532,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nVerify In UML reruns the refresh when you want an explicit verification click. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
+            append("\nVerify In UML lets you rerun the UML reload when you want an explicit verification step. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
