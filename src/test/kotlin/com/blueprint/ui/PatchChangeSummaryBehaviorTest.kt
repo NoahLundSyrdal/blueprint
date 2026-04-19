@@ -61,4 +61,66 @@ class PatchChangeSummaryBehaviorTest {
 
         assertTrue(summary.contains("__init__.py updated"))
     }
+
+    @Test
+    fun `review summary uses only added hunk lines for unified diffs`() {
+        val exec = ExecutionArtifact(
+            summary = "Patch Invite without restating the whole file.",
+            patches = listOf(
+                Patch(
+                    path = "app/models.py",
+                    action = PatchAction.update.name,
+                    content = """
+                        --- a/app/models.py
+                        +++ b/app/models.py
+                        @@
+                         class Invite:
+                        -    status: str
+                        +    status: InviteStatus
+                        +    accepted_at: datetime | None = None
+                    """.trimIndent(),
+                ),
+            ),
+        )
+
+        val summary = PatchChangeSummary.reviewSummary(exec)
+
+        assertTrue(summary.contains("Invite + status: InviteStatus"))
+        assertTrue(summary.contains("Invite + accepted_at: datetime | None"))
+        assertTrue(!summary.contains("status: str"))
+    }
+
+    @Test
+    fun `review summary for multi-file diff includes only changed classes from each hunk`() {
+        val exec = ExecutionArtifact(
+            summary = "Update Invite and create InvitePolicy.",
+            patches = listOf(
+                Patch(
+                    path = "app/models.py",
+                    action = PatchAction.update.name,
+                    content = """
+                        --- a/app/models.py
+                        +++ b/app/models.py
+                        @@
+                         class Invite:
+                        +    accepted_at: datetime | None = None
+                    """.trimIndent(),
+                ),
+                Patch(
+                    path = "app/policy.py",
+                    action = PatchAction.create.name,
+                    content = """
+                        class InvitePolicy:
+                            id: str
+                    """.trimIndent(),
+                ),
+            ),
+        )
+
+        val summary = PatchChangeSummary.reviewSummary(exec)
+
+        assertTrue(summary.contains("Invite + accepted_at: datetime | None"))
+        assertTrue(summary.contains("InvitePolicy + id: str"))
+        assertTrue(summary.contains("Changed files (2):"))
+    }
 }

@@ -420,6 +420,9 @@ internal object GuidedInviteScenario {
 }
 
 internal object PatchChangeSummary {
+    /**
+     * Builds the review-tab summary shown before apply from the reviewed patch content.
+     */
     fun reviewSummary(exec: ExecutionArtifact?): String {
         if (exec == null) return "What changed?\n- No reviewed code patch yet."
         if (exec.patches.isEmpty()) return "What changed?\n- No code changes needed"
@@ -432,6 +435,9 @@ internal object PatchChangeSummary {
         )
     }
 
+    /**
+     * Returns compact change lines for the whole reviewed patch or a filtered set of changed paths.
+     */
     fun semanticChangeLines(exec: ExecutionArtifact?, changedPaths: Collection<String>? = null): List<String> {
         if (exec == null) return emptyList()
         val changedPathSet = changedPaths?.toSet()
@@ -439,6 +445,9 @@ internal object PatchChangeSummary {
         return semanticChanges(filtered, exec.summary)
     }
 
+    /**
+     * Builds the apply-success summary from only the paths that were actually written to disk.
+     */
     fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
         if (exec == null || appliedPaths.isEmpty()) return "What changed?\n- No code changes needed"
         val appliedPathSet = appliedPaths.toSet()
@@ -453,6 +462,16 @@ internal object PatchChangeSummary {
         )
     }
 
+    /**
+     * Returns a short human-readable summary of which files the reviewed patch touches.
+     */
+    fun changedFilesSummary(exec: ExecutionArtifact?): String =
+        when {
+            exec == null -> "Changed files: none yet."
+            exec.patches.isEmpty() -> "Changed files: none."
+            else -> changedFilesSummary(exec.patches)
+        }
+
     private fun buildSummary(
         heading: String,
         semanticHeading: String,
@@ -466,13 +485,6 @@ internal object PatchChangeSummary {
             appendLine()
             appendLine(changedFilesText)
         }.trim()
-
-    fun changedFilesSummary(exec: ExecutionArtifact?): String =
-        when {
-            exec == null -> "Changed files: none yet."
-            exec.patches.isEmpty() -> "Changed files: none."
-            else -> changedFilesSummary(exec.patches)
-        }
 
     private fun changedFilesSummary(patches: List<Patch>): String =
         buildString {
@@ -501,23 +513,43 @@ internal object PatchChangeSummary {
     }
 
     private fun patchSemanticChanges(patch: Patch): List<String> {
-        val lines = patch.content.lines().map { it.trim() }
+        val changedLines = meaningfulChangedLines(patch)
+        if (changedLines.isEmpty()) return listOf(fallbackPatchSummary(patch))
         val classes = mutableMapOf<String, MutableList<String>>()
         var currentClass: String? = null
-        for (line in lines) {
-            val className = Regex("^class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(line)?.groupValues?.get(1)
+        for (line in changedLines) {
+            val trimmed = line.trim()
+            val className = Regex("^class\\s+([A-Za-z_][A-Za-z0-9_]*)").find(trimmed)?.groupValues?.get(1)
             if (className != null) {
                 currentClass = className
                 classes.getOrPut(className) { mutableListOf() }
                 continue
             }
             val owner = currentClass ?: continue
-            fieldSummary(line)?.let { classes.getOrPut(owner) { mutableListOf() }.add(it) }
+            fieldSummary(trimmed)?.let { classes.getOrPut(owner) { mutableListOf() }.add(it) }
         }
         val summaries = classes.entries.flatMap { (name, fields) ->
             if (fields.isEmpty()) listOf("$name updated") else fields.distinct().map { "$name + $it" }
         }
         return if (summaries.isNotEmpty()) summaries else listOf(fallbackPatchSummary(patch))
+    }
+
+    private fun meaningfulChangedLines(patch: Patch): List<String> {
+        val lines = patch.content.replace("\r\n", "\n").replace("\r", "\n").lines()
+        val diffLike = lines.any { it.startsWith("@@") || it.startsWith("+++") || it.startsWith("---") }
+        if (!diffLike) return lines.filter { it.isNotBlank() }
+        val changed = mutableListOf<String>()
+        lines.forEach { line ->
+            when {
+                line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@") -> Unit
+                line.startsWith("+") && !line.startsWith("+++") -> changed += line.removePrefix("+")
+                line.startsWith(" ") -> {
+                    val context = line.removePrefix(" ")
+                    if (context.trimStart().startsWith("class ")) changed += context
+                }
+            }
+        }
+        return changed.filter { it.isNotBlank() }
     }
 
     private fun fieldSummary(line: String): String? {
@@ -536,7 +568,6 @@ internal object PatchChangeSummary {
         }
     }
 }
-
 internal object ReviewExplanation {
     fun summary(
         nodeTitle: String,
