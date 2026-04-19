@@ -1924,8 +1924,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun String.containsWorkflowQuestion(): Boolean =
-        listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "apply")
-            .any { it in this }
+        listOf(
+            "run",
+            "next",
+            "why",
+            "blocked",
+            "diff",
+            "changed",
+            "generate code",
+            "generate patch",
+            "create patch",
+            "apply patch",
+            "refresh from code",
+            "code nodes",
+            "create code nodes",
+            "apply",
+        ).any { it in this }
 
     private fun refineUmlWithChat(message: String) {
         status("Refining UML with ${providerText()}...")
