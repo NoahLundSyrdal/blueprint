@@ -52,19 +52,14 @@ The recommended demo is:
 1. Open the Blueprint tool window.
 2. Enable Offline mock demo mode.
 3. For an existing Python project, click `Abstract Code to UML`.
-4. Review or edit the generated Mermaid class diagram in the main UML editor.
-5. Ask chat to refine the UML, for example `add a Supplier entity`.
-6. Click `Create Code Nodes`.
-7. Show the generated node graph.
-8. Select the first ready schema node.
-9. Click `Generate Plan`.
-10. Click `Execute Node`.
-11. Click `Review`.
-12. Click `Preview Diff`.
-13. Click `Apply All`.
-14. Click `Abstract Code to UML` again to show the loop can repeat from the updated codebase.
+4. Follow the compact `First-Run Demo` checklist shown in the action panel when `examples/invite_project` is open.
+5. Use the deterministic prompt `add an InvitePolicy entity`.
+6. Click `Generate Code Diff`.
+7. Click `Preview Diff`.
+8. Click `Apply Approved Changes`.
+9. Click `Refresh UML From Code` again to show the loop can repeat from the updated codebase.
 
-If the open project has too few Python classes for a compelling diagram, use `Paste UML` or `Sample: Car Company UML` as the fallback demo path.
+If the open project has too few Python classes for a compelling diagram, use `Paste UML` or `Sample: Invite UML` as the fallback demo path.
 
 ## UML / Schema Support Today
 
@@ -237,7 +232,7 @@ The nodes are normal persisted Blueprint nodes, not a separate demo-only path.
 
 ## Latest Demo Improvement
 
-The plugin now includes a dedicated `Sample: Car Company UML` button that creates:
+The plugin now includes a dedicated invite-first-run checklist plus a `Sample: Invite UML` fallback that creates:
 
 1. A schema node prefilled with UML-like architecture text.
 2. A Python service node depending on the schema node.
