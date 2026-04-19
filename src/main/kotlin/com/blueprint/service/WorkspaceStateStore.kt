@@ -35,6 +35,7 @@ data class WorkspaceState(
     val umlHasPendingEdits: Boolean = false,
     val selectedCanvasId: String? = null,
     val selectedNodeId: String? = null,
+    val activityReceipt: String? = null,
     val chatTranscript: List<WorkspaceChatEntry> = emptyList(),
     val codeMapGroupMode: String? = null,
     val hideTests: Boolean = false,

@@ -4954,6 +4954,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             umlHasPendingEdits = umlHasPendingEdits,
             selectedCanvasId = selectedCanvasId,
             selectedNodeId = registry.selectedNodeId(),
+            activityReceipt = activityLog.text,
             chatTranscript = chatHistory.toList(),
             codeMapGroupMode = (codeMapGroupCombo.selectedItem as? CodeMapProjection.GroupMode)?.name,
             hideTests = hideCodeMapTests.isSelected,
@@ -5002,6 +5003,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     suppressUmlDocumentEvents = false
                 }
             }
+
+            activityLog.text = state.activityReceipt.orEmpty()
 
             if (state.chatTranscript.isNotEmpty()) {
                 chatHistory.clear()

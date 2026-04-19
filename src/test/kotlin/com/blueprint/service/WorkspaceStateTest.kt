@@ -19,6 +19,7 @@ class WorkspaceStateTest {
             umlHasPendingEdits = true,
             selectedCanvasId = "Foo",
             selectedNodeId = "node-1",
+            activityReceipt = "[12:00:00] 01. Demo e2e step passed: Run the changed app with python app.py. Confirmed visible result: InvitePolicy appears.\n",
             chatTranscript = listOf(
                 WorkspaceChatEntry(author = "You", message = "add Bar"),
                 WorkspaceChatEntry(author = "Blueprint", message = "Updated UML."),
@@ -58,6 +59,7 @@ class WorkspaceStateTest {
         assertEquals(false, restored.umlHasPendingEdits)
         assertNull(restored.selectedCanvasId)
         assertNull(restored.selectedNodeId)
+        assertNull(restored.activityReceipt)
         assertNull(restored.codeMapGroupMode)
         assertEquals(false, restored.hideTests)
         assertEquals(false, restored.hideGenerated)
@@ -82,6 +84,7 @@ class WorkspaceStateTest {
         assertEquals(0L, fresh.savedAt)
         assertNull(fresh.umlText)
         assertEquals(false, fresh.umlHasPendingEdits)
+        assertNull(fresh.activityReceipt)
         assertEquals(emptyList<WorkspaceChatEntry>(), fresh.chatTranscript)
         // Mirrors BlueprintPanel: only "Hide imports" starts on.
         assertEquals(true, fresh.hideExternalEdges)
