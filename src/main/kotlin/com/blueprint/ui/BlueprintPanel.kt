@@ -261,6 +261,7 @@ internal data class FirstRunChecklistState(
     val validationReady: Boolean,
     val validationPassed: Boolean,
     val runVerified: Boolean,
+    val skippedFiles: List<PythonProjectAnalyzer.SkippedFile> = emptyList(),
 ) {
     /**
      * Returns the first-run checklist for any Python folder in plain product language.
@@ -301,18 +302,30 @@ internal data class FirstRunChecklistState(
             else ->
                 "Run the changed app with: $runCommand"
         }
-        return listOf(
-            "First-run checklist:",
-            "${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.",
-            "${markerForStep(2, currentStep, reviewedDiffReady)} Generate Code Diff -> create a reviewed code patch from your UML edits.",
-            "${markerForStep(3, currentStep, reviewApprovedReady)} Review approved -> confirm Blueprint says the reviewed code patch is safe to apply.",
-            "${markerForStep(4, currentStep, appliedReady)} Apply Approved Changes -> write the approved code patch to disk.",
-            "${markerForStep(5, currentStep, refreshedCodeMapReady)} Refresh UML From Code -> verify the code-backed UML after apply.",
-            "${markerForStep(6, currentStep, runVerified)} Run the changed app -> $runLine",
-            "",
-            "Validation:",
-            "- $validationLine",
-        ).joinToString("\n")
+        val skippedLine = skippedFilesSummaryLine()
+        return buildList {
+            add("First-run checklist:")
+            add("${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.")
+            skippedLine?.let { add(it) }
+            add("${markerForStep(2, currentStep, reviewedDiffReady)} Generate Code Diff -> create a reviewed code patch from your UML edits.")
+            add("${markerForStep(3, currentStep, reviewApprovedReady)} Review approved -> confirm Blueprint says the reviewed code patch is safe to apply.")
+            add("${markerForStep(4, currentStep, appliedReady)} Apply Approved Changes -> write the approved code patch to disk.")
+            add("${markerForStep(5, currentStep, refreshedCodeMapReady)} Refresh UML From Code -> verify the code-backed UML after apply.")
+            add("${markerForStep(6, currentStep, runVerified)} Run the changed app -> $runLine")
+            add("")
+            add("Validation:")
+            add("- $validationLine")
+        }.joinToString("\n")
+    }
+
+    private fun skippedFilesSummaryLine(): String? {
+        if (skippedFiles.isEmpty()) return null
+        val reasonSummary = skippedFiles.groupingBy { it.reason }.eachCount()
+            .entries.sortedByDescending { it.value }
+            .joinToString(", ") { (reason, count) ->
+                if (count == 1) reason else "$count $reason"
+            }
+        return "- Scope note: ${skippedFiles.size} Python path${if (skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($reasonSummary). Review skipped paths if the UML looks incomplete."
     }
 
     private fun markerForStep(step: Int, currentStep: Int, done: Boolean): String =
@@ -4264,6 +4277,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             validationReady = validation != null,
             validationPassed = validation?.status == ProjectValidationService.ValidationResult.Status.PASS,
             runVerified = activityLog.text.contains("Run the changed app", ignoreCase = true),
+            skippedFiles = context.skippedFiles,
         )
     }
 

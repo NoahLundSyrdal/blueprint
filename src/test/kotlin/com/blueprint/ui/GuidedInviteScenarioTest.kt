@@ -1,5 +1,6 @@
 package com.blueprint.ui
 
+import com.blueprint.service.PythonProjectAnalyzer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -255,8 +256,14 @@ class GuidedInviteScenarioTest {
             validationReady = false,
             validationPassed = false,
             runVerified = false,
+            skippedFiles = listOf(
+                PythonProjectAnalyzer.SkippedFile("generated/schema.py", "generated or cache file"),
+                PythonProjectAnalyzer.SkippedFile("build/tmp.py", "generated or cache file"),
+                PythonProjectAnalyzer.SkippedFile("notes.txt.py", "unsupported or non-importable Python file"),
+            ),
         ).checklistText()
         assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
+        assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). Review skipped paths if the UML looks incomplete."))
         assertTrue(patchReady.contains("[next] Review approved -> confirm Blueprint says the reviewed code patch is safe to apply."))
         assertTrue(patchReady.contains("Blueprint will validate after apply with: pytest"))
 
