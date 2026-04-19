@@ -16,6 +16,7 @@ class EmptyStateGuidanceRegressionTest {
         assertTrue(source.contains("private fun emptyUmlGuideText(): String"))
         assertTrue(source.contains("if (context.isPythonLikely()) {"))
         assertTrue(source.contains("No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram."))
+        assertTrue(source.contains("Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet."))
         assertTrue(source.contains("Blueprint found Python files, but no classes were extracted into the code-backed UML yet."))
         assertTrue(source.contains("This folder does not look like a supported Python project yet."))
         assertTrue(source.contains("Blueprint could not find Python files to turn into a code-backed UML diagram."))

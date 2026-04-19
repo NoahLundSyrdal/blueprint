@@ -375,10 +375,11 @@ private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: Lis
 
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
+    val candidateList = candidates.joinToString(", ")
     return if (candidates.isEmpty()) {
-        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:\n- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
+        "Blueprint could not infer a run command yet because it did not find a clear runnable entry file. Verify manually with this checklist:\n- Refresh UML From Code after you pick the Python folder you want to verify.\n- Open a likely entry file or package root manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
     } else {
-        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Open Likely Entry File to jump into one of these likely entry files: ${candidates.joinToString(", ")}. Then confirm the changed feature exists."
+        "Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Verify manually with this checklist:\n- Open Likely Entry File to jump into the best candidate.\n- Likely entry files: $candidateList\n- Refresh UML From Code again if you switch to a different Python folder or app root.\n- Confirm the changed feature exists in the running app or CLI output."
     }
 }
 
@@ -4214,6 +4215,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return listOf(
                 "No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram.",
                 "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
+                "Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet.",
                 "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
                 "After that, refine the UML, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and Run In Blueprint.",
                 "Next steps: review the inferred source roots, open a Python file to confirm the folder you want, or keep editing the project and refresh again.",
@@ -4332,7 +4334,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
             runDemoButton.isEnabled = genericState.codeMapReady
             runDemoButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use Open Likely Entry File to inspect the best candidate, or use the checklist to verify one of the likely entry files manually."
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use Open Likely Entry File to inspect the best candidate, or follow the manual checklist to verify the app from a likely entry file or package root."
                 genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
                 else -> "Record how you verified the changed app with: ${genericState.runCommand}"
             }
