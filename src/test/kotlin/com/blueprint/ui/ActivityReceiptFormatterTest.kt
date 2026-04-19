@@ -19,6 +19,10 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Generate Code Diff found no UML-backed work items ready to run."),
         )
         assertEquals(
+            "Generated reviewed code patch for Invite schema: APPROVE. Files: app/models.py",
+            receiptTextForTest("Code diff ready for Invite schema: APPROVE. Files: app/models.py"),
+        )
+        assertEquals(
             "Applied approved changes for Invite schema: 1 applied, 0 skipped.",
             receiptTextForTest("Apply finished for Invite schema: 1 applied, 0 skipped."),
         )
@@ -32,6 +36,14 @@ class ActivityReceiptFormatterTest {
     fun `leaves unrelated activity lines unchanged`() {
         val message = "Workspace reset to defaults"
         assertEquals(message, receiptTextForTest(message))
+    }
+
+    @Test
+    fun `formats uml refinement receipt with clearer wording`() {
+        assertEquals(
+            "Refined the UML draft from chat context and grounded source facts.",
+            receiptTextForTest("Updated the UML using Current code map, so the edit stays tied to the selected source facts, fields, methods, and relationships."),
+        )
     }
 }
 
