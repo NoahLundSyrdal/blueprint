@@ -12,8 +12,8 @@ class MiniGraphPanelSourceBadgeCopyTest {
     fun `source badge copy is explicit and not a run affordance`() {
         val source = Files.readString(sourcePath)
 
-        assertTrue(source.contains("val label = \"source\""))
-        assertTrue(source.contains("Open source file for this code-backed card. This does not run Generate Code Diff."))
-        assertTrue(source.contains("Use the source file badge or double-click to open the source file. This does not run Generate Code Diff."))
+        assertTrue(source.contains("val label = \"open\""))
+        assertTrue(source.contains("Open source file for this code-backed card. This does not run Generate Code Diff or Apply Approved Changes."))
+        assertTrue(source.contains("Use the open file badge or double-click to open the source file. This does not run Generate Code Diff or Apply Approved Changes."))
     }
 }
