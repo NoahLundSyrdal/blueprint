@@ -2142,7 +2142,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         graphArea.text = result.summary
         appendChat(
             "Blueprint",
-            "Imported $sourceLabel into ${result.nodes.size} generated node(s). Click Generate Code Diff to preview code changes."
+            "Imported $sourceLabel into an editable UML draft. Review it, then click Generate Code Diff to preview code changes."
         )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
