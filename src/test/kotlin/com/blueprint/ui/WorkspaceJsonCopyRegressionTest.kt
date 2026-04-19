@@ -12,9 +12,12 @@ class WorkspaceJsonCopyRegressionTest {
      * Verifies the checked-in demo workspace does not reintroduce legacy default-flow copy.
      */
     @Test
-    fun `demo workspace avoids create code nodes copy`() {
+    fun `demo workspace avoids legacy default flow and advanced node wording`() {
         val source = Files.readString(workspaceJsonPath)
 
         assertFalse(source.contains("Create Code Nodes"))
+        assertFalse(source.contains("implementation nodes"))
+        assertFalse(source.contains("node-by-node"))
+        assertFalse(source.contains("create nodes"))
     }
 }
