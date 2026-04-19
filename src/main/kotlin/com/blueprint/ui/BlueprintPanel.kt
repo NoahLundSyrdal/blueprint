@@ -17,6 +17,7 @@ import com.blueprint.service.NodeExecutionService
 import com.blueprint.service.NodePlanningService
 import com.blueprint.service.NodeRegistry
 import com.blueprint.service.PatchFreshness
+import com.blueprint.service.ProjectValidationService
 import com.blueprint.service.PythonProjectAnalyzer
 import com.blueprint.service.PythonUmlGenerator
 import com.blueprint.service.ReviewService
@@ -432,6 +433,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val execArea = JBTextArea().apply { isEditable = false }
     private val reviewArea = JBTextArea().apply { isEditable = false }
     private val secondaryTabs = JTabbedPane()
+    private val validationResults = mutableMapOf<String, ProjectValidationService.ValidationResult>()
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -1403,7 +1405,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun selectedNodeCanApply(): Boolean {
         val node = nodeList.selectedValue ?: return false
-        if (node.executionStatus == ExecutionStatus.APPLIED) return false
+        if (node.executionStatus == ExecutionStatus.APPLIED || node.executionStatus == ExecutionStatus.FAILED) return false
         val exec = registry.getExecution(node.id) ?: return false
         return exec.patches.isNotEmpty() && reviewAllowsApply(registry.getReview(node.id))
     }
@@ -2173,42 +2175,129 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             project.service<ApplyChangesService>().applySingle(n, exec, singlePath, review)
         }
-        n.executionStatus = if (result.applied.size == patchCount && result.skipped.isEmpty()) {
-            ExecutionStatus.APPLIED
-        } else {
-            ExecutionStatus.REVIEW
-        }
-        if (n.executionStatus == ExecutionStatus.APPLIED) {
-            umlHasPendingEdits = false
-            val generated = project.service<PythonUmlGenerator>().generate()
-            loadGeneratedUml(generated)
-            showArtifactTab("UML")
-            logActivity(
-                "Freshness verified after apply: refreshed UML from disk with " +
-                    "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
-            )
-        }
-        registry.update(n)
-        refreshArtifactSummary()
         logActivity("Apply finished for ${n.title.ifBlank { n.id.take(8) }}: ${result.applied.size} applied, ${result.skipped.size} skipped.")
-        status("Apply finished: ${result.applied.size} applied, ${result.skipped.size} skipped")
         if (result.skipped.isNotEmpty()) {
+            n.executionStatus = ExecutionStatus.REVIEW
+            registry.update(n)
+            refreshArtifactSummary()
+            status("Apply finished: ${result.applied.size} applied, ${result.skipped.size} skipped")
             Messages.showWarningDialog(
                 project,
                 "Skipped:\n" + result.skipped.joinToString("\n") { "${it.first} - ${it.second}" },
                 "Blueprint - Some changes skipped",
             )
-        } else {
-            Messages.showInfoMessage(
-                project,
-                "Applied ${result.applied.size} file change(s).\n\n${result.applied.joinToString("\n")}",
-                "Blueprint - Apply Complete"
-            )
+            return
         }
+
+        if (result.applied.size != patchCount) {
+            n.executionStatus = ExecutionStatus.REVIEW
+            registry.update(n)
+            refreshArtifactSummary()
+            status("Apply finished: ${result.applied.size} applied, expected $patchCount")
+            return
+        }
+
+        val patchesToValidate = displayedPatches.ifEmpty { exec.patches }
+        runPostApplyValidation(n, patchesToValidate, result)
+    }
+
+    private fun runPostApplyValidation(
+        node: BlueprintNode,
+        patches: List<Patch>,
+        applyResult: ApplyChangesService.ApplyResult,
+    ) {
+        val validation = project.service<ProjectValidationService>()
+        val command = validation.selectedCommand()
+        node.executionStatus = ExecutionStatus.EXECUTING
+        registry.update(node)
+        refreshArtifactSummary()
+        showArtifactTab("Review")
+        safetyArea.text = if (command == null) {
+            "Applied changes. No inferred validation command was available."
+        } else {
+            "Applied changes. Running validation:\n$command"
+        }
+        status(if (command == null) "Validation skipped: no command inferred" else "Running validation: $command")
+        logActivity(
+            if (command == null) {
+                "Validation skipped after apply for ${node.title.ifBlank { node.id.take(8) }}: no command inferred."
+            } else {
+                "Running validation after apply for ${node.title.ifBlank { node.id.take(8) }}: $command"
+            }
+        )
+
+        validation.validateAfterApplyAsync(patches) { result ->
+            validationResults[node.id] = result
+            when (result.status) {
+                ProjectValidationService.ValidationResult.Status.PASS,
+                ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                    node.executionStatus = ExecutionStatus.APPLIED
+                    registry.update(node)
+                    refreshUmlAfterSuccessfulApply()
+                    refreshArtifactSummary()
+                    logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
+                    status(result.summaryLine())
+                    Messages.showInfoMessage(
+                        project,
+                        buildString {
+                            append("Applied ${applyResult.applied.size} file change(s).")
+                            if (applyResult.applied.isNotEmpty()) {
+                                append("\n\n")
+                                append(applyResult.applied.joinToString("\n"))
+                            }
+                            append("\n\n")
+                            append(validationReportText(result))
+                        },
+                        "Blueprint - Apply Complete",
+                    )
+                }
+                ProjectValidationService.ValidationResult.Status.FAIL -> {
+                    node.executionStatus = ExecutionStatus.FAILED
+                    registry.update(node)
+                    refreshArtifactSummary()
+                    showArtifactTab("Review")
+                    safetyArea.text = validationReportText(result)
+                    safetyArea.foreground = BlueprintTheme.Danger
+                    logActivity("${result.summaryLine()}: ${result.reason.ifBlank { "see validation output" }}")
+                    status("Validation failed after apply")
+                    Messages.showWarningDialog(
+                        project,
+                        validationReportText(result),
+                        "Blueprint - Validation Failed",
+                    )
+                }
+            }
+        }
+    }
+
+    private fun refreshUmlAfterSuccessfulApply() {
+        umlHasPendingEdits = false
+        val generated = project.service<PythonUmlGenerator>().generate()
+        loadGeneratedUml(generated)
+        showArtifactTab("UML")
+        logActivity(
+            "Freshness verified after apply: refreshed UML from disk with " +
+                "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
+        )
     }
 
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
+
+    private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
+        buildString {
+            append(result.summaryLine())
+            result.exitCode?.let { append(" (exit $it)") }
+            if (result.durationMillis > 0) append(" in ${result.durationMillis}ms")
+            if (result.outputExcerpt.isNotBlank()) {
+                append("\n\n")
+                append(result.outputExcerpt)
+            }
+            if (result.relatedFiles.isNotEmpty()) {
+                append("\n\nRelated files:\n")
+                append(result.relatedFiles.joinToString("\n") { "- $it" })
+            }
+        }
 
     private fun reviewBlockMessage(review: ReviewArtifact?): String {
         if (review == null) {
@@ -2427,18 +2516,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val plan = registry.getPlan(n.id)
         val exec = registry.getExecution(n.id)
         val review = registry.getReview(n.id)
+        val validation = validationResults[n.id]
         val graph = project.service<DependencyGraphService>()
         val report = graph.analyze()
         val readiness = graph.readinessFor(n)
         updateOverviewSummary(report)
-        val canApply = !exec?.patches.isNullOrEmpty() && reviewAllowsApply(review)
+        val canApply = n.executionStatus != ExecutionStatus.APPLIED &&
+            n.executionStatus != ExecutionStatus.FAILED &&
+            !exec?.patches.isNullOrEmpty() &&
+            reviewAllowsApply(review)
         applyApprovedButton.isEnabled = canApply
-        applyApprovedButton.text = if (canApply) "Apply Approved Changes" else "Apply Blocked By Review"
-        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | node=${badgeFor(n)} | ready=${readiness.ready}"
+        applyApprovedButton.text = when {
+            canApply -> "Apply Approved Changes"
+            n.executionStatus == ExecutionStatus.FAILED -> "Validation Failed"
+            else -> "Apply Blocked By Review"
+        }
+        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         reviewSummaryArea.text = buildString {
             append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
             append("\n\n")
             append(changedFileSummary(exec))
+            if (validation != null) {
+                append("\n\n")
+                append(validation.summaryLine())
+            }
         }
 
         val issues = buildList {
@@ -2448,8 +2549,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val scopeDrops = exec?.validation?.risks.orEmpty().filter { it.contains("out-of-scope", ignoreCase = true) }
         safetyArea.text = when {
+            validation?.status == ProjectValidationService.ValidationResult.Status.FAIL -> validationReportText(validation)
+            validation?.status == ProjectValidationService.ValidationResult.Status.PASS -> validationReportText(validation)
+            validation?.status == ProjectValidationService.ValidationResult.Status.SKIPPED -> validationReportText(validation)
             issues.isNotEmpty() || scopeDrops.isNotEmpty() ->
                 (issues + scopeDrops).distinct().joinToString("\n") { "- $it" }
+            n.executionStatus == ExecutionStatus.FAILED -> "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing."
             exec?.status == "PARTIAL" -> "Execution is PARTIAL. Inspect the diff and validation notes before applying."
             exec?.status == "BLOCKED" -> "Execution is BLOCKED. Do not apply until the node is revised."
             review?.reviewStatus == "APPROVE" -> "Review approved. Scope compliance: ${review.scopeCompliance.result}."
@@ -2462,7 +2567,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Dependency blockers:\n" +
             readiness.reasons.joinToString("\n") { "- $it" }
         }
-        safetyArea.foreground = if (safetyArea.text.startsWith("-") || safetyArea.text.contains("BLOCKED") || safetyArea.text.contains("PARTIAL")) {
+        safetyArea.foreground = if (safetyArea.text.startsWith("-") ||
+            safetyArea.text.contains("BLOCKED") ||
+            safetyArea.text.contains("PARTIAL") ||
+            safetyArea.text.contains("failed", ignoreCase = true)
+        ) {
             BlueprintTheme.Warning
         } else {
             BlueprintTheme.Success
@@ -2627,9 +2736,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun updateGuide() {
         when {
+            nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
+                primaryActionButton.text = "Generate Code Diff"
+                guideLabel.text = "Validation failed after apply. Adjust the UML or code, then regenerate a reviewed diff."
+            }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
-                guideLabel.text = "Review approved the generated diff. Apply it to disk, then refresh UML from code."
+                guideLabel.text = "Review approved the generated diff. Apply it to disk; Blueprint will validate the project after apply."
             }
             currentUmlEntityCount() == 0 -> {
             primaryActionButton.text = "Refresh UML From Code"
@@ -2689,6 +2802,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val review = registry.getReview(node.id)
         return when {
             node.executionStatus == ExecutionStatus.APPLIED -> "APPLIED"
+            node.executionStatus == ExecutionStatus.FAILED -> "FAILED"
             node.executionStatus == ExecutionStatus.BLOCKED || exec?.status == "BLOCKED" -> "BLOCKED"
             exec?.status == "PARTIAL" -> "PARTIAL"
             review != null -> "REVIEWED"
@@ -2705,6 +2819,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "EXECUTED" -> BlueprintTheme.AccentSurface
             "PLANNED" -> BlueprintTheme.WarningSurface
             "BLOCKED" -> BlueprintTheme.DangerSurface
+            "FAILED" -> BlueprintTheme.DangerSurface
             "PARTIAL" -> BlueprintTheme.WarningSurface
             else -> BlueprintTheme.Surface
         }
