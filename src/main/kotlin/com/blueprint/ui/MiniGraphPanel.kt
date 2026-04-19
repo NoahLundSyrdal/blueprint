@@ -229,7 +229,7 @@ class MiniGraphPanel : JPanel() {
         if (nodes.isEmpty()) {
             g.color = Theme.Muted
             g.font = font.deriveFont(Font.PLAIN, 13f)
-            g.drawString("Click Abstract Code to UML to draw this project as architecture.", 24, 38)
+            g.drawString("Click Refresh UML From Code to draw this project as architecture.", 24, 38)
             cards = emptyMap()
             sourceBadges = emptyMap()
             return

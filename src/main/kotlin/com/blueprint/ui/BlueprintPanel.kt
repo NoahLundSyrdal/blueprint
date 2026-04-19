@@ -439,7 +439,7 @@ internal object GuidedInviteScenario {
         if (state.resetSuggested) {
             return listOf(
                 "Demo prompt scenario:",
-                "[done] Abstract Code to UML -> current code map is loaded.",
+                "[done] Refresh UML From Code -> current code map is loaded.",
                 if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
                 "[next] Reset the invite demo sandbox with Reset Demo Sandbox for ${state.resetPath}, or use Try This Change again after reset.",
@@ -456,7 +456,7 @@ internal object GuidedInviteScenario {
         if (!state.codeMapReady) {
             return listOf(
                 "Demo prompt scenario:",
-                "[next] Abstract Code to UML -> load the current code map first so Blueprint can choose a fresh demo change.",
+                "[next] Refresh UML From Code -> load the current code map first so Blueprint can choose a fresh demo change.",
                 "[wait] Try This Change -> available after the current code map loads.",
                 "[wait] Generate Code Diff -> available after the UML draft is updated.",
                 "[wait] Blueprint reviews the code patch before apply.",
@@ -492,7 +492,7 @@ internal object GuidedInviteScenario {
         }
         return listOf(
             "Demo prompt scenario:",
-            "${stepMarker(1, currentStep, state.codeMapReady)} Abstract Code to UML -> expect Project, User, and Invite in the current code map.",
+            "${stepMarker(1, currentStep, state.codeMapReady)} Refresh UML From Code -> expect Project, User, and Invite in the current code map.",
             if (state.promptReady) {
                 "${stepMarker(2, currentStep, state.umlDraftReady)} Try This Change: \"${state.prompt}\" -> $expectedResult"
             } else {
@@ -1074,7 +1074,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         text = """
             classDiagram
             %% Start here:
-            %% 1. Click "Abstract Code to UML" to read this Python project.
+            %% 1. Click "Refresh UML From Code" to read this Python project.
             %% 2. Edit the UML directly or ask chat to refine it.
             %% 3. Click "Generate Code Diff" when the design is ready.
             %%
@@ -1368,7 +1368,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val leftButtons = JPanel(GridLayout(0, 1, 4, 4)).apply {
             border = BorderFactory.createEmptyBorder(6, 6, 6, 6)
-            add(JButton("Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
+            add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
             add(JButton("Paste UML").apply { addActionListener { importUml() } })
             if (advancedMode.isSelected) add(JButton("Generate Code Diff").apply { addActionListener { generateCodeFromUml() } }) // Advanced mode only
             add(JButton("+ Manual Node").apply { addActionListener { addNode() } })
@@ -1853,7 +1853,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "When the UML looks right, click Generate Code Diff. Blueprint will prepare a reviewed code patch that you can inspect and then apply."
             }
             "abstract" in lower || "sync" in lower -> {
-                "Click Abstract Code to UML at any time. Blueprint will rescan the Python project and replace the editable UML with the current code architecture."
+                "Click Refresh UML From Code at any time. Blueprint will rescan the Python project and replace the editable UML with the current code architecture."
             }
             "blocked" in lower || "why" in lower -> {
                 val node = selected ?: return "Select a node in the UML diagram first, then ask why it is blocked."
@@ -1888,7 +1888,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "${selected.title.ifBlank { selected.id.take(8) }} is selected. Status: ${badgeFor(selected)}. " +
                     if (readiness.ready) "It is ready to run." else "It is blocked; ask 'why blocked' for details."
             }
-            else -> "Start with Abstract Code to UML. Refine the editable diagram here with chat, then click Generate Code Diff when the architecture is ready."
+            else -> "Start with Refresh UML From Code. Refine the editable diagram here with chat, then click Generate Code Diff when the architecture is ready."
         }
     }
 
@@ -4417,7 +4417,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun guidedNextState(): Pair<String, String> {
         val entityCount = currentUmlEntityCount()
         if (entityCount == 0) {
-            return "Next: Abstract Code to UML" to "Read the current Python project and draw the first UML diagram."
+            return "Next: Refresh UML From Code" to "Read the current Python project and draw the first UML diagram."
         }
 
         val allNodes = registry.all()
