@@ -4177,6 +4177,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
     }
 
+    private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String =
+        when {
+            state.resetSuggested ->
+                "Reset the invite demo sandbox, refresh UML from code, then use Try This Change again so Blueprint can load a fresh prompt for the current sandbox state."
+            state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
+                "Expect Invite to show expires_at in the refreshed UML and in the running feature path."
+            state.expectedRelationSource != null && state.expectedRelationTarget != null ->
+                "Expect ${state.expectedRelationSource} to show ${state.expectedEntity} in the refreshed UML and the running app flow."
+            else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app flow."
+        }
+
     private fun runDemoVerificationStep() {
         val state = currentInviteFirstRunScenarioState()
         val runCommand = state.runCommand
@@ -4189,13 +4200,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             logActivity("Demo e2e step failed: Run the changed app could not start because no run command was inferred.")
             return
         }
-        val expectedVisibleResult = when {
-            state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
-                "Expect Invite to show expires_at in the refreshed UML and in the running feature path."
-            state.expectedRelationSource != null && state.expectedRelationTarget != null ->
-                "Expect ${state.expectedRelationSource} to show ${state.expectedEntity} in the refreshed UML and the running app flow."
-            else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app flow."
-        }
+        val expectedVisibleResult = manualDemoExpectedVisibleResult(state)
         Messages.showInfoMessage(
             project,
             "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records this run step in Activity so the full demo path reads like a receipt.",
