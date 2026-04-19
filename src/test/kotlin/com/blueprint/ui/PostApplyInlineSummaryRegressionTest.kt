@@ -35,8 +35,8 @@ class PostApplyInlineSummaryRegressionTest {
     fun `review summary switches to inline applied summary when apply succeeds`() {
         assertTrue(source.contains("reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {"))
         assertTrue(source.contains("postApplyReviewSummary(exec, inlineSummary)"))
-        assertTrue(source.contains("val reviewText = summary.reviewPanelText(exec)"))
-        assertTrue(source.contains("if (reviewText.contains(summary.validationDetailsText)) return reviewText"))
+        assertTrue(source.contains("private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String ="))
+        assertTrue(source.contains("summary.reviewPanelText(exec)"))
         assertTrue(source.contains("fun reviewPanelText(exec: ExecutionArtifact?): String ="))
         assertTrue(source.contains("appendLine(receiptSummary)"))
         assertTrue(source.contains("appendLine(resultDetailsSection())"))

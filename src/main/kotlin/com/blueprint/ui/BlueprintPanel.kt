@@ -3926,16 +3926,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
 
-    private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String {
-        val reviewText = summary.reviewPanelText(exec)
-        if (reviewText.contains(summary.validationDetailsText)) return reviewText
-        val insertionPoint = summary.receiptSummary
-        val validationBlock = buildString {
-            appendLine(summary.receiptSummary)
-            appendLine(summary.validationDetailsText)
-        }.trim()
-        return reviewText.replaceFirst(insertionPoint, validationBlock)
-    }
+    private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String =
+        summary.reviewPanelText(exec)
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
         buildString {
