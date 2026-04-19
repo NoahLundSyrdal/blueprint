@@ -18,6 +18,7 @@ import com.blueprint.service.NodeExecutionService
 import com.blueprint.service.NodePlanningService
 import com.blueprint.service.NodeRegistry
 import com.blueprint.service.PatchFreshness
+import com.blueprint.service.ProjectRunService
 import com.blueprint.service.ProjectValidationService
 import com.blueprint.service.PythonProjectAnalyzer
 import com.blueprint.service.PythonUmlGenerator
@@ -845,6 +846,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
     private val runDemoButton = JButton("Run Demo Step").apply { addActionListener { runDemoVerificationStep() } }
+    private val runAppButton = JButton("Run In Blueprint").apply { addActionListener { toggleRunInBlueprint() } }
+    private val runOutputArea = JBTextArea(8, 40).apply {
+        isEditable = false
+        lineWrap = true
+        wrapStyleWord = false
+        text = "Run output will appear here after Blueprint starts the inferred project command."
+    }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
         addActionListener { runPrimaryProductAction() }
@@ -1451,6 +1459,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
+                add(runAppButton)
+            })
+            add(JPanel(BorderLayout()).apply {
+                border = BorderFactory.createTitledBorder("Run Output")
+                add(JBScrollPane(runOutputArea), BorderLayout.CENTER)
+                maximumSize = Dimension(Int.MAX_VALUE, 180)
             })
             val advancedRows = listOf(
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
@@ -3661,17 +3675,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it" }.orEmpty()
+        context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }.orEmpty()
 
     private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "Run the changed app with: $it" }
+        context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here." }
             ?: "Blueprint could not infer a run command yet. It looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =
         GuidedInviteScenario.matchesProject(project.name, project.basePath)
 
     private fun refreshFirstRunScenario() {
-        if (!shouldShowInviteFirstRunScenario()) return
+        if (!shouldShowInviteFirstRunScenario()) {
+            refreshRunControls()
+            return
+        }
         val state = currentInviteFirstRunScenarioState()
         firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
         demoReceiptArea.text = state.demoReceiptText()
@@ -3690,6 +3707,67 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
             state.runVerified -> "Blueprint already recorded a passed demo run for: ${state.runCommand}"
             else -> "Record the final manual demo step and expected visible result for: ${state.runCommand}"
+        }
+        refreshRunControls()
+    }
+
+    private fun refreshRunControls() {
+        val runner = project.service<ProjectRunService>()
+        if (runner.isRunning()) {
+            runAppButton.text = "Stop Run"
+            runAppButton.isEnabled = true
+            runAppButton.toolTipText = "Stop the inferred project command running inside Blueprint."
+            return
+        }
+        val runCommand = runner.inferredRunCommand()
+        runAppButton.text = "Run In Blueprint"
+        runAppButton.isEnabled = !runCommand.isNullOrBlank()
+        runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }
+            ?: runner.noCommandSummary()
+    }
+
+    private fun toggleRunInBlueprint() {
+        val runner = project.service<ProjectRunService>()
+        if (runner.isRunning()) {
+            val stopped = runner.stopRun()
+            if (stopped) {
+                runOutputArea.text = listOf(runOutputArea.text.trimEnd(), "", "Run stopped from Blueprint.").filter { it.isNotBlank() }.joinToString("\n")
+                logActivity("Stopped in-app run for the inferred Python command.")
+                status("Run stopped")
+            }
+            refreshRunControls()
+            return
+        }
+        runOutputArea.text = "Preparing inferred run command..."
+        runner.runInferredCommand { state ->
+            when (state.status) {
+                ProjectRunService.RunState.Status.FAILED -> {
+                    runOutputArea.text = listOf(state.summary, state.output).filter { it.isNotBlank() }.joinToString("\n\n")
+                    status("Run failed")
+                    logActivity("In-app run failed: ${state.summary}")
+                }
+                ProjectRunService.RunState.Status.FINISHED -> {
+                    runOutputArea.text = listOf(state.output, state.summary).filter { it.isNotBlank() }.joinToString("\n\n")
+                    status("Run finished")
+                    logActivity("In-app run finished: ${state.command}")
+                }
+                ProjectRunService.RunState.Status.STOPPED -> {
+                    runOutputArea.text = listOf(state.output, state.summary).filter { it.isNotBlank() }.joinToString("\n\n")
+                    status("Run stopped")
+                    logActivity("In-app run stopped: ${state.command}")
+                }
+                ProjectRunService.RunState.Status.RUNNING -> {
+                    runOutputArea.text = if (state.output.isBlank()) state.summary else state.output
+                    status("Streaming app output")
+                }
+                ProjectRunService.RunState.Status.STARTING -> {
+                    runOutputArea.text = state.summary
+                    status("Starting inferred run command")
+                    logActivity("Started in-app run for ${state.command}")
+                }
+                ProjectRunService.RunState.Status.IDLE -> Unit
+            }
+            refreshRunControls()
         }
     }
 
