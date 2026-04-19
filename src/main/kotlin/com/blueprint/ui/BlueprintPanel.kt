@@ -361,7 +361,7 @@ internal object GuidedInviteScenario {
             } else {
                 "${stepMarker(2, currentStep, false)} Try This Change -> use the button to load the fresh prompt into chat first."
             },
-            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
+            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed code patch for $PATCH_PATH.",
             "${stepMarker(3, currentStep, state.reviewedDiffReady)} Review Approved Changes -> expect Blueprint to approve the reviewed code patch before apply.",
             "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
             "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
@@ -1991,27 +1991,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "Refine the UML, or click Refresh UML From Code to verify the current code before trying a different change."
             }
             reviewSummaryArea.text = if (checked == 0) {
-                "No code changes: UML already matches code. $nextStep"
+                "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
             } else {
-                "No code changes: UML already matches code for $checked checked node(s). $nextStep"
+                "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
             }
-            safetyArea.text = "No diff to apply."
+            safetyArea.text = "No reviewed code patch to apply."
             showArtifactTab("Review")
             status("No code changes needed")
             appendChat(
                 "Blueprint",
                 if (checked == 0) {
-                    "No code changes: UML already matches code. $nextStep"
-                } else {
-                    "No code changes: UML already matches code for $checked checked node(s). $nextStep"
-                }
-            )
-            showArtifactTab("Review")
-            status("No code changes needed")
-            appendChat(
-                "Blueprint",
-                if (checked == 0) {
-                    "No code changes needed. $nextStep"
+                    "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
                 } else {
                     "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
                 }
