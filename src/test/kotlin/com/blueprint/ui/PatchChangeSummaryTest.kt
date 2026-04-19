@@ -78,6 +78,35 @@ class PatchChangeSummaryTest {
         assertEquals("No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
     }
 
+
+    @Test
+    fun `apply summary reuses semantic lines after apply`() {
+        val exec = ExecutionArtifact(
+            summary = "Applied invite updates.",
+            patches = listOf(
+                Patch(
+                    path = "app/models.py",
+                    action = PatchAction.update.name,
+                    content = """
+                        class Invite:
+                            accepted_at: datetime | None = None
+
+                        class InviteAuditLog:
+                            actor_ip: str
+                    """.trimIndent(),
+                ),
+            ),
+        )
+
+        val summary = PatchChangeSummary.applySummary(exec, listOf("app/models.py"))
+
+        assertTrue(summary.contains("What changed:"))
+        assertTrue(summary.contains("Invite + accepted_at: datetime | None"))
+        assertTrue(summary.contains("InviteAuditLog + actor_ip: str"))
+        assertTrue(summary.contains("Changed files (1):"))
+        assertTrue(summary.contains("- update app/models.py"))
+    }
+
     @Test
     fun `apply summary ignores paths that are not part of the reviewed diff`() {
         val exec = ExecutionArtifact(
