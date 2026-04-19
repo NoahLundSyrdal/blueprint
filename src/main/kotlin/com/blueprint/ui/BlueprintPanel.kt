@@ -516,9 +516,10 @@ internal object ReviewExplanation {
         review: ReviewArtifact?,
         readiness: DependencyGraphService.NodeReadiness?,
         validation: ProjectValidationService.ValidationResult?,
+        validationCommand: String?,
     ): String {
         if (review == null) return "Review not run yet. Generate Code Diff first so Blueprint can review the patch before apply."
-        return details(nodeTitle, exec, review, readiness, validation).joinToString("\n")
+        return details(nodeTitle, exec, review, readiness, validation, validationCommand).joinToString("\n")
     }
 
     fun statusLine(nodeTitle: String, exec: ExecutionArtifact?, review: ReviewArtifact?): String {
@@ -538,6 +539,7 @@ internal object ReviewExplanation {
         review: ReviewArtifact,
         readiness: DependencyGraphService.NodeReadiness?,
         validation: ProjectValidationService.ValidationResult?,
+        validationCommand: String?,
     ): List<String> {
         val shortTitle = nodeTitle.ifBlank { "this change" }
         val changePhrase = changePhrase(exec)
@@ -557,6 +559,8 @@ internal object ReviewExplanation {
             ProjectValidationService.ValidationResult.Status.FAIL -> "Validation status: failed after apply."
             null -> "Validation status: will run after apply if Blueprint can infer a command."
         }
+        val validationCommandLine = validationCommand?.let { "Validation after apply: $it" }
+            ?: "Validation after apply: Blueprint could not infer a validation command, so validation will be skipped unless you run checks manually."
         val lines = mutableListOf<String>()
         if (review.reviewStatus.uppercase() == "APPROVE") {
             lines += "Why is it safe to apply?"
@@ -572,6 +576,7 @@ internal object ReviewExplanation {
         }
         lines += "- $scopeLine"
         lines += "- $dependencyLine"
+        lines += "- $validationCommandLine"
         lines += "- $validationLine"
         return lines
     }
@@ -2707,6 +2712,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 review = r,
                 readiness = project.service<DependencyGraphService>().readinessFor(n),
                 validation = validationResults[n.id],
+                validationCommand = project.service<ProjectValidationService>().selectedCommand(),
             )
             val reviewStatusLine = ReviewExplanation.statusLine(
                 nodeTitle = n.title.ifBlank { n.id.take(8) },
@@ -3359,6 +3365,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 review = it,
                 readiness = readiness,
                 validation = validation,
+                validationCommand = project.service<ProjectValidationService>().selectedCommand(),
             )
         }
         safetyArea.text = when {

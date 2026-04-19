@@ -69,6 +69,7 @@ class ReviewExplanationTest {
             ),
             readiness = DependencyGraphService.NodeReadiness(nodeId = "invite-update", ready = true, reasons = emptyList(), wave = 1),
             validation = null,
+            validationCommand = "python -m pytest",
         )
 
         assertTrue(text.contains("Why is it safe to apply?"))
@@ -77,6 +78,7 @@ class ReviewExplanationTest {
         assertTrue(text.contains("- Scope: stays within the selected files."))
         assertTrue(text.contains("- Safety: Only the selected model file changes. Fields match the UML request."))
         assertTrue(text.contains("- Dependency status: ready."))
+        assertTrue(text.contains("- Validation after apply: python -m pytest"))
         assertTrue(text.contains("- Validation status: will run after apply"))
     }
 
@@ -110,9 +112,11 @@ class ReviewExplanationTest {
                 status = ProjectValidationService.ValidationResult.Status.SKIPPED,
                 reason = "No command inferred.",
             ),
+            validationCommand = null,
         )
 
         assertTrue(text.contains("- Safety: No concrete safety issues were reported."))
+        assertTrue(text.contains("- Validation after apply: Blueprint could not infer a validation command, so validation will be skipped unless you run checks manually."))
         assertTrue(text.contains("- Validation status: skipped after apply."))
     }
 
@@ -176,6 +180,7 @@ class ReviewExplanationTest {
                 status = ProjectValidationService.ValidationResult.Status.SKIPPED,
                 reason = "No Python validation command was inferred for this project.",
             ),
+            validationCommand = null,
         )
 
         assertTrue(text.contains("Why is it blocked?"))
@@ -184,6 +189,7 @@ class ReviewExplanationTest {
         assertTrue(text.contains("- Acceptance: The patch edits app/routes.py instead of only the requested model file."))
         assertTrue(text.contains("- Scope: review found out-of-scope changes."))
         assertTrue(text.contains("- Dependency status: blocked by parent node not applied."))
+        assertTrue(text.contains("- Validation after apply: Blueprint could not infer a validation command, so validation will be skipped unless you run checks manually."))
         assertTrue(text.contains("- Validation status: skipped after apply."))
     }
 }
