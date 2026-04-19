@@ -1484,7 +1484,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 val node = selected ?: return "Select a node in the UML diagram first, then ask why it is blocked."
                 val readiness = graph.readinessFor(node)
                 if (readiness.ready) {
-                    "${node.title.ifBlank { node.id.take(8) }} is ready. Run Generate Plan, then Execute Node."
+                    "${node.title.ifBlank { node.id.take(8) }} is ready. Keep refining the UML if needed, then click Generate Code Diff."
                 } else {
                     "Blocked reasons for ${node.title.ifBlank { node.id.take(8) }}:\n" +
                         readiness.reasons.joinToString("\n") { "- $it" }
@@ -1492,9 +1492,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "next" in lower || "run" in lower -> {
                 if (ready.isEmpty()) {
-                    "No nodes are ready right now. Check the UML diagram for blocked nodes, or select a node and ask why it is blocked."
+                    "No reviewed code patch is ready yet. Refine the UML, or select a UML item and ask why it is blocked."
                 } else {
-                    "Next ready node: ${ready.first().title.ifBlank { ready.first().id.take(8) }}.\nRun Generate Plan -> Execute Node -> Review -> Preview Diff -> Apply All."
+                    "Next ready UML item: ${ready.first().title.ifBlank { ready.first().id.take(8) }}.\nReview the diagram, then click Generate Code Diff when you are ready for a reviewed code patch."
                 }
             }
             "changed" in lower || "diff" in lower -> {
