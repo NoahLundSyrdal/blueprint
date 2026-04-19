@@ -3526,11 +3526,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun emptyUmlGuideText(): String {
         val context = project.service<PythonProjectAnalyzer>().analyze()
         if (context.isPythonLikely()) {
-            return "Start by reading the current project into an editable UML diagram."
+            return "No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram."
         }
         val nextStep = context.notes.firstOrNull()
             ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
-        return "Blueprint has not found enough Python project structure yet. $nextStep"
+        return "This folder does not look like a supported Python project yet. $nextStep"
     }
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =

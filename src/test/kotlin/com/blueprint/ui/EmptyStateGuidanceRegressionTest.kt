@@ -15,8 +15,8 @@ class EmptyStateGuidanceRegressionTest {
         assertTrue(source.contains("guideLabel.text = emptyUmlGuideText()"))
         assertTrue(source.contains("private fun emptyUmlGuideText(): String"))
         assertTrue(source.contains("if (context.isPythonLikely()) {"))
-        assertTrue(source.contains("Start by reading the current project into an editable UML diagram."))
-        assertTrue(source.contains("Blueprint has not found enough Python project structure yet."))
+        assertTrue(source.contains("No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram."))
+        assertTrue(source.contains("This folder does not look like a supported Python project yet."))
     }
 
     @Test
@@ -25,6 +25,6 @@ class EmptyStateGuidanceRegressionTest {
 
         assertTrue(source.contains("val nextStep = context.notes.firstOrNull()"))
         assertTrue(source.contains("?: \"Open a Python folder or add .py files, then click Refresh UML From Code again.\""))
-        assertTrue(source.contains("return \"Blueprint has not found enough Python project structure yet. \$nextStep\""))
+        assertTrue(source.contains("return \"This folder does not look like a supported Python project yet. \$nextStep\""))
     }
 }

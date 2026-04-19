@@ -12,7 +12,7 @@ class PrimaryActionCopyRegressionTest {
 
         assertTrue(source.contains("primaryActionButton.text = \"Refresh UML From Code\""))
         assertTrue(source.contains("guideLabel.text = emptyUmlGuideText()"))
-        assertTrue(source.contains("\"Start by reading the current project into an editable UML diagram.\""))
+        assertTrue(source.contains("\"No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram.\""))
     }
 
     @Test
