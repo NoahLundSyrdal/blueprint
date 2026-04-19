@@ -516,7 +516,7 @@ internal object ReviewExplanation {
         val shortTitle = nodeTitle.ifBlank { "this change" }
         val changePhrase = changePhrase(exec)
         return if (review.reviewStatus.uppercase() == "APPROVE") {
-            "Review approved $shortTitle because $changePhrase stays in scope and no blocking safety issues were reported."
+            "Review approved $shortTitle because $changePhrase stays in scope. ${compactApprovalReason(review)}"
         } else {
             "Review blocked $shortTitle because ${blockerLine(review)} Fix: ${fixLine(review)}"
         }
@@ -583,6 +583,11 @@ internal object ReviewExplanation {
         review.issues.firstOrNull()?.suggestedFix?.ifBlank { null }
             ?: review.followUpChecks.firstOrNull()
             ?: "adjust the UML or regenerate the patch and review again."
+
+    private fun compactApprovalReason(review: ReviewArtifact): String =
+        review.positiveSignals.firstOrNull()?.trim()?.trimEnd('.')?.let {
+            "$it."
+        } ?: "No blocking safety issues were reported."
 
     private fun safetyLine(review: ReviewArtifact): String =
         when {
