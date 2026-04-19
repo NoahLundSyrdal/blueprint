@@ -16,7 +16,10 @@ class ValidationCommandReceiptRegressionTest {
     }
 
     @Test
-    fun `validation failure copy points users back to generate code diff or manual inspection`() {
-        assertTrue(source.contains("Validation failed after apply. Generate Code Diff again after you fix the problem, or inspect the related file manually before continuing."))
+    fun `validation failure copy points users to the safest recovery step`() {
+        assertTrue(source.contains("private fun validationFailureRecoveryMessage(reviewFreshnessBadge: String?): String = when (reviewFreshnessBadge) {"))
+        assertTrue(source.contains("\"Validation failed after apply. The reviewed code patch is stale now, so Generate Code Diff again after you adjust the UML or code. Inspect the related file manually first if you need to understand the failure.\""))
+        assertTrue(source.contains("\"Validation failed after apply. Inspect the related file manually first. If you change the UML or code, Generate Code Diff again before you continue.\""))
+        assertTrue(source.contains("\"Validation failed after apply. Inspect the related file manually first. If the fix changes the UML or code, Generate Code Diff again before you continue.\""))
     }
 }

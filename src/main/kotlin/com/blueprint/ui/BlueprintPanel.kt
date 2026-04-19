@@ -421,6 +421,21 @@ private fun manualVerificationTooltip(hasLikelyEntryFiles: Boolean): String =
         "No run command was inferred yet. Refresh UML From Code, inspect a likely entry file manually, run it, and confirm the feature."
     }
 
+private fun validationFailureRecoveryMessage(reviewFreshnessBadge: String?): String = when (reviewFreshnessBadge) {
+    "STALE" ->
+        "Validation failed after apply. The reviewed code patch is stale now, so Generate Code Diff again after you adjust the UML or code. Inspect the related file manually first if you need to understand the failure."
+    "FRESH" ->
+        "Validation failed after apply. Inspect the related file manually first. If you change the UML or code, Generate Code Diff again before you continue."
+    else ->
+        "Validation failed after apply. Inspect the related file manually first. If the fix changes the UML or code, Generate Code Diff again before you continue."
+}
+
+private fun validationFailureNextStepDetail(reviewFreshnessBadge: String?): String = when (reviewFreshnessBadge) {
+    "STALE" -> "Validation failed after apply, and the reviewed code patch is stale now, so Generate Code Diff again after you adjust the UML or code."
+    "FRESH" -> "Validation failed after apply. Inspect the related file manually first, then Generate Code Diff again if you changed the UML or code."
+    else -> "Validation failed after apply. Inspect the related file manually first, then Generate Code Diff again if the fix changed the UML or code."
+}
+
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
     val candidateList = candidates.joinToString(", ")
@@ -4196,7 +4211,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 listOf((issues + scopeDrops).distinct().joinToString("\n") { "- $it" }, commandBlock).joinToString("\n\n")
             reviewDetails != null -> listOf(reviewDetails.joinToString("\n"), commandBlock).joinToString("\n\n")
             n.executionStatus == ExecutionStatus.FAILED -> listOf(
-                "Validation failed after apply. Generate Code Diff again after you fix the problem, or inspect the related file manually before continuing.",
+                validationFailureRecoveryMessage(reviewFreshness.badge),
                 commandBlock,
             ).joinToString("\n\n")
             exec?.status == "PARTIAL" -> listOf(
@@ -4390,9 +4405,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         refreshFirstRunScenario()
         when {
             nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
+                val failedNode = nodeList.selectedValue
+                val failedFreshness = failedNode?.let { reviewFreshnessFor(it, registry.getExecution(it.id)) }
                 primaryActionButton.text = "Generate Code Diff"
-                guideLabel.text = "Validation failed after apply. Adjust the UML or code, then Generate Code Diff again."
-                updateNextStepBanner("Next: Generate Code Diff", "Validation failed after apply, so the reviewed code patch needs another pass.")
+                guideLabel.text = validationFailureRecoveryMessage(failedFreshness?.badge)
+                updateNextStepBanner("Next: Generate Code Diff", validationFailureNextStepDetail(failedFreshness?.badge))
             }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"

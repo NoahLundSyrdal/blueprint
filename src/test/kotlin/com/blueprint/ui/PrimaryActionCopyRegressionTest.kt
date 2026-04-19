@@ -44,7 +44,9 @@ class PrimaryActionCopyRegressionTest {
     fun `next step banner includes failed validation guidance`() {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
-        assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", \"Validation failed after apply, so the reviewed code patch needs another pass.\")"))
+        assertTrue(source.contains("guideLabel.text = validationFailureRecoveryMessage(failedFreshness?.badge)"))
+        assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", validationFailureNextStepDetail(failedFreshness?.badge))"))
+        assertTrue(source.contains("private fun validationFailureNextStepDetail(reviewFreshnessBadge: String?): String = when (reviewFreshnessBadge) {"))
     }
 
     @Test
