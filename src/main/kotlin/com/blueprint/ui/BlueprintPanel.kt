@@ -740,7 +740,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             %% 3. Click "Generate Code Diff" when the design is ready.
             %%
             %% This loop can run anytime:
-            %% codebase -> UML -> chat refinement -> reviewed code diff -> apply -> UML again
+            %% codebase -> UML -> chat refinement -> Generate Code Diff -> Apply Approved Changes -> UML again
         """.trimIndent()
     }
 
@@ -1628,7 +1628,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         You are Blueprint, an architecture assistant inside PyCharm.
 
         Product loop:
-        codebase -> editable UML -> chat refinement -> reviewed code diff -> plan/execute/review/apply -> UML again.
+        codebase -> editable UML -> chat refinement -> Generate Code Diff -> plan/execute/review/apply -> UML again.
 
         Answer the user's question clearly and briefly. Do not claim you changed code unless the user used the execution buttons.
         When useful, refer to the selected entity's source, fields, methods, relationships, current UML, and generated nodes.
@@ -1813,7 +1813,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (text.isBlank() || !text.contains("classDiagram")) {
             Messages.showWarningDialog(
                 project,
-                "The UML editor needs Mermaid classDiagram text before Blueprint can generate reviewed code diff.",
+                "The UML editor needs Mermaid classDiagram text before Blueprint can Generate Code Diff.",
                 "Blueprint - Generate Code Diff"
             )
             status("No usable UML to generate code")
