@@ -16,6 +16,7 @@ class PythonProjectAnalyzerDetectionTest {
             frameworks = listOf("pytest"),
             testCommands = listOf("python -m pytest"),
             runCommands = listOf("python app.py"),
+            runEntryCandidates = listOf("app.py"),
             notes = emptyList(),
         ).promptContext()
 

@@ -296,7 +296,7 @@ internal data class FirstRunChecklistState(
         }
         val runLine = when {
             runCommand.isNullOrBlank() ->
-                "No run command was inferred. Open the project entrypoint or main screen manually and verify the changed feature exists."
+                "Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
             runVerified ->
                 "Run verified with: $runCommand"
             else ->
@@ -447,7 +447,7 @@ internal object GuidedInviteScenario {
 
     fun checklistText(state: GuidedInviteScenarioState): String {
         val runStep = when {
-            state.runCommand.isNullOrBlank() -> "Run the changed app -> no run command was inferred yet, so open the project entrypoint or main screen manually to verify the feature."
+            state.runCommand.isNullOrBlank() -> "Run the changed app -> Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
             state.runVerified -> "Run the changed app -> pass. Verified with: ${state.runCommand}"
             else -> "Run the changed app -> start with: ${state.runCommand}; verify the new feature appears."
         }
@@ -4075,7 +4075,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }
-            ?: "Blueprint could not infer a run command, so open the project entrypoint or main screen manually and verify the changed feature exists."
+            ?: missingRunCommandGuidance(context)
 
     private fun generateDiffGuideSummary(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
@@ -4103,7 +4103,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "Run after apply with: $it" }
-            ?: "Run after apply: Blueprint could not infer a command yet, so open the project entrypoint manually to verify the feature."
+            ?: "Run after apply: ${missingRunCommandGuidance(context)}"
 
     private fun commandReviewBlock(
         validationCommand: String?,
@@ -4116,7 +4116,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here." }
-            ?: "Blueprint could not infer a run command yet. Open the project entrypoint or main screen manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+            ?: missingRunCommandGuidance(context)
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =
         GuidedInviteScenario.matchesProject(project.name, project.basePath)
@@ -4160,7 +4160,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
             runDemoButton.isEnabled = genericState.codeMapReady
             runDemoButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use this checklist to verify the project entrypoint manually."
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use this checklist to verify one of the likely entry files manually."
                 genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
                 else -> "Record how you verified the changed app with: ${genericState.runCommand}"
             }
@@ -4237,10 +4237,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun runOutputIdleHint(): String {
         val runner = project.service<ProjectRunService>()
-        val runCommand = runner.inferredRunCommand()
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val runCommand = runner.inferredRunCommand(context)
         return runCommand?.let {
             "Run Output\n\nClick Run In Blueprint to start: $it\nBlueprint will stream stdout and stderr here. If the app keeps running, use Stop Run when you are done verifying the feature."
-        } ?: "Run Output\n\n${runner.noCommandSummary()}\nWhen a command is available, Run In Blueprint will stream stdout and stderr here."
+        } ?: "Run Output\n\n${runner.noCommandSummary(context)}\nWhen a command is available, Run In Blueprint will stream stdout and stderr here."
+    }
+
+    private fun missingRunCommandGuidance(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String {
+        val candidates = context.runEntryCandidates.take(4)
+        return if (candidates.isEmpty()) {
+            "Blueprint could not infer a run command yet. Open the likely entrypoint manually and verify the changed feature exists. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+        } else {
+            "Blueprint could not infer a run command yet. Open one of these likely entry files manually and verify the changed feature exists: ${candidates.joinToString(", ")}."
+        }
     }
 
     private fun currentInvitePrompt(): String? =

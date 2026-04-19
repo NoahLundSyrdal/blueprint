@@ -32,6 +32,7 @@ class PythonProjectAnalyzer(private val project: Project) {
         val frameworks: List<String>,
         val testCommands: List<String>,
         val runCommands: List<String>,
+        val runEntryCandidates: List<String>,
         val notes: List<String>,
         val filesAnalyzed: List<String> = emptyList(),
         val skippedFiles: List<SkippedFile> = emptyList(),
@@ -48,6 +49,7 @@ class PythonProjectAnalyzer(private val project: Project) {
                 appendLine("- Source roots: ${sourceRoots.joinToString(", ").ifBlank { "No Python source roots detected yet." }}")
                 appendLine("- Validation command: ${testCommands.firstOrNull() ?: "No validation command inferred yet."}")
                 appendLine("- Run command: ${runCommands.firstOrNull() ?: "No run command inferred yet."}")
+                appendLine("- Run entry candidates: ${runEntryCandidates.joinToString(", ").ifBlank { "No entry files identified yet." }}")
                 appendLine("- Scope summary: ${scopeSummaryLine()}")
             }.trim()
 
@@ -107,6 +109,7 @@ class PythonProjectAnalyzer(private val project: Project) {
                 appendLine("frameworkHints: ${frameworks.joinToString(", ").ifBlank { "(none found)" }}")
                 appendLine("suggestedTestCommands: ${testCommands.joinToString(" && ").ifBlank { "(none inferred)" }}")
                 appendLine("suggestedRunCommands: ${runCommands.joinToString(" && ").ifBlank { "(none inferred)" }}")
+                appendLine("runEntryCandidates: ${runEntryCandidates.joinToString(", ").ifBlank { "(none identified)" }}")
                 appendLine("scopeSummary: ${scopeSummaryLine()}")
                 if (filesAnalyzed.isNotEmpty()) {
                     appendLine("filesAnalyzed: ${filesAnalyzed.joinToString(", ")}")
@@ -144,6 +147,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             val frameworks = detectFrameworks(text, base)
             val packageManager = detectPackageManager(configFiles, text)
             val testCommands = inferTestCommands(packageManager, configFiles, frameworks, testRoots)
+            val runEntryCandidates = inferRunEntryCandidates(base, sourceRoots, frameworks)
             val runCommands = inferRunCommands(base, sourceRoots, frameworks)
             val scopeScan = scanProjectScope(base, sourceRoots, maxDepth)
             val notes = buildList {
@@ -172,6 +176,7 @@ class PythonProjectAnalyzer(private val project: Project) {
                 frameworks = frameworks,
                 testCommands = testCommands,
                 runCommands = runCommands,
+                runEntryCandidates = runEntryCandidates,
                 notes = notes,
                 filesAnalyzed = scopeScan.filesAnalyzed,
                 skippedFiles = scopeScan.skipped,
@@ -290,7 +295,51 @@ class PythonProjectAnalyzer(private val project: Project) {
     }
 
     private fun inferRunCommands(base: Path, sourceRoots: List<String>, frameworks: List<String>): List<String> {
-        val commands = mutableListOf<String>()
+        val commands = linkedSetOf<String>()
+        val candidates = inferRunCandidates(base, sourceRoots, frameworks)
+        val packageRunCommand = preferredPackageRunCommand(base, candidates.candidatePackages, candidates.detectedPackage)
+
+        candidates.fastApiPath?.let { path ->
+            val fastApiModule = inferFrameworkModule(base, path, candidates.sourcePackages, "server")
+            if (fastApiModule != null) {
+                commands += "uvicorn $fastApiModule:app --reload"
+            }
+            commands += "python ${inferPreferredPythonPath(base, path, candidates.sourcePackages, "server")}"
+        }
+        if ("flask" in frameworks) {
+            candidates.detectedPackage?.let { commands += "flask --app ${it.replace('/', '.')}.api run" }
+            if (commands.none { it.startsWith("flask --app ") }) {
+                candidates.flaskPath?.let { path ->
+                    commands += "flask --app ${inferFrameworkModule(base, path, candidates.sourcePackages, "api") ?: moduleName(path)} run"
+                }
+            }
+        }
+        candidates.streamlitPath?.let { path -> commands += "streamlit run $path" }
+        candidates.appLikePath?.let { commands += "python $it" }
+        if (commands.isEmpty()) {
+            candidates.mainGuardPath?.let { commands += "python $it" }
+            packageRunCommand?.let { commands += it }
+        }
+        if (commands.isEmpty()) {
+            packageRunCommand?.let { commands += it }
+        }
+        return commands.toList()
+    }
+
+    private fun inferRunEntryCandidates(base: Path, sourceRoots: List<String>, frameworks: List<String>): List<String> {
+        val candidates = inferRunCandidates(base, sourceRoots, frameworks)
+        return buildList {
+            candidates.fastApiPath?.let { add(it) }
+            candidates.flaskPath?.let { add(it) }
+            candidates.streamlitPath?.let { add(it) }
+            candidates.appLikePath?.let { add(it) }
+            candidates.relPaths.firstOrNull { it == "main.py" || it.endsWith("/main.py") }?.let { add(it) }
+            candidates.relPaths.firstOrNull { it == "__main__.py" || it.endsWith("/__main__.py") }?.let { add(it) }
+            candidates.mainGuardPath?.let { add(it) }
+        }.distinct()
+    }
+
+    private fun inferRunCandidates(base: Path, sourceRoots: List<String>, frameworks: List<String>): RunCandidates {
         val pythonFiles = walkPythonFiles(base, 4)
         val relPaths = pythonFiles.map { base.relativize(it).toString().replace('\\', '/') }
         val sourcePackages = sourceRoots.filter { it != "." }
@@ -298,41 +347,45 @@ class PythonProjectAnalyzer(private val project: Project) {
         val detectedPackage = candidatePackages.firstOrNull() ?: sourcePackages.firstOrNull { it != "src" && it != "app" }
         val appLikePath = relPaths.firstOrNull { it == "app.py" || it.endsWith("/app.py") || it == "main.py" || it.endsWith("/main.py") }
         val mainGuardPath = relPaths.firstOrNull { hasMainGuard(base.resolve(it)) }
-        val packageRunCommand = preferredPackageRunCommand(base, candidatePackages, detectedPackage)
-
-        if ("fastapi" in frameworks) {
-            val fastApiPath = relPaths.firstOrNull {
+        val fastApiPath = if ("fastapi" in frameworks) {
+            relPaths.firstOrNull {
                 hasAnyText(base.resolve(it), listOf("FastAPI(", "fastapi.FastAPI(", "APIRouter(", "from fastapi import"))
             }
-            val fastApiModule = fastApiPath?.let { inferFrameworkModule(base, it, sourcePackages, "server") }
-            if (fastApiModule != null) {
-                commands += "uvicorn $fastApiModule:app --reload"
+        } else {
+            null
+        }
+        val flaskPath = if ("flask" in frameworks) {
+            relPaths.firstOrNull {
+                hasAnyText(base.resolve(it), listOf("Flask(", "flask.Flask(", "Blueprint(", "from flask import"))
             }
-            fastApiPath?.let { path ->
-                commands += "python ${inferPreferredPythonPath(base, path, sourcePackages, "server")}" }
+        } else {
+            null
         }
-        if ("flask" in frameworks) {
-            detectedPackage?.let { commands += "flask --app ${it.replace('/', '.')}.api run" }
-            if (commands.none { it.startsWith("flask --app ") }) {
-                relPaths.firstOrNull {
-                    hasAnyText(base.resolve(it), listOf("Flask(", "flask.Flask(", "Blueprint(", "from flask import"))
-                }?.let { path ->
-                    commands += "flask --app ${inferFrameworkModule(base, path, sourcePackages, "api") ?: moduleName(path)} run"
-                }
-            }
-        }
-        relPaths.firstOrNull { hasAnyText(base.resolve(it), listOf("streamlit.", "import streamlit")) }
-            ?.let { path -> commands += "streamlit run $path" }
-        appLikePath?.let { commands += "python $it" }
-        if (commands.isEmpty()) {
-            mainGuardPath?.let { commands += "python $it" }
-            packageRunCommand?.let { commands += it }
-        }
-        if (commands.isEmpty()) {
-            packageRunCommand?.let { commands += it }
-        }
-        return commands.distinct()
+        val streamlitPath = relPaths.firstOrNull { hasAnyText(base.resolve(it), listOf("streamlit.", "import streamlit")) }
+        return RunCandidates(
+            relPaths = relPaths,
+            sourcePackages = sourcePackages,
+            candidatePackages = candidatePackages,
+            detectedPackage = detectedPackage,
+            appLikePath = appLikePath,
+            mainGuardPath = mainGuardPath,
+            fastApiPath = fastApiPath,
+            flaskPath = flaskPath,
+            streamlitPath = streamlitPath,
+        )
     }
+
+    private data class RunCandidates(
+        val relPaths: List<String>,
+        val sourcePackages: List<String>,
+        val candidatePackages: List<String>,
+        val detectedPackage: String?,
+        val appLikePath: String?,
+        val mainGuardPath: String?,
+        val fastApiPath: String?,
+        val flaskPath: String?,
+        val streamlitPath: String?,
+    )
 
     private fun preferredPackageRunCommand(base: Path, candidatePackages: List<String>, detectedPackage: String?): String? {
         val preferredPackage = candidatePackages.firstOrNull { isImportablePackage(base.resolve(it)) }
@@ -513,6 +566,7 @@ class PythonProjectAnalyzer(private val project: Project) {
             frameworks = emptyList(),
             testCommands = emptyList(),
             runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
             notes = emptyList(),
         )
 

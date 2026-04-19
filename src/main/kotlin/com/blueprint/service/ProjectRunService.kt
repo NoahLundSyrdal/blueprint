@@ -119,8 +119,15 @@ class ProjectRunService(private val project: Project) {
     /**
      * Returns the safe fallback message shown when no run command can be inferred.
      */
-    fun noCommandSummary(): String =
-        "Blueprint could not infer a run command yet. Refresh UML From Code first, or run the project entrypoint manually."
+    fun noCommandSummary(context: PythonProjectAnalyzer.PythonProjectContext = project.getService(PythonProjectAnalyzer::class.java).analyze()): String {
+        val candidates = context.runEntryCandidates.take(4)
+        val candidateText = if (candidates.isEmpty()) {
+            "Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+        } else {
+            "Open one of these likely entry files manually: ${candidates.joinToString(", ")}."
+        }
+        return "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. $candidateText"
+    }
 
     private fun attachActiveProcess(launchId: Long, process: Process) {
         if (launchId != launchToken.get()) {

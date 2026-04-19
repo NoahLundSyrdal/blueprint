@@ -77,6 +77,7 @@ class ProjectValidationServiceTest {
             frameworks = emptyList(),
             testCommands = emptyList(),
             runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
             notes = emptyList(),
         )
 
@@ -132,6 +133,7 @@ class ProjectValidationServiceTest {
             frameworks = listOf("pytest"),
             testCommands = testCommands,
             runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
             notes = emptyList(),
         )
 }

@@ -15,6 +15,7 @@ class PythonProjectAnalyzerContextSummaryTest {
             frameworks = emptyList(),
             testCommands = emptyList(),
             runCommands = emptyList(),
+            runEntryCandidates = emptyList(),
             notes = emptyList(),
             filesAnalyzed = emptyList(),
             skippedFiles = emptyList(),

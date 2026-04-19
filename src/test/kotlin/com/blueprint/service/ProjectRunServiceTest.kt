@@ -22,10 +22,22 @@ class ProjectRunServiceTest {
     }
 
     @Test
-    fun `returns fallback summary when no run command exists`() {
+    fun `returns fallback summary with detected entry candidates`() {
+        val context = context(runCommands = emptyList(), runEntryCandidates = listOf("app.py", "src/server.py"))
+
         assertEquals(
-            "Blueprint could not infer a run command yet. Refresh UML From Code first, or run the project entrypoint manually.",
-            ProjectRunServiceInvariants.noCommandSummary(),
+            "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. Open one of these likely entry files manually: app.py, src/server.py.",
+            ProjectRunServiceInvariants.noCommandSummary(context),
+        )
+    }
+
+    @Test
+    fun `returns fallback summary with generic search list when no candidates exist`() {
+        val context = context(runCommands = emptyList(), runEntryCandidates = emptyList())
+
+        assertEquals(
+            "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints.",
+            ProjectRunServiceInvariants.noCommandSummary(context),
         )
     }
 
@@ -101,7 +113,10 @@ class ProjectRunServiceTest {
         }
     }
 
-    private fun context(runCommands: List<String>): PythonProjectAnalyzer.PythonProjectContext =
+    private fun context(
+        runCommands: List<String>,
+        runEntryCandidates: List<String> = emptyList(),
+    ): PythonProjectAnalyzer.PythonProjectContext =
         PythonProjectAnalyzer.PythonProjectContext(
             basePath = "/tmp/project",
             configFiles = emptyList(),
@@ -111,6 +126,7 @@ class ProjectRunServiceTest {
             frameworks = emptyList(),
             testCommands = emptyList(),
             runCommands = runCommands,
+            runEntryCandidates = runEntryCandidates,
             notes = emptyList(),
         )
 }
@@ -119,8 +135,15 @@ private object ProjectRunServiceInvariants {
     fun inferredRunCommand(context: PythonProjectAnalyzer.PythonProjectContext): String? =
         context.runCommands.firstOrNull()?.takeIf { it.isNotBlank() }
 
-    fun noCommandSummary(): String =
-        "Blueprint could not infer a run command yet. Refresh UML From Code first, or run the project entrypoint manually."
+    fun noCommandSummary(context: PythonProjectAnalyzer.PythonProjectContext): String {
+        val candidates = context.runEntryCandidates.take(4)
+        val candidateText = if (candidates.isEmpty()) {
+            "Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
+        } else {
+            "Open one of these likely entry files manually: ${candidates.joinToString(", ")}."
+        }
+        return "Blueprint could not infer a run command yet. Refresh UML From Code first, then verify the feature manually. $candidateText"
+    }
 
     fun isRunning(process: Process?): Boolean = process?.isAlive == true
 
