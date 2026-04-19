@@ -11,7 +11,7 @@ class PostApplyVerifyChecklistRegressionTest {
     @Test
     fun `apply success stores a verify checklist for the uml tab`() {
         assertTrue(source.contains("val verifyChecklist = buildString {"))
-        assertTrue(source.contains("appendLine(\"Verify in UML tab:\")"))
+        assertTrue(source.contains("appendLine(\"Refresh UML From Code verification:\")"))
         assertTrue(source.contains("appendLine(\"- \$summaryLine\")"))
         assertTrue(source.contains("appendLine(\"- \${result.summaryLine()}\")"))
         assertTrue(source.contains("appendLine(\"- Changed paths:\")"))

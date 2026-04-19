@@ -1070,9 +1070,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
-    private val verifyInUmlButton = JButton("Verify In UML").apply {
+    private val verifyInUmlButton = JButton("Refresh UML From Code").apply {
         isEnabled = false
-        toolTipText = "Reload the changed files into the code-backed UML so you can verify the applied result after apply."
+        toolTipText = "Rerun Refresh UML From Code after apply so you can verify the changed files in the code-backed UML again."
         addActionListener { refreshUmlAfterApplyVerification() }
     }
     private val openLikelyEntryFileButton = JButton("Open Likely Entry File").apply {
@@ -3407,7 +3407,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         append(changedFilesText)
                     }.trim()
                     val verifyChecklist = buildString {
-                        appendLine("Verify in UML tab:")
+                        appendLine("Refresh UML From Code verification:")
                         appendLine("- Blueprint already reloaded the changed code into the UML after apply.")
                         appendLine("- Click Refresh UML From Code when you want to verify that reload yourself.")
                         appendLine("- $summaryLine")
@@ -3537,7 +3537,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nVerify In UML lets you rerun the UML reload when you want an explicit verification step. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
+            append("\nRefresh UML From Code lets you rerun the UML reload when you want an explicit verification step. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
@@ -4705,7 +4705,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun refreshUmlAfterApplyVerification() {
         verifyInUmlButton.isEnabled = false
-        logActivity("Verify In UML rereads the changed code from disk after apply.")
+        logActivity("Refresh UML From Code rereads the changed code from disk after apply.")
         status("Verifying applied changes in UML")
         generateProjectUml()
     }
