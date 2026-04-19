@@ -64,6 +64,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                runVerified = false,
                 promptReady = false,
                 runCommand = null,
             ),
@@ -92,6 +93,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                runVerified = false,
                 promptReady = true,
                 runCommand = null,
             ),
@@ -110,6 +112,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = true,
                 appliedReady = true,
                 refreshedCodeMapReady = true,
+                runVerified = true,
                 promptReady = true,
                 runCommand = "python main.py",
             ),
@@ -128,6 +131,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = true,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                runVerified = false,
                 promptReady = true,
                 runCommand = null,
             ),
@@ -144,7 +148,7 @@ class GuidedInviteScenarioTest {
         assertTrue(approved.contains("[done] Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
         assertTrue(approved.contains("[next] Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
         assertTrue(runReady.contains("[done] Refresh UML From Code -> expect InviteReminder to appear in the refreshed current code map."))
-        assertTrue(runReady.contains("[done] Run the changed app -> start with: python main.py"))
+        assertTrue(runReady.contains("[done] Run the changed app -> pass. Verified with: python main.py"))
 
         val loadedPrompt = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
@@ -160,6 +164,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                runVerified = false,
                 promptReady = false,
                 runCommand = null,
             ),
@@ -180,6 +185,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                runVerified = false,
                 promptReady = true,
                 runCommand = null,
             ),
@@ -201,6 +207,7 @@ class GuidedInviteScenarioTest {
                 reviewApprovedReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                runVerified = false,
                 promptReady = true,
                 runCommand = null,
             ),
@@ -221,6 +228,7 @@ class GuidedInviteScenarioTest {
         val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("firstRunPromptButton.text = if (state.resetSuggested) \"Show Reset Steps\" else \"Try This Change\""))
+        assertTrue(source.contains("runDemoButton.text = if (state.runVerified) \"Demo Run Verified\" else \"Run Demo Step\""))
         assertTrue(source.contains("All guided demo changes already exist. Restore \${state.resetPath} from git, or pick your own change."))
         assertTrue(source.contains("To get a fresh invite demo path, restore \${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code."))
     }
@@ -234,6 +242,9 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(source.contains("Fresh demo prompt: "))
         assertTrue(source.contains("Fresh demo prompt loaded into chat:"))
+        assertTrue(source.contains("Demo e2e step passed: Try This Change prepared"))
+        assertTrue(source.contains("Manual demo runner"))
+        assertTrue(source.contains("Run Demo Step"))
         assertTrue(source.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
     }
 }

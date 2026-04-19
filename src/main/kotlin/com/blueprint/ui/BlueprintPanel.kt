@@ -258,6 +258,7 @@ internal data class GuidedInviteScenarioState(
     val reviewApprovedReady: Boolean,
     val appliedReady: Boolean,
     val refreshedCodeMapReady: Boolean,
+    val runVerified: Boolean,
     val promptReady: Boolean,
     val runCommand: String?,
 )
@@ -309,7 +310,8 @@ internal object GuidedInviteScenario {
     fun checklistText(state: GuidedInviteScenarioState): String {
         val runStep = when {
             state.runCommand.isNullOrBlank() -> "Run the changed app -> no run command was inferred yet, so open the project entrypoint manually to verify the feature."
-            else -> "Run the changed app -> start with: ${state.runCommand}"
+            state.runVerified -> "Run the changed app -> pass. Verified with: ${state.runCommand}"
+            else -> "Run the changed app -> start with: ${state.runCommand}; verify the new feature appears."
         }
         if (state.resetSuggested) {
             return listOf(
@@ -350,6 +352,7 @@ internal object GuidedInviteScenario {
             !state.reviewApprovedReady -> 4
             !state.appliedReady -> 5
             !state.refreshedCodeMapReady -> 6
+            !state.runVerified -> 7
             else -> 7
         }
         val expectedResult = when {
@@ -376,7 +379,7 @@ internal object GuidedInviteScenario {
             "${stepMarker(4, currentStep, state.reviewApprovedReady)} Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked.",
             "${stepMarker(5, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
             "${stepMarker(6, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
-            "${stepMarker(7, currentStep, state.refreshedCodeMapReady)} $runStep",
+            "${stepMarker(7, currentStep, state.runVerified)} $runStep",
             "",
             "Your own change:",
             "[next] Edit the UML directly or ask chat for a different architecture change when you are not following the demo prompt.",
@@ -804,11 +807,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             } else {
                 chatInput.text = state.prompt
                 appendChat("Blueprint", "Fresh demo prompt loaded into chat: \"${state.prompt}\". Send it as-is, or edit it before Generate Code Diff.")
+                logActivity("Demo e2e step passed: Try This Change prepared \"${state.prompt}\".")
                 status("Fresh demo prompt loaded")
                 refreshFirstRunScenario()
             }
         }
     }
+    private val runDemoButton = JButton("Run Demo Step").apply { addActionListener { runDemoVerificationStep() } }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
         addActionListener { runPrimaryProductAction() }
@@ -1385,6 +1390,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         add(
                             JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
                                 add(firstRunPromptButton)
+            add(runDemoButton)
                             },
                             BorderLayout.SOUTH,
                         )
@@ -3640,6 +3646,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             "Fresh demo prompt: ${state.prompt}"
         }
+        runDemoButton.text = if (state.runVerified) "Demo Run Verified" else "Run Demo Step"
+        runDemoButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
+        runDemoButton.toolTipText = when {
+            state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
+            state.runVerified -> "Blueprint already recorded a passed demo run for: ${state.runCommand}"
+            else -> "Record the final manual demo step and expected visible result for: ${state.runCommand}"
+        }
     }
 
     private fun currentInvitePrompt(): String? =
@@ -3715,9 +3728,39 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             reviewApprovedReady = approvedInviteDiff,
             appliedReady = appliedInviteDiff,
             refreshedCodeMapReady = refreshedReady,
+            runVerified = refreshedReady && activityLog.text.contains("Demo e2e step passed: Run the changed app", ignoreCase = true),
             promptReady = promptReady,
             runCommand = project.service<PythonProjectAnalyzer>().analyze().runCommands.firstOrNull(),
         )
+    }
+
+    private fun runDemoVerificationStep() {
+        val state = currentInviteFirstRunScenarioState()
+        val runCommand = state.runCommand
+        if (runCommand.isNullOrBlank()) {
+            Messages.showInfoMessage(
+                project,
+                "Refresh UML From Code first so Blueprint can infer how this Python project should run.",
+                "Blueprint - Demo Runner"
+            )
+            logActivity("Demo e2e step failed: Run the changed app could not start because no run command was inferred.")
+            return
+        }
+        val expectedVisibleResult = when {
+            state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
+                "Expect Invite to show expires_at in the refreshed UML and in the running feature path."
+            state.expectedRelationSource != null && state.expectedRelationTarget != null ->
+                "Expect ${state.expectedRelationSource} to show ${state.expectedEntity} in the refreshed UML and the running app flow."
+            else -> "Expect ${state.expectedEntity} to appear in the refreshed UML and in the running app flow."
+        }
+        Messages.showInfoMessage(
+            project,
+            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records this run step in Activity so the full demo path reads like a receipt.",
+            "Blueprint - Run Demo Step"
+        )
+        logActivity("Demo e2e step passed: Run the changed app with $runCommand. Expected visible result: $expectedVisibleResult")
+        status("Demo run step recorded")
+        refreshFirstRunScenario()
     }
 
     private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
@@ -4081,6 +4124,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("validation skipped:") -> msg.replaceFirst("Validation skipped:", "Validation skipped:")
             lower.startsWith("validation failed:") -> msg.replaceFirst("Validation failed:", "Validation failed:")
             lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Refreshed UML from code after apply:")
+            lower.startsWith("demo e2e step passed:") -> msg.removePrefix("Demo e2e step passed: ")
+            lower.startsWith("demo e2e step failed:") -> msg.removePrefix("Demo e2e step failed: ")
             lower.startsWith("opened diff preview for") -> msg.replaceFirst("Opened diff preview for", "Opened reviewed diff for")
             lower.startsWith("opened source for") -> msg.replaceFirst("Opened source for", "Opened source file for")
             lower.startsWith("uml import found no entities") -> "Could not build UML from the imported text because no entities were found."

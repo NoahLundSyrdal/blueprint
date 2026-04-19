@@ -101,6 +101,14 @@ object PythonModelModuleRenderer {
             if (spec == null) {
                 out += lines.subList(block.start, block.endExclusive)
             } else {
+                val pending = classes.filterNot { it.name in handled || it.name == spec.name }
+                val ownedInsertions = pending.filter { insertion -> spec.referencesType(insertion.name) }
+                ownedInsertions.forEach { insertion ->
+                    if (out.isNotEmpty() && out.last().isNotBlank()) out += ""
+                    out += renderClass(insertion, preservedBody = emptyList()).lines()
+                    handled += insertion.name
+                    out += ""
+                }
                 handled += spec.name
                 out += renderClass(spec, preservedBody = preservedClassBody(lines.subList(block.classLine + 1, block.endExclusive))).lines()
             }
@@ -248,6 +256,9 @@ object PythonModelModuleRenderer {
         return ordered.map { parsed.getValue(it) }
     }
 
+    private fun ModelSpec.referencesType(typeName: String): Boolean =
+        fields.any { field -> typeIdentifiers(field.type).contains(typeName) }
+
     private fun modelSpecsInContent(content: String): Map<String, ModelSpec> {
         val normalized = content.replace("\r\n", "\n").replace("\r", "\n")
         val lines = normalized.lines().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
@@ -272,6 +283,7 @@ object PythonModelModuleRenderer {
     private fun astClassBlocks(content: String): List<ClassBlock> {
         if (content.isBlank()) return emptyList()
         val python = findPythonExecutable() ?: return emptyList()
+        val lines = content.lines().let { if (it.lastOrNull() == "") it.dropLast(1) else it }
         return try {
             val process = ProcessBuilder(python, "-c", AST_CLASS_SCRIPT)
                 .redirectErrorStream(true)
@@ -288,13 +300,13 @@ object PythonModelModuleRenderer {
             val stdout = process.inputStream.readBytes().toString(StandardCharsets.UTF_8)
             val output = gson.fromJson(stdout, AstClassOutput::class.java)
             output.classes
-                .filter { it.name.matches(IDENTIFIER) && it.classLine > 0 && it.endExclusive >= it.classLine }
+                .filter { it.name.matches(IDENTIFIER) && it.classLine > 0 && it.endExclusive > it.classLine }
                 .map { cls ->
                     ClassBlock(
                         name = cls.name,
                         start = (cls.start - 1).coerceAtLeast(0),
                         classLine = (cls.classLine - 1).coerceAtLeast(0),
-                        endExclusive = cls.endExclusive,
+                        endExclusive = cls.endExclusive.coerceAtMost(lines.size).coerceAtLeast((cls.classLine - 1).coerceAtLeast(0) + 1),
                         fields = cls.fields
                             .filter { it.name.matches(IDENTIFIER) && it.type.isNotBlank() }
                             .map { ModelField(it.name, it.type) },
@@ -399,7 +411,7 @@ for node in module.body:
         "name": node.name,
         "start": start,
         "classLine": getattr(node, "lineno", start),
-        "endExclusive": getattr(node, "end_lineno", getattr(node, "lineno", start)),
+        "endExclusive": getattr(node, "end_lineno", getattr(node, "lineno", start)) + 1,
         "fields": fields,
     })
 

@@ -67,6 +67,14 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Opened diff preview for Invite schema (1 file(s))."),
         )
         assertEquals(
+            "Run the changed app with python main.py. Expected visible result: InviteReminder appears on the screen",
+            receiptTextForTest("Demo e2e step passed: Run the changed app with python main.py. Expected visible result: InviteReminder appears on the screen"),
+        )
+        assertEquals(
+            "Run the changed app could not start because no run command was inferred.",
+            receiptTextForTest("Demo e2e step failed: Run the changed app could not start because no run command was inferred."),
+        )
+        assertEquals(
             "Opened source file for Invite: app/models.py:12",
             receiptTextForTest("Opened source for Invite: app/models.py:12"),
         )
