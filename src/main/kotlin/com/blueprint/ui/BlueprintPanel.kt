@@ -554,9 +554,9 @@ internal object ReviewExplanation {
             "Dependency status: ready."
         }
         val validationLine = when (validation?.status) {
-            ProjectValidationService.ValidationResult.Status.PASS -> "Validation status: passed after apply."
+            ProjectValidationService.ValidationResult.Status.PASS -> "${validation.detailLabel()} status: passed after apply."
             ProjectValidationService.ValidationResult.Status.SKIPPED -> "Validation status: skipped after apply."
-            ProjectValidationService.ValidationResult.Status.FAIL -> "Validation status: failed after apply."
+            ProjectValidationService.ValidationResult.Status.FAIL -> "${validation.detailLabel()} status: failed after apply."
             null -> "Validation status: will run after apply if Blueprint can infer a command."
         }
         val validationCommandLine = validationCommand?.let { "Validation after apply: $it" }
@@ -3094,11 +3094,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
         buildString {
+            appendLine("${result.detailLabel()} command: ${result.command.ifBlank { "not available" }}")
             append(result.summaryLine())
             result.exitCode?.let { append(" (exit $it)") }
             if (result.durationMillis > 0) append(" in ${result.durationMillis}ms")
+            if (result.reason.isNotBlank() && result.status != ProjectValidationService.ValidationResult.Status.SKIPPED) {
+                append("\nResult: ${result.reason}")
+            }
             if (result.outputExcerpt.isNotBlank()) {
-                append("\n\n")
+                append("\n\nOutput excerpt:\n")
                 append(result.outputExcerpt)
             }
             if (result.relatedFiles.isNotEmpty()) {

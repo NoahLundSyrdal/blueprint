@@ -121,6 +121,32 @@ class ReviewExplanationTest {
     }
 
     @Test
+    fun `approval summary labels fallback validation honestly`() {
+        val text = ReviewExplanation.summary(
+            nodeTitle = "Invite update",
+            exec = ExecutionArtifact(
+                patches = listOf(Patch(path = "app/models.py", action = "update", content = "class Invite:\n    accepted_at: datetime")),
+                summary = "Add accepted_at to Invite.",
+            ),
+            review = ReviewArtifact(
+                reviewStatus = "APPROVE",
+                summary = "Patch is scoped and safe.",
+                scopeCompliance = ScopeCompliance(result = "PASS"),
+                recommendedNextAction = "apply",
+            ),
+            readiness = DependencyGraphService.NodeReadiness(nodeId = "invite-update", ready = true, reasons = emptyList(), wave = 1),
+            validation = ProjectValidationService.ValidationResult(
+                status = ProjectValidationService.ValidationResult.Status.PASS,
+                command = "python -m pytest; built-in test fallback",
+                mode = ProjectValidationService.ValidationResult.Mode.FALLBACK,
+            ),
+            validationCommand = "python -m pytest",
+        )
+
+        assertTrue(text.contains("- Fallback validation status: passed after apply."))
+    }
+
+    @Test
     fun `rejection status line summarizes blocker and fix`() {
         val text = ReviewExplanation.statusLine(
             nodeTitle = "Invite update",

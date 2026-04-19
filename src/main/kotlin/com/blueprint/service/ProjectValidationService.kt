@@ -22,14 +22,29 @@ class ProjectValidationService(private val project: Project) {
         val relatedFiles: List<String> = emptyList(),
         val durationMillis: Long = 0,
         val reason: String = "",
+        val mode: Mode = Mode.STANDARD,
     ) {
         enum class Status { PASS, FAIL, SKIPPED }
 
+        enum class Mode { STANDARD, FALLBACK }
+
         fun summaryLine(): String =
             when (status) {
-                Status.PASS -> "Validation passed: $command"
-                Status.FAIL -> "Validation failed: $command"
+                Status.PASS -> validationLabel("passed")
+                Status.FAIL -> validationLabel("failed")
                 Status.SKIPPED -> "Validation skipped: $reason"
+            }
+
+        fun detailLabel(): String =
+            when (mode) {
+                Mode.STANDARD -> "Validation"
+                Mode.FALLBACK -> "Fallback validation"
+            }
+
+        private fun validationLabel(outcome: String): String =
+            when (mode) {
+                Mode.STANDARD -> "Validation $outcome: $command"
+                Mode.FALLBACK -> "Fallback validation $outcome: $command"
             }
     }
 
@@ -71,6 +86,7 @@ class ProjectValidationService(private val project: Project) {
                         appendLine("pytest was not available; Blueprint ran its built-in test-function fallback.")
                         append(fallback.output.trim())
                     }.trim(),
+                    mode = ValidationResult.Mode.FALLBACK,
                 )
             } else {
                 primary
@@ -85,6 +101,7 @@ class ProjectValidationService(private val project: Project) {
                     relatedFiles = relatedFiles(basePath, patches, ""),
                     durationMillis = finalRun.durationMillis,
                     reason = "timeout",
+                    mode = finalRun.mode,
                 )
             }
             ValidationResult(
@@ -95,6 +112,7 @@ class ProjectValidationService(private val project: Project) {
                 relatedFiles = relatedFiles(basePath, patches, finalRun.output),
                 durationMillis = finalRun.durationMillis,
                 reason = if (finalRun.exitCode == 0) "" else "exit ${finalRun.exitCode}",
+                mode = finalRun.mode,
             )
         } catch (t: Throwable) {
             log.warn("Project validation failed to run", t)
@@ -159,6 +177,7 @@ class ProjectValidationService(private val project: Project) {
         val output: String,
         val durationMillis: Long,
         val timedOut: Boolean,
+        val mode: ValidationResult.Mode = ValidationResult.Mode.STANDARD,
     )
 
     companion object {
