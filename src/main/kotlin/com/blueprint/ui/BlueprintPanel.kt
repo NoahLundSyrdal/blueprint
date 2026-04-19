@@ -4500,9 +4500,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val summary = PatchChangeSummary.reviewSummary(exec)
         val scopeSentence = reviewScopeSentence(exec)
         val changedFilesHeader = reviewChangedFilesHeader(exec)
+        val changedFilesInline = reviewChangedFilesInline(exec)
         val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
             appendLine(changedFilesHeader)
+            appendLine(changedFilesInline)
             appendLine("Diff status: ${freshness.badge}")
             appendLine(freshness.reviewedAtLine)
             appendLine(freshness.warning)
@@ -4549,6 +4551,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             0 -> "Changed files: 0 files"
             1 -> "Changed files: 1 file"
             else -> "Changed files: $count files"
+        }
+    }
+
+    private fun reviewChangedFilesInline(exec: ExecutionArtifact?): String {
+        val paths = exec?.patches.orEmpty().map { it.path }.distinct()
+        return when (paths.size) {
+            0 -> "Changed paths: none"
+            1 -> "Changed path: ${paths.first()}"
+            else -> "Changed paths: ${paths.joinToString(", ")}"
         }
     }
 
