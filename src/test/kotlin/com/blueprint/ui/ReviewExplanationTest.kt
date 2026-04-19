@@ -1,5 +1,6 @@
 package com.blueprint.ui
 
+import com.blueprint.model.AcceptanceReviewItem
 import com.blueprint.model.ExecutionArtifact
 import com.blueprint.model.Patch
 import com.blueprint.model.ReviewArtifact
@@ -56,6 +57,13 @@ class ReviewExplanationTest {
                 reviewStatus = "APPROVE",
                 summary = "Patch is scoped and safe.",
                 scopeCompliance = ScopeCompliance(result = "PASS"),
+                acceptanceReview = listOf(
+                    AcceptanceReviewItem(
+                        criterion = "Add accepted_at field",
+                        result = "PASS",
+                        evidence = listOf("The Invite patch adds accepted_at as requested by the UML."),
+                    ),
+                ),
                 positiveSignals = listOf("Only the selected model file changes.", "Fields match the UML request."),
                 recommendedNextAction = "apply",
             ),
@@ -65,6 +73,7 @@ class ReviewExplanationTest {
 
         assertTrue(text.contains("Why is it safe to apply?"))
         assertTrue(text.contains("- Approved because Invite + accepted_at: datetime stays aligned with Invite update"))
+        assertTrue(text.contains("- Acceptance: The Invite patch adds accepted_at as requested by the UML."))
         assertTrue(text.contains("- Scope: stays within the selected files."))
         assertTrue(text.contains("- Safety: Only the selected model file changes. Fields match the UML request."))
         assertTrue(text.contains("- Dependency status: ready."))
@@ -110,6 +119,13 @@ class ReviewExplanationTest {
                 reviewStatus = "REQUEST_CHANGES",
                 summary = "Patch touches the wrong file.",
                 scopeCompliance = ScopeCompliance(result = "FAIL"),
+                acceptanceReview = listOf(
+                    AcceptanceReviewItem(
+                        criterion = "Add accepted_at field",
+                        result = "FAIL",
+                        issues = listOf("The patch edits app/routes.py instead of only the requested model file."),
+                    ),
+                ),
                 issues = listOf(
                     ReviewIssue(
                         title = "Out of scope file",
@@ -129,6 +145,7 @@ class ReviewExplanationTest {
         assertTrue(text.contains("Why is it blocked?"))
         assertTrue(text.contains("- Not approved because The patch also modifies app/routes.py."))
         assertTrue(text.contains("- Fix: Regenerate the patch so only app/models.py changes."))
+        assertTrue(text.contains("- Acceptance: The patch edits app/routes.py instead of only the requested model file."))
         assertTrue(text.contains("- Scope: review found out-of-scope changes."))
         assertTrue(text.contains("- Dependency status: blocked by parent node not applied."))
         assertTrue(text.contains("- Validation status: skipped after apply."))

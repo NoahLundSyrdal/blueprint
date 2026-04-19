@@ -521,26 +521,23 @@ internal object ReviewExplanation {
             ProjectValidationService.ValidationResult.Status.FAIL -> "Validation status: failed after apply."
             null -> "Validation status: will run after apply if Blueprint can infer a command."
         }
-        return if (review.reviewStatus.uppercase() == "APPROVE") {
-            listOf(
-                "Why is it safe to apply?",
-                "- Approved because $changePhrase stays aligned with $shortTitle and review found no blocking scope or safety issues.",
-                "- ${safetyLine(review)}",
-                "- $scopeLine",
-                "- $dependencyLine",
-                "- $validationLine",
-            )
+        val lines = mutableListOf<String>()
+        if (review.reviewStatus.uppercase() == "APPROVE") {
+            lines += "Why is it safe to apply?"
+            lines += "- Approved because $changePhrase stays aligned with $shortTitle and review found no blocking scope or safety issues."
+            review.acceptanceReviewLine()?.let { lines += "- $it" }
+            lines += "- ${safetyLine(review)}"
         } else {
-            listOf(
-                "Why is it blocked?",
-                "- Not approved because ${blockerLine(review)}",
-                "- Fix: ${fixLine(review)}",
-                "- ${safetyLine(review)}",
-                "- $scopeLine",
-                "- $dependencyLine",
-                "- $validationLine",
-            )
+            lines += "Why is it blocked?"
+            lines += "- Not approved because ${blockerLine(review)}"
+            lines += "- Fix: ${fixLine(review)}"
+            review.acceptanceReviewLine()?.let { lines += "- $it" }
+            lines += "- ${safetyLine(review)}"
         }
+        lines += "- $scopeLine"
+        lines += "- $dependencyLine"
+        lines += "- $validationLine"
+        return lines
     }
 
     private fun changePhrase(exec: ExecutionArtifact?): String {
@@ -567,6 +564,33 @@ internal object ReviewExplanation {
             review.issues.isEmpty() -> "Safety: No concrete safety issues were reported."
             else -> "Safety: ${review.issues.take(2).joinToString(" ") { it.title.ifBlank { it.category } }}"
         }
+
+    private fun ReviewArtifact.acceptanceReviewLine(): String? {
+        val accepted = acceptanceReview.filter { it.result.uppercase() == "PASS" }
+        if (accepted.isNotEmpty()) {
+            val evidence = accepted
+                .flatMap { it.evidence }
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .take(2)
+            return if (evidence.isEmpty()) {
+                "Acceptance: requested UML changes are covered by the reviewed patch."
+            } else {
+                "Acceptance: ${evidence.joinToString(" ")}"
+            }
+        }
+        val concerns = acceptanceReview
+            .filter { it.result.uppercase() == "PARTIAL" || it.result.uppercase() == "FAIL" }
+            .flatMap { reviewItem ->
+                reviewItem.issues.ifEmpty { listOf(reviewItem.criterion) }
+            }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(2)
+        return if (concerns.isEmpty()) null else "Acceptance: ${concerns.joinToString(" ")}"
+    }
 }
 
 private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
