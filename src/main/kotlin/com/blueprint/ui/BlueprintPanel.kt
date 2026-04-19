@@ -616,7 +616,15 @@ internal object PatchChangeSummary {
      */
     fun reviewSummary(exec: ExecutionArtifact?): String {
         if (exec == null) return "What changed?\n- No reviewed code patch yet."
-        if (exec.patches.isEmpty()) return "What changed?\n- No code changes needed"
+        if (exec.patches.isEmpty()) {
+            return buildSummary(
+                heading = "What changed?",
+                semanticHeading = "Plain-English summary before apply:",
+                semanticChanges = listOf("No code changes needed"),
+                diffGuidance = noOpDiffGuidance(),
+                changedFilesText = "Changed files: none.",
+            )
+        }
         val semanticChanges = semanticChanges(exec.patches, exec.summary)
         return buildSummary(
             heading = "What changed?",
@@ -640,10 +648,10 @@ internal object PatchChangeSummary {
      * Builds the apply-success summary from only the paths that were actually written to disk.
      */
     fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
-        if (exec == null || appliedPaths.isEmpty()) return "What changed?\n- No code changes needed"
+        if (exec == null || appliedPaths.isEmpty()) return noOpApplySummary()
         val appliedPathSet = appliedPaths.toSet()
         val changedFiles = exec.patches.filter { it.path in appliedPathSet }
-        if (changedFiles.isEmpty()) return "What changed?\n- No code changes needed"
+        if (changedFiles.isEmpty()) return noOpApplySummary()
         val semanticChanges = semanticChanges(changedFiles, exec.summary)
         return buildSummary(
             heading = "What changed?",
@@ -687,6 +695,18 @@ internal object PatchChangeSummary {
             appendLine("Changed files (${patches.size}):")
             patches.forEach { appendLine("- ${fileActionLabel(it.action)} ${it.path}") }
         }.trim()
+
+    private fun noOpApplySummary(): String =
+        buildSummary(
+            heading = "What changed?",
+            semanticHeading = "Plain-English summary after apply:",
+            semanticChanges = listOf("No code changes needed"),
+            diffGuidance = noOpDiffGuidance(),
+            changedFilesText = "Changed files: none.",
+        )
+
+    private fun noOpDiffGuidance(): String =
+        "Blueprint compared the current UML-backed request against the code on disk. Refresh UML From Code to verify the current code, or refine the UML and try a different change."
 
     private fun fileActionLabel(action: String): String =
         when (action.lowercase()) {

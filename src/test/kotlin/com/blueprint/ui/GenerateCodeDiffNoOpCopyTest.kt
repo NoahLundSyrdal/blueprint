@@ -22,7 +22,18 @@ class GenerateCodeDiffNoOpCopyTest {
             ),
         )
 
-        assertEquals("What changed?\n- No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
+        assertEquals(
+            """
+            What changed?
+            Plain-English summary after apply:
+            - No code changes needed
+            
+            Blueprint compared the current UML-backed request against the code on disk. Refresh UML From Code to verify the current code, or refine the UML and try a different change.
+            
+            Changed files: none.
+            """.trimIndent(),
+            PatchChangeSummary.applySummary(exec, emptyList())
+        )
     }
 
     @Test

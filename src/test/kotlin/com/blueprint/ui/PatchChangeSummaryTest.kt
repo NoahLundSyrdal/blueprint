@@ -76,7 +76,9 @@ class PatchChangeSummaryTest {
         assertTrue(summary.contains("Changed files (1):"))
         assertTrue(summary.contains("- update app/models.py"))
         assertTrue(!summary.contains("unused.py"))
-        assertEquals("What changed?\n- No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
+        assertTrue(PatchChangeSummary.applySummary(exec, emptyList()).contains("Plain-English summary after apply:"))
+        assertTrue(PatchChangeSummary.applySummary(exec, emptyList()).contains("No code changes needed"))
+        assertTrue(PatchChangeSummary.applySummary(exec, emptyList()).contains("Refresh UML From Code to verify the current code"))
     }
 
 
@@ -118,16 +120,20 @@ class PatchChangeSummaryTest {
             ),
         )
 
-        assertEquals("What changed?\n- No code changes needed", PatchChangeSummary.applySummary(exec, listOf("app/other.py")))
+        val summary = PatchChangeSummary.applySummary(exec, listOf("app/other.py"))
+
+        assertTrue(summary.contains("Plain-English summary after apply:"))
+        assertTrue(summary.contains("No code changes needed"))
+        assertTrue(summary.contains("Changed files: none."))
     }
 
     @Test
     fun `review summary handles empty and missing execution states`() {
         assertEquals("What changed?\n- No reviewed code patch yet.", PatchChangeSummary.reviewSummary(null))
-        assertEquals(
-            "What changed?\n- No code changes needed",
-            PatchChangeSummary.reviewSummary(ExecutionArtifact(patches = emptyList())),
-        )
+        val reviewSummary = PatchChangeSummary.reviewSummary(ExecutionArtifact(patches = emptyList()))
+        assertTrue(reviewSummary.contains("Plain-English summary before apply:"))
+        assertTrue(reviewSummary.contains("No code changes needed"))
+        assertTrue(reviewSummary.contains("Refresh UML From Code to verify the current code"))
         assertEquals("Changed files: none yet.", PatchChangeSummary.changedFilesSummary(null))
         assertEquals("Changed files: none.", PatchChangeSummary.changedFilesSummary(ExecutionArtifact(patches = emptyList())))
     }
