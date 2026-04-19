@@ -20,9 +20,7 @@ class PostApplyInlineSummaryRegressionTest {
     fun `review summary switches to inline applied summary when apply succeeds`() {
         assertTrue(source.contains("reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {"))
         assertTrue(source.contains("postApplyReviewSummary(exec, inlineSummary)"))
-        assertTrue(source.contains("appendLine(\"Changed paths:\")"))
-        assertTrue(source.contains("summary.changedPaths.forEach { appendLine(\"- \$it\") }"))
-        assertTrue(source.contains("appendLine(summary.validationLine)"))
-        assertTrue(source.contains("append(summary.nextStepLine)"))
+        assertTrue(source.contains("appendLine(summary.verifyChecklist)"))
+        assertTrue(source.contains("append(\"\\nOpen Changed Files to inspect what Blueprint wrote before you rerun the app.\")"))
     }
 }

@@ -524,6 +524,7 @@ internal data class PostApplyInlineSummary(
     val summaryLine: String,
     val validationLine: String,
     val nextStepLine: String,
+    val verifyChecklist: String,
 )
 
 internal data class GenerateDiffGuideSummary(
@@ -3306,11 +3307,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         appendLine("Validation:")
                         appendLine(validationReportText(result))
                     }.trim()
+                    val verifyChecklist = buildString {
+                        appendLine("Verify in UML tab:")
+                        appendLine("- $summaryLine")
+                        appendLine("- ${result.summaryLine()}")
+                        if (changedPaths.isEmpty()) {
+                            appendLine("- No changed paths were written.")
+                        } else {
+                            appendLine("- Changed paths:")
+                            changedPaths.forEach { appendLine("  - $it") }
+                        }
+                        appendLine("- $umlRefreshLine")
+                        appendLine("- $highlightLine")
+                        appendLine("- $refreshNote")
+                    }.trim()
                     postApplyInlineSummary = PostApplyInlineSummary(
                         changedPaths = changedPaths,
                         summaryLine = summaryLine,
                         validationLine = result.summaryLine(),
                         nextStepLine = refreshNote,
+                        verifyChecklist = verifyChecklist,
                     )
                     openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
                     openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
@@ -3415,10 +3431,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         buildString {
             appendLine(summary.summaryLine)
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
-            appendLine("Changed paths:")
-            summary.changedPaths.forEach { appendLine("- $it") }
-            appendLine(summary.validationLine)
-            append(summary.nextStepLine)
+            appendLine(summary.verifyChecklist)
             append("\nOpen Changed Files to inspect what Blueprint wrote before you rerun the app.")
         }.trim()
 

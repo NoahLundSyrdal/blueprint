@@ -15,9 +15,8 @@ class PostApplyReceiptPersistenceRegressionTest {
         assertTrue(source.contains("val inlineSummary = postApplyInlineSummary"))
         assertTrue(source.contains("if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null)"))
         assertTrue(source.contains("private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String ="))
-        assertTrue(source.contains("appendLine(\"Changed paths:\")"))
-        assertTrue(source.contains("appendLine(summary.validationLine)"))
-        assertTrue(source.contains("append(summary.nextStepLine)"))
+        assertTrue(source.contains("appendLine(summary.verifyChecklist)"))
+        assertTrue(source.contains("val verifyChecklist: String,"))
         assertTrue(source.contains("postApplyInlineSummary = null"))
         assertTrue(source.contains("if (!refreshedAfterApply) {"))
     }
