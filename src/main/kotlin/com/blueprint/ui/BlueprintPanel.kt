@@ -1190,6 +1190,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
     }
     private val runDemoButton = JButton("Run Demo Step").apply { addActionListener { runDemoVerificationStep() } }
+    private val runChecklistActionButton = JButton("Run The Changed App").apply {
+        isEnabled = false
+        toolTipText = "Run the inferred project command from the first-run checklist when one is available."
+        addActionListener { runFromChecklist() }
+    }
     private val runAppButton = JButton("Run In Blueprint").apply { addActionListener { toggleRunInBlueprint() } }
     private val runStatusNoteLabel = JLabel().apply {
         foreground = BlueprintTheme.Muted
@@ -1820,6 +1825,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         add(
                             JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
                                 add(firstRunPromptButton)
+                                add(runChecklistActionButton)
                                 add(runDemoButton)
                             },
                             BorderLayout.SOUTH,
@@ -4484,6 +4490,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             } else {
                 "Fresh prompt for the current sandbox: \"${state.prompt}\""
             }
+            runChecklistActionButton.text = if (state.runVerified) "Run The Changed App Again" else "Run The Changed App"
+            runChecklistActionButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
+            runChecklistActionButton.toolTipText = when {
+                state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
+                state.runVerified -> "Run the inferred command again from the first-run checklist: ${state.runCommand}"
+                else -> "Run the inferred command from the first-run checklist: ${state.runCommand}"
+            }
             runDemoButton.text = if (state.runVerified) "Demo Run Verified" else "Run Demo Step"
             runDemoButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
             runDemoButton.toolTipText = when {
@@ -4500,6 +4513,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             } else {
                 "Load the current Python folder into a code-backed UML diagram."
             }
+            runChecklistActionButton.text = if (genericState.runVerified) "Run The Changed App Again" else "Run The Changed App"
+            runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()
+            runChecklistActionButton.toolTipText = when {
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred yet. Refresh UML From Code first, or use Open Likely Entry File to inspect the best candidate manually."
+                genericState.runVerified -> "Run the inferred command again from the first-run checklist: ${genericState.runCommand}"
+                else -> "Run the inferred command from the first-run checklist: ${genericState.runCommand}"
+            }
             runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
             runDemoButton.isEnabled = genericState.codeMapReady
             runDemoButton.toolTipText = when {
@@ -4511,17 +4531,38 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         refreshRunControls()
     }
 
+    private fun runFromChecklist() {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val runCommand = project.service<ProjectRunService>().inferredRunCommand(context)
+        if (runCommand.isNullOrBlank()) {
+            status("No run command inferred")
+            logActivity("First-run checklist run blocked: no inferred project run command was available.")
+            refreshFirstRunScenario()
+            return
+        }
+        logActivity("First-run checklist run launched: $runCommand")
+        status("Launching run from checklist")
+        toggleRunInBlueprint()
+    }
+
     private fun refreshRunControls() {
         val runner = project.service<ProjectRunService>()
         val context = project.service<PythonProjectAnalyzer>().analyze()
         updateLikelyEntryFileAction(context)
         if (runner.isRunning()) {
+            runChecklistActionButton.text = "Stop The Changed App"
+            runChecklistActionButton.isEnabled = true
+            runChecklistActionButton.toolTipText = "Stop the checklist run that is streaming inside Blueprint."
             runAppButton.text = "Stop Run"
             runAppButton.isEnabled = true
             runAppButton.toolTipText = "Stop the inferred project command running inside Blueprint."
             return
         }
         val runCommand = runner.inferredRunCommand(context)
+        runChecklistActionButton.text = "Run The Changed App"
+        runChecklistActionButton.isEnabled = !runCommand.isNullOrBlank()
+        runChecklistActionButton.toolTipText = runCommand?.let { "Run the inferred project command from the first-run checklist: $it" }
+            ?: "No run command was inferred yet. Refresh UML From Code first, or use Open Likely Entry File to inspect the best candidate manually."
         runAppButton.text = "Run In Blueprint"
         runAppButton.isEnabled = !runCommand.isNullOrBlank()
         runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }
