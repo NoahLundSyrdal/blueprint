@@ -1,0 +1,19 @@
+package com.blueprint.ui
+
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.nio.file.Files
+import java.nio.file.Paths
+
+class WhatChangedAfterApplyReceiptTest {
+    private val sourcePath = Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt")
+
+    @Test
+    fun `apply chat summary reuses what changed summary and refreshed uml confirmation`() {
+        val source = Files.readString(sourcePath)
+
+        assertTrue(source.contains("appendChat(\"Blueprint\", \"\$summaryLine\\n\$whatChanged\\n\$refreshNote\\n\$umlRefreshLine\")"))
+        assertTrue(source.contains("val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)"))
+        assertTrue(source.contains("val umlRefreshLine = \"Code-backed UML was refreshed from disk after apply.\""))
+    }
+}
