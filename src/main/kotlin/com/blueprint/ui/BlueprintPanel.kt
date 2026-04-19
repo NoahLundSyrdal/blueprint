@@ -5160,15 +5160,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             "- Likely entry files: ${likelyEntryFiles.joinToString(", ")}."
         }
+        val changedPathsLine = "- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}"
+        val inspectChangedPathsLine = if (changedPaths.isEmpty()) {
+            "- Inspect the current code in the IDE before manual verification if you want file-by-file proof."
+        } else {
+            "- Inspect the changed paths in the IDE first, then run the app manually if you still need visible-result proof."
+        }
         return buildString {
             appendLine("Copyable issue comment")
             appendLine("- ${runReadinessSummary(null, context.runEntryCandidates)}")
             appendLine("- $flowLabel is ready for manual verification because Blueprint could not infer a project run command yet.")
             appendLine("- Refresh UML From Code to verify the current code-backed UML before you inspect the app manually.")
-            appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
+            appendLine(changedPathsLine)
+            appendLine(inspectChangedPathsLine)
             appendLine(likelyEntryLine)
             appendLine("- ${manualVerificationNextStep(context.runEntryCandidates)}")
-            appendLine("- Next action: inspect the likely entry file, run it manually, confirm the feature exists, then compare that result with the changed paths above.")
+            appendLine("- Next action: inspect the changed paths first, run the likely entry file manually if needed, confirm the feature exists, then compare that result with the changed paths above.")
             append(validationSummary.removePrefix("Result summary\n"))
         }.trim()
     }
