@@ -94,6 +94,24 @@ class GuidedInviteScenarioTest {
         assertTrue(middleLines[3].startsWith("[next]"))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
 
+        val fieldPrompt = GuidedInviteScenario.checklistText(
+            GuidedInviteScenarioState(
+                codeMapReady = true,
+                prompt = "add an expires_at field to Invite",
+                expectedEntity = "Invite",
+                expectedRelationSource = null,
+                expectedRelationTarget = null,
+                resetSuggested = false,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
+                umlDraftReady = false,
+                reviewedDiffReady = false,
+                appliedReady = false,
+                refreshedCodeMapReady = false,
+            ),
+        )
+        assertTrue(fieldPrompt.contains("expect Invite to include expires_at in the UML draft."))
+        assertTrue(fieldPrompt.contains("expect the refreshed current code map to include expires_at on Invite."))
+
         val reset = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
                 codeMapReady = true,
