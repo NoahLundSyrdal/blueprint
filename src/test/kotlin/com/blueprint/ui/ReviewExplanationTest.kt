@@ -37,7 +37,7 @@ class ReviewExplanationTest {
 
         assertTrue(text.contains("Review approved Invite update because Invite + accepted_at: datetime stays within the selected files"))
         assertTrue(text.contains("Only the selected model file changes."))
-        assertTrue(text.contains("That is why Apply Approved Changes is unlocked now."))
+        assertTrue(text.contains("That is why Apply Approved Changes is safe now."))
     }
 
     @Test
@@ -74,7 +74,8 @@ class ReviewExplanationTest {
         )
 
         assertTrue(text.contains("Why is it safe to apply?"))
-        assertTrue(text.contains("- Approved because Invite + accepted_at: datetime stays aligned with Invite update"))
+        assertTrue(text.contains("- What changed: Invite + accepted_at: datetime stays aligned with Invite update."))
+        assertTrue(text.contains("- Why it is safe: review found no blocking scope or safety issues, so Apply Approved Changes is safe now."))
         assertTrue(text.contains("- Acceptance: The Invite patch adds accepted_at as requested by the UML."))
         assertTrue(text.contains("- Scope: stays within the selected files."))
         assertTrue(text.contains("- Safety: Only the selected model file changes. Fields match the UML request."))

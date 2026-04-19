@@ -19,7 +19,7 @@ class ReviewApprovalSummaryRegressionTest {
         assertTrue(source.contains("appendLine(\"Approval reason:\")"))
         assertTrue(source.contains("appendLine(\"Proof and scope:\")"))
         assertTrue(source.contains("private fun compactApprovalReason(review: ReviewArtifact): String ="))
-        assertTrue(source.contains("That is why Apply Approved Changes is unlocked now."))
+        assertTrue(source.contains("That is why Apply Approved Changes is safe now."))
         assertTrue(source.contains("It also matches the requested UML because"))
     }
 }

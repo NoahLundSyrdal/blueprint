@@ -1010,7 +1010,7 @@ internal object ReviewExplanation {
             val acceptanceReason = review.acceptanceReviewLine()?.removePrefix("Acceptance: ")
                 ?.let { " It also matches the requested UML because $it." }
                 .orEmpty()
-            "Review approved $shortTitle because $changePhrase $scopeReason and ${compactApprovalReason(review)} That is why Apply Approved Changes is unlocked now.$acceptanceReason"
+            "Review approved $shortTitle because $changePhrase $scopeReason and ${compactApprovalReason(review)} That is why Apply Approved Changes is safe now.$acceptanceReason"
         } else {
             "Review blocked $shortTitle because ${blockerLine(review)} Fix: ${fixLine(review)}"
         }
@@ -1053,7 +1053,8 @@ internal object ReviewExplanation {
         val lines = mutableListOf<String>()
         if (review.reviewStatus.uppercase() == "APPROVE") {
             lines += "Why is it safe to apply?"
-            lines += "- Approved because $changePhrase stays aligned with $shortTitle and review found no blocking scope or safety issues."
+            lines += "- What changed: $changePhrase stays aligned with $shortTitle."
+            lines += "- Why it is safe: review found no blocking scope or safety issues, so Apply Approved Changes is safe now."
             review.acceptanceReviewLine()?.let { lines += "- $it" }
             lines += "- ${safetyLine(review)}"
         } else {
@@ -5343,7 +5344,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "was reviewed for scope"
         }
         val evidenceReason = acceptedEvidence?.let { " It also matches the requested UML because $it." }.orEmpty()
-        return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported. That is why Apply Approved Changes is unlocked now.$evidenceReason"
+        return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported. That is why Apply Approved Changes is safe now.$evidenceReason"
     }
 
     private fun reviewChangedFilesHeader(exec: ExecutionArtifact?): String {
