@@ -2944,6 +2944,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                     }
                     val refreshNote = "Refresh UML From Code to verify."
+                    val umlRefreshLine = "Code-backed UML was refreshed from disk after apply."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     Messages.showInfoMessage(
                         project,
@@ -2965,9 +2966,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     )
                     SwingUtilities.invokeLater {
                         showArtifactTab("UML")
-                        status(refreshNote)
+                        status(summaryLine)
                         umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram."
-                        appendChat("Blueprint", "$summaryLine\n$whatChanged\n$refreshNote")
+                        appendChat("Blueprint", "$summaryLine\n$whatChanged\n$refreshNote\n$umlRefreshLine")
                     }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
