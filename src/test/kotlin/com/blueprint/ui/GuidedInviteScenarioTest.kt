@@ -1,7 +1,6 @@
 package com.blueprint.ui
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -10,7 +9,7 @@ class GuidedInviteScenarioTest {
     fun `matches bundled invite project by name or path`() {
         assertTrue(GuidedInviteScenario.matchesProject("invite_project", null))
         assertTrue(GuidedInviteScenario.matchesProject("anything", "/tmp/work/examples/invite_project"))
-        assertFalse(GuidedInviteScenario.matchesProject("car_company_project", "/tmp/work/examples/car_company_project"))
+        assertTrue(!GuidedInviteScenario.matchesProject("car_company_project", "/tmp/work/examples/car_company_project"))
     }
 
     @Test
@@ -64,13 +63,14 @@ class GuidedInviteScenarioTest {
                 reviewedDiffReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                promptReady = false,
             ),
         )
         val firstLines = first.lines()
         assertEquals("Demo prompt scenario:", firstLines[0])
         assertTrue(firstLines[1].startsWith("[next]"))
         assertTrue(first.contains("load the current code map first so Blueprint can choose a fresh demo change"))
-        assertTrue(first.contains("Try this change -> available after the current code map loads."))
+        assertTrue(first.contains("Try This Change -> available after the current code map loads."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -82,18 +82,37 @@ class GuidedInviteScenarioTest {
                 expectedRelationTarget = "InviteReminder",
                 resetSuggested = false,
                 resetPath = GuidedInviteScenario.PATCH_PATH,
-                umlDraftReady = true,
+                umlDraftReady = false,
                 reviewedDiffReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                promptReady = true,
             ),
         )
         val middleLines = middle.lines()
         assertEquals("Demo prompt scenario:", middleLines[0])
         assertTrue(middleLines[1].startsWith("[done]"))
-        assertTrue(middleLines[2].startsWith("[done]"))
-        assertTrue(middleLines[3].startsWith("[next]"))
+        assertTrue(middleLines[2].startsWith("[next]"))
+        assertTrue(middle.contains("Try This Change: \"add an InviteReminder entity\""))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
+
+        val loadedPrompt = GuidedInviteScenario.checklistText(
+            GuidedInviteScenarioState(
+                codeMapReady = true,
+                prompt = "add an InvitePolicy entity",
+                expectedEntity = "InvitePolicy",
+                expectedRelationSource = "Invite",
+                expectedRelationTarget = "InvitePolicy",
+                resetSuggested = false,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
+                umlDraftReady = false,
+                reviewedDiffReady = false,
+                appliedReady = false,
+                refreshedCodeMapReady = false,
+                promptReady = false,
+            ),
+        )
+        assertTrue(loadedPrompt.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
 
         val fieldPrompt = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
@@ -108,6 +127,7 @@ class GuidedInviteScenarioTest {
                 reviewedDiffReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                promptReady = true,
             ),
         )
         assertTrue(fieldPrompt.contains("expect Invite to include expires_at in the UML draft."))
@@ -126,8 +146,10 @@ class GuidedInviteScenarioTest {
                 reviewedDiffReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
+                promptReady = true,
             ),
         )
+        assertTrue(reset.contains("Guided demo prompt loaded: \"restore blueprint_demo/imported_invite/models.py from git\"."))
         assertTrue(reset.contains("restoring blueprint_demo/imported_invite/models.py"))
         assertTrue(reset.contains("Your own change:"))
     }
@@ -140,5 +162,7 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("Blueprint keeps this Try This Change prompt fresh by checking the current UML and imported invite code before suggesting the next demo change."))
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(source.contains("Fresh demo prompt: "))
+        assertTrue(source.contains("Fresh demo prompt loaded into chat:"))
+        assertTrue(source.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
     }
 }

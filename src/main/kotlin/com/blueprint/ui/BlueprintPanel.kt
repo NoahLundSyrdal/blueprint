@@ -257,6 +257,7 @@ internal data class GuidedInviteScenarioState(
     val reviewedDiffReady: Boolean,
     val appliedReady: Boolean,
     val refreshedCodeMapReady: Boolean,
+    val promptReady: Boolean,
 )
 
 internal object GuidedInviteScenario {
@@ -308,6 +309,7 @@ internal object GuidedInviteScenario {
             return listOf(
                 "Demo prompt scenario:",
                 "[done] Abstract Code to UML -> current code map is loaded.",
+                if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
                 "[next] Reset the invite demo sandbox by restoring ${state.resetPath}, or try your own architecture change.",
                 "",
@@ -319,7 +321,7 @@ internal object GuidedInviteScenario {
             return listOf(
                 "Demo prompt scenario:",
                 "[next] Abstract Code to UML -> load the current code map first so Blueprint can choose a fresh demo change.",
-                "[wait] Try this change -> available after the current code map loads.",
+                "[wait] Try This Change -> available after the current code map loads.",
                 "[wait] Generate Code Diff -> available after the UML draft is updated.",
                 "[wait] Apply Approved Changes -> available after review approves the patch.",
                 "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
@@ -351,7 +353,11 @@ internal object GuidedInviteScenario {
         return listOf(
             "Demo prompt scenario:",
             "${stepMarker(1, currentStep, state.codeMapReady)} Abstract Code to UML -> expect Project, User, and Invite in the current code map.",
-            "${stepMarker(2, currentStep, state.umlDraftReady)} Try this change: \"${state.prompt}\" -> $expectedResult",
+            if (state.promptReady) {
+                "${stepMarker(2, currentStep, state.umlDraftReady)} Try This Change: \"${state.prompt}\" -> $expectedResult"
+            } else {
+                "${stepMarker(2, currentStep, false)} Try This Change -> use the button to load the fresh prompt into chat first."
+            },
             "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
             "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk.",
             "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
@@ -750,7 +756,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     "Blueprint - Reset Demo Path"
                 )
             } else {
-                sendSuggestedChat(state.prompt)
+                chatInput.text = state.prompt
+                appendChat("Blueprint", "Fresh demo prompt loaded into chat: \"${state.prompt}\". Send it as-is, or edit it before Generate Code Diff.")
+                status("Fresh demo prompt loaded")
+                refreshFirstRunScenario()
             }
         }
     }
@@ -3521,6 +3530,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         firstRunPromptButton.isEnabled = state.codeMapReady
         firstRunPromptButton.toolTipText = if (state.resetSuggested) {
             "All guided demo changes already exist. Restore ${state.resetPath} from git, or pick your own change."
+        } else if (state.promptReady) {
+            "Fresh demo prompt loaded: ${state.prompt}"
         } else {
             "Fresh demo prompt: ${state.prompt}"
         }
@@ -3552,6 +3563,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             ?.fields
             .orEmpty()
             .map { it.substringBefore(":").trim() }
+        val suggestedPrompt = chatInput.text.trim()
         val promptPlan = GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
         val reviewedInviteDiff = registry.all().any { node ->
             registry.getReview(node.id) != null &&
@@ -3566,6 +3578,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             expectedEntity = "Invite",
             expectedField = "expires_at",
         )
+        val promptReady = statefulPromptMatches(activePlan.prompt, suggestedPrompt)
         val hasExpectedDraft = when {
             activePlan.expectedField != null -> umlHasPendingEdits && activePlan.expectedField in inviteFields
             activePlan.relationSource != null && activePlan.relationTarget != null ->
@@ -3592,8 +3605,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             reviewedDiffReady = reviewedInviteDiff,
             appliedReady = appliedInviteDiff,
             refreshedCodeMapReady = refreshedReady,
+            promptReady = promptReady,
         )
     }
+
+    private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
+        currentPrompt.equals(expectedPrompt, ignoreCase = true)
 
     private fun guidedNextState(): Pair<String, String> {
         val entityCount = currentUmlEntityCount()
