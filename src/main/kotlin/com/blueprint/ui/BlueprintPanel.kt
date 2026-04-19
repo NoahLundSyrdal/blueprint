@@ -57,6 +57,7 @@ import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import javax.swing.AbstractButton
 import javax.swing.BorderFactory
 import javax.swing.BoxLayout
@@ -3677,8 +3678,29 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun logActivity(msg: String) {
         val at = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
-        activityLog.append("[$at] $msg\n")
+        val numbered = activityLog.lineCount + 1
+        activityLog.append("[$at] ${numbered.toString().padStart(2, '0')}. ${receiptText(msg)}\n")
         activityLog.caretPosition = activityLog.document.length
+    }
+
+    private fun receiptText(msg: String): String {
+        val lower = msg.lowercase(Locale.getDefault())
+        return when {
+            lower.startsWith("abstracted code to uml:") -> msg.replaceFirst("Abstracted code to UML:", "Scanned project and generated UML:")
+            lower.startsWith("updated the uml using") -> "Refined the UML draft from chat context."
+            lower.startsWith("planning code diff for") -> msg.replaceFirst("Planning code diff for", "Started Generate Code Diff for")
+            lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Planned reviewed code patch for")
+            lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Generated reviewed code patch for")
+            lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Review finished for")
+            lower.startsWith("apply finished for") -> msg.replaceFirst("Apply finished for", "Applied approved changes for")
+            lower.startsWith("validation passed:") -> msg.replaceFirst("Validation passed:", "Validation passed:")
+            lower.startsWith("validation skipped:") -> msg.replaceFirst("Validation skipped:", "Validation skipped:")
+            lower.startsWith("validation failed:") -> msg.replaceFirst("Validation failed:", "Validation failed:")
+            lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Refreshed UML from code after apply:")
+            lower.startsWith("review approve") || lower.startsWith("review request_changes") || lower.startsWith("review reject") ->
+                msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "Review result: ")
+            else -> msg
+        }
     }
 
     private fun decorateBanner(text: String): String =
