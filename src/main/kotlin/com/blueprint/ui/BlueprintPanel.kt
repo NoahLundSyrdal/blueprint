@@ -1474,7 +1474,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val ready = graph.readyNodes()
         return when {
-            "generate code" in lower || "reviewed code diff" in lower -> {
+            "generate code" in lower || "code nodes" in lower || "reviewed code diff" in lower -> {
                 "When the UML looks right, click Generate Code Diff. Blueprint will prepare a reviewed code patch that you can inspect and then apply."
             }
             "abstract" in lower || "sync" in lower -> {
@@ -1521,7 +1521,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (codex.providerMode() == "mock") return false
         val lower = message.lowercase()
         if (!codex.hasOpenAIKey() && codex.providerMode() == "openai") return false
-        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "reviewed code diff", "apply").any { it in lower }) {
+        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "reviewed code diff", "apply").any { it in lower }) {
             return false
         }
         return listOf("explain", "what is", "what are", "current product", "product", "architecture", "summarize", "describe")
@@ -1550,7 +1550,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val lower = message.lowercase()
         return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field")
             .any { it in lower } &&
-            !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "reviewed code diff", "explain").any { it in lower }
+            !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "code nodes", "reviewed code diff", "explain").any { it in lower }
     }
 
     private fun refineUmlWithChat(message: String) {
@@ -2846,7 +2846,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                     }
                     val refreshNote = "Refresh UML From Code to verify."
-                    val refreshedNote = "After refresh, Blueprint shows the code-backed UML updated from disk."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     Messages.showInfoMessage(
                         project,
@@ -2859,7 +2858,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             changedPaths.forEach { appendLine("- $it") }
                             appendLine()
                             appendLine(refreshNote)
-                            appendLine(refreshedNote)
+                            appendLine("Code-backed UML was refreshed from disk after apply.")
                             appendLine()
                             appendLine("Validation:")
                             appendLine(validationReportText(result))
