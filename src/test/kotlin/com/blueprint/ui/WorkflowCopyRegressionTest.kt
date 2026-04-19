@@ -25,7 +25,6 @@ class WorkflowCopyRegressionTest {
 
         assertTrue(source.contains("private fun String.containsWorkflowQuestion(): Boolean ="))
         assertTrue(source.contains("\"code nodes\""))
-        assertTrue(source.contains("\"create code nodes\""))
         assertTrue(source.contains("\"generate patch\""))
         assertTrue(source.contains("\"apply patch\""))
         assertTrue(source.contains("\"refresh from code\""))

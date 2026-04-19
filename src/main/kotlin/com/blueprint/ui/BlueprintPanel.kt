@@ -1952,7 +1952,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "apply patch",
             "refresh from code",
             "code nodes",
-            "create code nodes",
             "apply",
         ).any { it in this }
 
