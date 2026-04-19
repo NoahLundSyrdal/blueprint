@@ -7,6 +7,7 @@ import com.blueprint.ir.Edge
 import com.blueprint.ir.EdgeKind
 import com.blueprint.ir.EdgeTargetKind
 import com.blueprint.ir.Field
+import com.blueprint.ir.Module
 import com.blueprint.ir.Operation
 import com.blueprint.ir.Ownership
 import com.blueprint.ir.ProjectMeta
@@ -137,5 +138,164 @@ class CodeMapProjectionTest {
         assertEquals(1, bank.fieldOverflowCount)
         assertEquals(listOf("deposit()", "withdraw()"), bank.methods)
         assertEquals(1, bank.methodOverflowCount)
+    }
+
+    @Test
+    fun `projection can group code entities by package modules`() {
+        val ir = ArchitectureIR(
+            modules = listOf(
+                Module("app.models", "app.models", "app/models/", componentIds = listOf("app.models.invite")),
+                Module("app.services", "app.services", "app/services/", componentIds = listOf("app.services.invite")),
+            ),
+            components = listOf(
+                Component(
+                    id = "app.models.invite",
+                    name = "Invite",
+                    kind = ComponentKind.MODEL,
+                    ownership = Ownership(files = listOf("app/models/invite.py")),
+                ),
+                Component(
+                    id = "app.services.invite",
+                    name = "InviteService",
+                    kind = ComponentKind.SERVICE,
+                    ownership = Ownership(files = listOf("app/services/invite.py")),
+                ),
+            ),
+        )
+
+        val views = CodeMapProjection.fromIr(
+            ir = ir,
+            selectedId = null,
+            options = CodeMapProjection.Options(groupMode = CodeMapProjection.GroupMode.PACKAGE),
+        )
+
+        assertEquals("Package: app.models", views.single { it.id == "app.models.invite" }.groupTitle)
+        assertEquals("Package: app.services", views.single { it.id == "app.services.invite" }.groupTitle)
+        assertTrue(views.map { it.groupOrder }.toSet().size == 2)
+    }
+
+    @Test
+    fun `projection can group code entities by architectural layer`() {
+        val ir = ArchitectureIR(
+            components = listOf(
+                Component(
+                    id = "app.routes.create_invite",
+                    name = "create_invite",
+                    kind = ComponentKind.SERVICE,
+                    tags = setOf("route"),
+                    ownership = Ownership(files = listOf("app/routes.py")),
+                ),
+                Component(
+                    id = "app.service.invite",
+                    name = "InviteService",
+                    kind = ComponentKind.SERVICE,
+                    ownership = Ownership(files = listOf("app/service.py")),
+                ),
+                Component(
+                    id = "app.models.invite",
+                    name = "Invite",
+                    kind = ComponentKind.MODEL,
+                    ownership = Ownership(files = listOf("app/models.py")),
+                ),
+                Component(
+                    id = "tests.test_invite",
+                    name = "test_invite",
+                    kind = ComponentKind.TEST,
+                    ownership = Ownership(files = listOf("tests/test_invite.py")),
+                ),
+            ),
+        )
+
+        val views = CodeMapProjection.fromIr(
+            ir = ir,
+            selectedId = null,
+            options = CodeMapProjection.Options(groupMode = CodeMapProjection.GroupMode.LAYER),
+        )
+
+        assertEquals("Layer: API", views.single { it.id == "app.routes.create_invite" }.groupTitle)
+        assertEquals("Layer: Service", views.single { it.id == "app.service.invite" }.groupTitle)
+        assertEquals("Layer: Model", views.single { it.id == "app.models.invite" }.groupTitle)
+        assertEquals("Layer: Test", views.single { it.id == "tests.test_invite" }.groupTitle)
+        assertTrue(
+            views.single { it.id == "app.routes.create_invite" }.groupOrder <
+                views.single { it.id == "app.models.invite" }.groupOrder,
+        )
+    }
+
+    @Test
+    fun `projection filters tests generated nodes and noisy edges`() {
+        val ir = ArchitectureIR(
+            components = listOf(
+                Component(
+                    id = "app.models.invite",
+                    name = "Invite",
+                    kind = ComponentKind.MODEL,
+                    ownership = Ownership(files = listOf("app/models.py")),
+                ),
+                Component(
+                    id = "app.service.invite",
+                    name = "InviteService",
+                    kind = ComponentKind.SERVICE,
+                    ownership = Ownership(files = listOf("app/service.py")),
+                ),
+                Component(
+                    id = "tests.test_invite",
+                    name = "test_invite",
+                    kind = ComponentKind.TEST,
+                    ownership = Ownership(files = listOf("tests/test_invite.py")),
+                ),
+                Component(
+                    id = "imported.invite.models.invitepolicy",
+                    name = "InvitePolicy",
+                    kind = ComponentKind.MODEL,
+                    ownership = Ownership(files = listOf("blueprint_demo/imported_invite/models.py")),
+                ),
+            ),
+            edges = listOf(
+                Edge(
+                    from = "app.service.invite",
+                    to = "app.models.invite",
+                    toKind = EdgeTargetKind.COMPONENT,
+                    kind = EdgeKind.REFERENCES,
+                    label = "uses",
+                    evidence = "typed parameter",
+                    confidence = 0.95,
+                ),
+                Edge(
+                    from = "tests.test_invite",
+                    to = "app.service.invite",
+                    toKind = EdgeTargetKind.COMPONENT,
+                    kind = EdgeKind.CALLS,
+                    label = "tests",
+                    evidence = "call expression: InviteService",
+                    confidence = 0.8,
+                ),
+                Edge(
+                    from = "app.models.invite",
+                    to = "app.service.invite",
+                    toKind = EdgeTargetKind.COMPONENT,
+                    kind = EdgeKind.REFERENCES,
+                    label = "import",
+                    evidence = "imported symbol: InviteService",
+                    confidence = 0.65,
+                ),
+            ),
+        )
+
+        val views = CodeMapProjection.fromIr(
+            ir = ir,
+            selectedId = null,
+            options = CodeMapProjection.Options(
+                groupMode = CodeMapProjection.GroupMode.PACKAGE,
+                hideTests = true,
+                hideGenerated = true,
+                hideExternalEdges = true,
+                hideLowConfidenceEdges = true,
+            ),
+        )
+
+        assertEquals(setOf("app.models.invite", "app.service.invite"), views.map { it.id }.toSet())
+        assertEquals(listOf("app.service.invite"), views.single { it.id == "app.models.invite" }.dependencies)
+        assertTrue(views.single { it.id == "app.service.invite" }.dependencies.isEmpty())
     }
 }

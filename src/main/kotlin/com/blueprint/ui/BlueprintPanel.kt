@@ -381,6 +381,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
     private val advancedMode = JBCheckBox("Advanced")
     private val filterCombo = JComboBox(NodeFilter.values())
+    private val codeMapGroupCombo = JComboBox(CodeMapProjection.GroupMode.values()).apply {
+        selectedItem = CodeMapProjection.GroupMode.PACKAGE
+    }
+    private val hideCodeMapTests = JBCheckBox("Hide tests")
+    private val hideGeneratedCodeMap = JBCheckBox("Hide generated")
+    private val hideExternalCodeMapEdges = JBCheckBox("Hide imports").apply { isSelected = true }
+    private val hideLowConfidenceCodeMapEdges = JBCheckBox("Hide weak edges")
     private var umlHasPendingEdits = false
     private var suppressUmlDocumentEvents = false
     private val activityLog = JBTextArea(6, 40).apply {
@@ -658,6 +665,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             refreshList()
             logActivity("Node filter: ${filterCombo.selectedItem}")
         }
+        val refreshCodeMapLayout: () -> Unit = {
+            updateMiniGraph(project.service<DependencyGraphService>().analyze())
+            logActivity("Code map layout: ${codeMapGroupCombo.selectedItem}")
+        }
+        codeMapGroupCombo.addActionListener { refreshCodeMapLayout() }
+        hideCodeMapTests.addActionListener { refreshCodeMapLayout() }
+        hideGeneratedCodeMap.addActionListener { refreshCodeMapLayout() }
+        hideExternalCodeMapEdges.addActionListener { refreshCodeMapLayout() }
+        hideLowConfidenceCodeMapEdges.addActionListener { refreshCodeMapLayout() }
         val overview = JPanel(GridLayout(0, 1, 4, 4)).apply {
             border = BorderFactory.createTitledBorder("Overview")
             add(JLabel("Project: ${project.name}").apply { foreground = Color(0x333333) })
@@ -753,12 +769,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
             border = BorderFactory.createTitledBorder("UML Canvas")
-            add(JPanel(GridLayout(0, 1, 2, 2)).apply {
-                add(JLabel("Blueprint").apply {
-                    font = font.deriveFont(java.awt.Font.BOLD, 15f)
-                })
-                add(umlStatusLabel.apply { foreground = Color(0x555555) })
-                add(modeBannerLabel)
+            add(JPanel(BorderLayout()).apply {
+                add(JPanel(GridLayout(0, 1, 2, 2)).apply {
+                    add(JLabel("Blueprint").apply {
+                        font = font.deriveFont(java.awt.Font.BOLD, 15f)
+                    })
+                    add(umlStatusLabel.apply { foreground = Color(0x555555) })
+                    add(modeBannerLabel)
+                }, BorderLayout.CENTER)
+                add(codeMapControls(), BorderLayout.SOUTH)
             }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph).apply {
                 viewport.background = BlueprintTheme.Background
@@ -795,6 +814,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         }
     }
+
+    private fun codeMapControls(): JPanel =
+        JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+            add(JLabel("Group"))
+            add(codeMapGroupCombo.apply { preferredSize = Dimension(130, 32) })
+            add(hideCodeMapTests)
+            add(hideGeneratedCodeMap)
+            add(hideExternalCodeMapEdges)
+            add(hideLowConfidenceCodeMapEdges)
+        }
 
     private fun criteriaPanel(): JPanel =
         JPanel(BorderLayout()).apply {
@@ -2512,6 +2541,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             ir = ir,
             selectedId = selectedCanvasId ?: selectedNodeId,
             workflowByComponentId = workflowByComponent,
+            options = CodeMapProjection.Options(
+                groupMode = codeMapGroupCombo.selectedItem as? CodeMapProjection.GroupMode
+                    ?: CodeMapProjection.GroupMode.PACKAGE,
+                hideTests = hideCodeMapTests.isSelected,
+                hideGenerated = hideGeneratedCodeMap.isSelected,
+                hideExternalEdges = hideExternalCodeMapEdges.isSelected,
+                hideLowConfidenceEdges = hideLowConfidenceCodeMapEdges.isSelected,
+            ),
         )
     }
 

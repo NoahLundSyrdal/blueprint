@@ -67,6 +67,8 @@ class MiniGraphPanel : JPanel() {
         val methods: List<String> = emptyList(),
         val methodOverflowCount: Int = 0,
         val relationshipHint: String = "",
+        val groupTitle: String = "",
+        val groupOrder: Int = 0,
     )
 
     private var nodes: List<NodeView> = emptyList()
@@ -156,7 +158,7 @@ class MiniGraphPanel : JPanel() {
             return
         }
 
-        val waves = nodes.groupBy { it.wave }.toSortedMap()
+        val layoutGroups = layoutGroups()
         val richCards = nodes.any { it.hasRichFacts() }
         val cardW = if (richCards) 292f else 230f
         val cardH = if (richCards) 132f else 76f
@@ -167,12 +169,12 @@ class MiniGraphPanel : JPanel() {
         val localCards = mutableMapOf<String, RoundRectangle2D.Float>()
         val localSourceBadges = mutableMapOf<String, RoundRectangle2D.Float>()
 
-        waves.entries.forEachIndexed { waveIndex, (wave, waveNodes) ->
-            val x = startX + waveIndex * (cardW + gapX)
+        layoutGroups.forEachIndexed { groupIndex, group ->
+            val x = startX + groupIndex * (cardW + gapX)
             g.color = Theme.TextStrong
             g.font = font.deriveFont(Font.BOLD, 12f)
-            g.drawString("Wave $wave", x.toInt(), 28)
-            waveNodes.forEachIndexed { row, node ->
+            g.drawString(group.title.ellipsizeToWidth(g, cardW.toInt()), x.toInt(), 28)
+            group.nodes.forEachIndexed { row, node ->
                 val y = startY + row * (cardH + gapY)
                 localCards[node.id] = RoundRectangle2D.Float(x, y, cardW, cardH, 10f, 10f)
             }
@@ -285,9 +287,9 @@ class MiniGraphPanel : JPanel() {
         val gapY = 24
         val startX = 24
         val startY = 46
-        val waves = nodes.groupBy { it.wave }.toSortedMap()
-        val columns = waves.size.coerceAtLeast(1)
-        val maxRows = (waves.values.maxOfOrNull { it.size } ?: 1).coerceAtLeast(1)
+        val layoutGroups = layoutGroups()
+        val columns = layoutGroups.size.coerceAtLeast(1)
+        val maxRows = (layoutGroups.maxOfOrNull { it.nodes.size } ?: 1).coerceAtLeast(1)
         val contentWidth = startX + columns * cardW + (columns - 1) * gapX + 24
         val contentHeight = startY + maxRows * cardH + (maxRows - 1) * gapY + 28
         preferredSize = Dimension(
@@ -295,6 +297,24 @@ class MiniGraphPanel : JPanel() {
             contentHeight.toInt().coerceAtLeast(minimumSize.height),
         )
     }
+
+    private fun layoutGroups(): List<LayoutGroup> =
+        nodes
+            .groupBy { it.displayGroupTitle() }
+            .map { (title, groupNodes) ->
+                LayoutGroup(
+                    title = title,
+                    order = groupNodes.minOf { it.displayGroupOrder() },
+                    nodes = groupNodes.sortedWith(compareBy<NodeView>({ it.wave }, { it.sourcePath }, { it.title })),
+                )
+            }
+            .sortedWith(compareBy<LayoutGroup>({ it.order }, { it.title }))
+
+    private data class LayoutGroup(
+        val title: String,
+        val order: Int,
+        val nodes: List<NodeView>,
+    )
 
     private fun nodeAt(point: Point): NodeView? {
         val id = cards.entries.firstOrNull { (_, card) -> card.contains(point) }?.key ?: return null
@@ -441,6 +461,12 @@ class MiniGraphPanel : JPanel() {
 
     private fun NodeView.hasSourceTarget(): Boolean =
         sourcePath.isNotBlank()
+
+    private fun NodeView.displayGroupTitle(): String =
+        groupTitle.ifBlank { "Wave $wave" }
+
+    private fun NodeView.displayGroupOrder(): Int =
+        groupOrder.takeIf { it != 0 } ?: wave
 
     private fun NodeView.sourceDescription(): String =
         when {
