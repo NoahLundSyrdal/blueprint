@@ -1031,6 +1031,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
+    private val openAppliedFilesButton = JButton("Open Changed Files").apply {
+        isEnabled = false
+        toolTipText = "Open the file(s) Blueprint last wrote to disk. This stays separate from Apply Approved Changes."
+        addActionListener { openAppliedFiles() }
+    }
     private val undoLastApplyButton = JButton("Undo Last Apply").apply {
         isEnabled = false
         addActionListener { undoChanges() }
@@ -1659,6 +1664,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(previewDiffButton)
                 add(applyApprovedButton)
+                add(openAppliedFilesButton)
                 add(undoLastApplyButton)
             },
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
@@ -3307,6 +3313,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         validationLine = result.summaryLine(),
                         nextStepLine = refreshNote,
                     )
+                    openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
+                    openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
                     Messages.showInfoMessage(
                         project,
                         listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
@@ -3407,6 +3415,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             summary.changedPaths.forEach { appendLine("- $it") }
             appendLine(summary.validationLine)
             append(summary.nextStepLine)
+            append("\nOpen Changed Files to inspect what Blueprint wrote before you rerun the app.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
@@ -3427,6 +3436,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 append(result.relatedFiles.joinToString("\n") { "- $it" })
             }
         }
+
+    private fun openAppliedFiles() {
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty()
+        if (changedPaths.isEmpty()) {
+            status("No changed files to open")
+            return
+        }
+        if (changedPaths.size == 1) {
+            openChangedFile(changedPaths.first())
+            logActivity("Opened the only changed file from the last apply.")
+            return
+        }
+        val selectedPath = JOptionPane.showInputDialog(
+            this,
+            "Open which changed file?",
+            "Blueprint - Open Changed Files",
+            JOptionPane.QUESTION_MESSAGE,
+            null,
+            changedPaths.toTypedArray(),
+            changedPaths.first(),
+        ) as? String ?: return
+        openChangedFile(selectedPath)
+        logActivity("Opened one changed file from the last apply chooser.")
+    }
 
     private fun reviewBlockMessage(review: ReviewArtifact?): String {
         if (review == null) {
@@ -3650,6 +3683,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = nodeList.selectedValue ?: run {
             applyApprovedButton.isEnabled = false
             applyApprovedButton.text = "Apply Approved Changes"
+            openAppliedFilesButton.isEnabled = false
+            openAppliedFilesButton.text = "Open Changed Files"
             undoLastApplyButton.isEnabled = false
             updateOverviewSummary()
             selectedLabel.text = "Selected: none"
@@ -3716,6 +3751,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             n.executionStatus == ExecutionStatus.FAILED -> "Validation Failed"
             else -> "Apply Blocked By Review"
         }
+        val openAppliedFilesEnabled = n.executionStatus == ExecutionStatus.APPLIED && postApplyInlineSummary?.changedPaths.orEmpty().isNotEmpty()
+        openAppliedFilesButton.isEnabled = openAppliedFilesEnabled
+        openAppliedFilesButton.text = if (postApplyInlineSummary?.changedPaths?.size == 1) "Open Changed File" else "Open Changed Files"
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | ${reviewFreshness.reviewedAtLine.lowercase(Locale.US)} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         val inlineSummary = postApplyInlineSummary
         reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
