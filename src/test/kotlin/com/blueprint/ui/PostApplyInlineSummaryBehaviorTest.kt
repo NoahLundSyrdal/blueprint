@@ -12,8 +12,8 @@ class PostApplyInlineSummaryBehaviorTest {
         val summary = PostApplyInlineSummary(
             changedPaths = listOf("app/models.py"),
             summaryLine = "Applied 1 file. Validation passed.",
-            receiptSummary = "Apply receipt:\n- Applied 1 file. Validation passed.\n- Changed paths (1): app/models.py\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.",
-            validationAndPathsLine = "Apply receipt:\n- Applied 1 file. Validation passed.\n- Changed paths (1): app/models.py\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.\nValidation passed after apply.\nRun after apply:\npython app.py\nChanged paths:\n- app/models.py",
+            receiptSummary = "Apply receipt:\n- Applied 1 file. Validation passed.\n- Written paths (1): app/models.py\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.",
+            validationAndPathsLine = "Apply receipt:\n- Applied 1 file. Validation passed.\n- Written paths (1): app/models.py\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.\nValidation passed after apply.\nRun after apply:\npython app.py\nChanged paths:\n- app/models.py",
             nextStepLine = "Next: Refresh UML From Code to manually verify the updated code-backed UML.",
             verifyChecklist = "Refresh UML From Code verification:\n- Blueprint already reloaded the changed code into the UML automatically after apply.\n- Click Refresh UML From Code when you want a separate manual verification refresh.",
             copyableResultSummary = "Result summary\n- Applied 1 file. Validation passed.",
@@ -74,7 +74,7 @@ class PostApplyInlineSummaryBehaviorTest {
         val summary = PostApplyInlineSummary(
             changedPaths = emptyList(),
             summaryLine = "No code changes needed. Validation passed.",
-            receiptSummary = "Apply receipt:\n- No code changes needed. Validation passed.\n- Changed paths: none.\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.",
+            receiptSummary = "Apply receipt:\n- No code changes needed. Validation passed.\n- Written paths: none.\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.",
             validationAndPathsLine = "Apply receipt:\n- No code changes needed. Validation passed.",
             nextStepLine = "Next: Refresh UML From Code to manually verify the updated code-backed UML.",
             verifyChecklist = "Refresh UML From Code verification:\n- No changed paths were written.",

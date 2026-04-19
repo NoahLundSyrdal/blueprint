@@ -14,7 +14,7 @@ class PostApplyVerifyChecklistRegressionTest {
         assertTrue(source.contains("appendLine(\"Refresh UML From Code verification:\")"))
         assertTrue(source.contains("appendLine(\"- \$summaryLine\")"))
         assertTrue(source.contains("appendLine(\"- \${result.summaryLine()}\")"))
-        assertTrue(source.contains("appendLine(\"- Changed paths:\")"))
+        assertTrue(source.contains("appendLine(\"- Written paths:\")"))
         assertTrue(source.contains("changedPaths.forEach { appendLine(\"  - \$it\") }"))
         assertTrue(source.contains("appendLine(\"- \$umlRefreshLine\")"))
         assertTrue(source.contains("appendLine(\"- \$highlightLine\")"))

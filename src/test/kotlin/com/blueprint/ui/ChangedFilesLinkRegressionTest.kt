@@ -14,7 +14,7 @@ class ChangedFilesLinkRegressionTest {
 
         assertTrue(source.contains("private val changedFilesPanel = JPanel().apply {"))
         assertTrue(source.contains("private fun refreshChangedFilesPanel(exec: ExecutionArtifact?)"))
-        assertTrue(source.contains("Changed files (open to inspect, not apply):"))
+        assertTrue(source.contains("Reviewed patch files (open to inspect, not apply):"))
         assertTrue(source.contains("changedPaths.forEach { path ->"))
         assertTrue(source.contains("changedFilesPanel.add(JButton(path).apply {"))
         assertTrue(source.contains("toolTipText = \"Open this changed file in the IDE. This does not apply the reviewed code patch.\""))

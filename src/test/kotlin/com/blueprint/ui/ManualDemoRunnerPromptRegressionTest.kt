@@ -20,6 +20,6 @@ class ManualDemoRunnerPromptRegressionTest {
     @Test
     fun `manual demo runner explains reset path before suggesting a fresh prompt`() {
         assertTrue(source.contains("state.resetSuggested ->"))
-        assertTrue(source.contains("The guided demo prompt likely matches code already in the invite demo file. Click Reset Demo Sandbox for a fresh run, or keep your own UML edit instead."))
+        assertTrue(source.contains("The guided demo prompt likely matches code already in the invite demo file. Reset Demo Sandbox is optional but recommended for a predictable fresh run. If you skip reset, make your own UML-backed change instead."))
     }
 }

@@ -10,11 +10,11 @@ class PostApplyInlineSummaryNoOpRegressionTest {
 
     @Test
     fun `inline post apply receipt keeps validation with no changed paths`() {
-        assertTrue(source.contains("val changedFilesText = if (changedPaths.isEmpty()) {"))
-        assertTrue(source.contains("\"No changed paths were written.\""))
+        assertTrue(source.contains("val writtenPathsText = if (changedPaths.isEmpty()) {"))
+        assertTrue(source.contains("\"Written paths: none.\""))
         assertTrue(source.contains("val validationAndPathsLine = buildString {"))
         assertTrue(source.contains("appendLine(result.summaryLine())"))
-        assertTrue(source.contains("append(changedFilesText)"))
+        assertTrue(source.contains("append(writtenPathsText)"))
         assertTrue(source.contains("appendLine(validationAndPathsLine)"))
     }
 }

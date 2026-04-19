@@ -538,8 +538,9 @@ internal object GuidedInviteScenario {
                 "[done] Refresh UML From Code -> current code map is loaded.",
                 if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
-                "[next] Click Reset Demo Sandbox to restore ${state.resetPath} to the baseline invite demo file.",
-                "[next] Then click Try This Change to load a fresh prompt for the clean sandbox.",
+                "[next] Reset Demo Sandbox is optional but recommended here because it restores ${state.resetPath} to the baseline invite demo file for a predictable fresh demo run.",
+                "[next] If you skip reset, make your own UML-backed change instead of reusing the stale guided prompt.",
+                "[next] After reset, click Try This Change to load a fresh prompt for the clean sandbox.",
                 "[wait] Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.",
                 "[wait] Blueprint reviews the fresh code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the fresh reviewed code patch.",
@@ -1171,7 +1172,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 if (GuidedInviteScenario.resetImportedInviteFile(project.basePath)) {
                     appendChat(
                         "Blueprint",
-                        "Reset Demo Sandbox restored ${state.resetPath} to the baseline invite demo file. Refresh UML From Code, then click Try This Change for a fresh prompt. You can still skip the reset and make your own UML edit instead."
+                        "Reset Demo Sandbox restored ${state.resetPath} to the baseline invite demo file. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make your own UML-backed change instead."
                     )
                     logActivity("Demo e2e step passed: Reset invite demo sandbox at ${state.resetPath}.")
                     status("Invite demo sandbox reset")
@@ -3557,18 +3558,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         appendLine("Validation:")
                         appendLine(validationReportText(result))
                     }.trim()
-                    val changedFilesText = if (changedPaths.isEmpty()) {
-                        "No changed paths were written."
+                    val writtenPathsText = if (changedPaths.isEmpty()) {
+                        "Written paths: none."
                     } else {
                         buildString {
-                            appendLine("Changed paths:")
+                            appendLine("Written paths:")
                             changedPaths.forEach { appendLine("- $it") }
                         }.trim()
                     }
-                    val changedPathCountLine = if (changedPaths.isEmpty()) {
-                        "Changed paths: none."
+                    val writtenPathCountLine = if (changedPaths.isEmpty()) {
+                        "Written paths: none."
                     } else {
-                        "Changed paths (${changedPaths.size}): ${changedPaths.joinToString(", ")}"
+                        "Written paths (${changedPaths.size}): ${changedPaths.joinToString(", ")}"
                     }
                     val validationOutcomeLine = when (result.status) {
                         ProjectValidationService.ValidationResult.Status.PASS -> "Validation outcome: passed."
@@ -3583,7 +3584,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val receiptSummary = buildString {
                         appendLine("Apply receipt:")
                         appendLine("- $summaryLine")
-                        appendLine("- $changedPathCountLine")
+                        appendLine("- $writtenPathCountLine")
                         appendLine("- $validationOutcomeLine")
                         appendLine("- $nextActionLine")
                     }.trim()
@@ -3591,7 +3592,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         appendLine(receiptSummary)
                         appendLine(result.summaryLine())
                         appendLine(runBlock)
-                        append(changedFilesText)
+                        append(writtenPathsText)
                     }.trim()
                     val verifyChecklist = buildString {
                         appendLine("Refresh UML From Code verification:")
@@ -3600,9 +3601,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         appendLine("- $summaryLine")
                         appendLine("- ${result.summaryLine()}")
                         if (changedPaths.isEmpty()) {
-                            appendLine("- No changed paths were written.")
+                            appendLine("- Written paths: none.")
                         } else {
-                            appendLine("- Changed paths:")
+                            appendLine("- Written paths:")
                             changedPaths.forEach { appendLine("  - $it") }
                         }
                         appendLine("- $umlRefreshLine")
@@ -3620,7 +3621,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         copyableResultSummary = buildString {
                             appendLine("Result summary")
                             appendLine("- $summaryLine")
-                            appendLine("- $changedPathCountLine")
+                            appendLine("- $writtenPathCountLine")
                             appendLine("- $validationOutcomeLine")
                             appendLine("- Validation details: ${result.summaryLine()}")
                             appendLine("- Next: Refresh UML From Code to verify the updated code-backed UML.")
@@ -3933,12 +3934,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         changedFilesPanel.removeAll()
         val changedPaths = exec?.patches.orEmpty().map { it.path }.distinct().sorted()
         if (changedPaths.isEmpty()) {
-            changedFilesPanel.add(JLabel("Changed files appear here after Generate Code Diff.").apply {
+            changedFilesPanel.add(JLabel("Reviewed patch files appear here after Generate Code Diff.").apply {
                 foreground = BlueprintTheme.Muted
                 font = BlueprintTheme.font(12f)
             })
         } else {
-            changedFilesPanel.add(JLabel("Changed files (open to inspect, not apply):").apply {
+            changedFilesPanel.add(JLabel("Reviewed patch files (open to inspect, not apply):").apply {
                 foreground = BlueprintTheme.TextStrong
                 font = BlueprintTheme.font(12f, Font.BOLD)
             })
@@ -4495,7 +4496,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Sandbox" else "Try This Change"
             firstRunPromptButton.isEnabled = state.codeMapReady
             firstRunPromptButton.toolTipText = if (state.resetSuggested) {
-                "The guided demo prompt likely matches code that is already in ${state.resetPath}. Click Reset Demo Sandbox for a fresh invite demo run, or keep your own UML edit instead."
+                "The guided demo prompt likely matches code that is already in ${state.resetPath}. Reset Demo Sandbox is optional but recommended for a predictable fresh invite demo run. If you skip reset, make your own UML-backed change instead."
             } else if (state.promptReady) {
                 "Fresh prompt already loaded for the current sandbox: \"${state.prompt}\""
             } else {
@@ -4804,7 +4805,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String =
         when {
             state.resetSuggested ->
-                "The guided demo prompt likely matches code already in the invite demo file. Click Reset Demo Sandbox for a fresh run, or keep your own UML edit instead."
+                "The guided demo prompt likely matches code already in the invite demo file. Reset Demo Sandbox is optional but recommended for a predictable fresh run. If you skip reset, make your own UML-backed change instead."
             state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
                 "Expect Invite to show expires_at in the refreshed UML and in the running app, browser, or terminal flow."
             state.expectedRelationSource != null && state.expectedRelationTarget != null ->
@@ -4815,9 +4816,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun manualDemoWhatToLookForChecklist(state: GuidedInviteScenarioState): String =
         when {
             state.resetSuggested -> listOf(
-                "- Reset Demo Sandbox restored the invite demo baseline before you verify again.",
-                "- Refresh UML From Code before rerunning the prompt.",
+                "- Reset Demo Sandbox is optional but recommended when you want a predictable fresh invite demo run.",
+                "- Reset Demo Sandbox restores ${state.resetPath} to the baseline invite demo file.",
+                "- Refresh UML From Code next before rerunning the prompt.",
                 "- Click Try This Change again so the next demo prompt is fresh.",
+                "- If you skip reset, make your own UML-backed change instead.",
             )
             state.expectedEntity == "Invite" && state.prompt.contains("expires_at") -> listOf(
                 "- Invite shows expires_at in the refreshed UML.",
