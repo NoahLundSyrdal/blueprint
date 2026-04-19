@@ -9,17 +9,17 @@ class PostApplyInlineSummaryRegressionTest {
     private val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
     @Test
-    fun `successful apply stores inline summary state for review panel`() {
+    fun `successful apply stores concise inline result summary plus separate next step`() {
         assertTrue(source.contains("private var postApplyInlineSummary: PostApplyInlineSummary? = null"))
         assertTrue(source.contains("postApplyInlineSummary = PostApplyInlineSummary("))
         assertTrue(source.contains("val validationAndPathsLine = buildString {"))
+        assertTrue(source.contains("appendLine(summaryLine)"))
         assertTrue(source.contains("appendLine(result.summaryLine())"))
         assertTrue(source.contains("append(changedFilesText)"))
-        assertTrue(source.contains("summaryLine = nextActionLine"))
-        assertTrue(source.contains("appendLine(summaryLine)"))
-        assertTrue(source.contains("validationAndPathsLine = buildString {"))
+        assertTrue(source.contains("summaryLine = summaryLine"))
         assertTrue(source.contains("validationAndPathsLine = validationAndPathsLine,"))
-        assertTrue(source.contains("nextStepLine = refreshNote"))
+        assertTrue(source.contains("nextStepLine = nextActionLine"))
+        assertTrue(source.contains("appendLine(\"- Next: Refresh UML From Code to verify.\")"))
     }
 
     @Test

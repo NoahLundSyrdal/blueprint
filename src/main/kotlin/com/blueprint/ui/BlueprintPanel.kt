@@ -3522,13 +3522,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     postApplyInlineSummary = PostApplyInlineSummary(
                         changedPaths = changedPaths,
-                        summaryLine = nextActionLine,
+                        summaryLine = summaryLine,
                         validationAndPathsLine = validationAndPathsLine,
-                        nextStepLine = refreshNote,
+                        nextStepLine = nextActionLine,
                         verifyChecklist = verifyChecklist,
                         copyableResultSummary = buildString {
                             appendLine("Result summary")
+                            appendLine("- $summaryLine")
                             appendLine("- Validation: ${result.summaryLine()}")
+                            appendLine("- Next: Refresh UML From Code to verify.")
                             appendLine("- Run after apply: $runNote")
                             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
                         }.trim(),
