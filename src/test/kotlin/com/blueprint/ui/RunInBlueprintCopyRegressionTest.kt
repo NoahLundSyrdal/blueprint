@@ -36,6 +36,7 @@ class RunInBlueprintCopyRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("text = runOutputIdleHint()"))
+        assertTrue(source.contains("Run In Blueprint will launch: \$it"))
         assertTrue(source.contains("Click Run In Blueprint to start: \$it"))
         assertTrue(source.contains("Blueprint will stream stdout and stderr here."))
         assertTrue(source.contains("When a command is available, Run In Blueprint will stream stdout and stderr here."))
