@@ -225,6 +225,74 @@ class GuidedInviteScenarioTest {
 
 
     @Test
+    fun `generic first run checklist covers fresh folder patch ready apply complete and manual verification`() {
+        val fresh = FirstRunChecklistState(
+            codeMapReady = false,
+            reviewedDiffReady = false,
+            reviewApprovedReady = false,
+            appliedReady = false,
+            refreshedCodeMapReady = false,
+            runCommand = null,
+            validationCommand = null,
+            validationReady = false,
+            validationPassed = false,
+            runVerified = false,
+        ).checklistText()
+        assertTrue(fresh.contains("First-run checklist:"))
+        assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
+        assertTrue(fresh.contains("Open the project entrypoint manually and verify the changed feature exists."))
+        assertTrue(fresh.contains("No validation command was inferred."))
+
+        val patchReady = FirstRunChecklistState(
+            codeMapReady = true,
+            reviewedDiffReady = true,
+            reviewApprovedReady = false,
+            appliedReady = false,
+            refreshedCodeMapReady = false,
+            runCommand = "python main.py",
+            validationCommand = "pytest",
+            validationReady = false,
+            validationPassed = false,
+            runVerified = false,
+        ).checklistText()
+        assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
+        assertTrue(patchReady.contains("[next] Review approved -> confirm Blueprint says the reviewed code patch is safe to apply."))
+        assertTrue(patchReady.contains("Blueprint will validate after apply with: pytest"))
+
+        val applied = FirstRunChecklistState(
+            codeMapReady = true,
+            reviewedDiffReady = true,
+            reviewApprovedReady = true,
+            appliedReady = true,
+            refreshedCodeMapReady = true,
+            runCommand = "python main.py",
+            validationCommand = "pytest",
+            validationReady = true,
+            validationPassed = true,
+            runVerified = true,
+        ).checklistText()
+        assertTrue(applied.contains("[done] Apply Approved Changes -> write the approved code patch to disk."))
+        assertTrue(applied.contains("[done] Refresh UML From Code -> verify the code-backed UML after apply."))
+        assertTrue(applied.contains("[done] Run the changed app -> Run verified with: python main.py"))
+        assertTrue(applied.contains("Validation passed after apply with: pytest"))
+
+        val noRunCommand = FirstRunChecklistState(
+            codeMapReady = true,
+            reviewedDiffReady = true,
+            reviewApprovedReady = true,
+            appliedReady = true,
+            refreshedCodeMapReady = true,
+            runCommand = null,
+            validationCommand = null,
+            validationReady = true,
+            validationPassed = false,
+            runVerified = false,
+        ).checklistText()
+        assertTrue(noRunCommand.contains("[next] Run the changed app -> Open the project entrypoint manually and verify the changed feature exists."))
+        assertTrue(noRunCommand.contains("Validation ran after apply. Review the result before you continue."))
+    }
+
+    @Test
     fun `demo receipt summarizes pass wait states and expected visible results`() {
         val waiting = GuidedInviteScenarioState(
             codeMapReady = false,

@@ -246,6 +246,79 @@ private class ChatBubblePanel(
     }
 }
 
+internal data class FirstRunChecklistState(
+    val codeMapReady: Boolean,
+    val reviewedDiffReady: Boolean,
+    val reviewApprovedReady: Boolean,
+    val appliedReady: Boolean,
+    val refreshedCodeMapReady: Boolean,
+    val runCommand: String?,
+    val validationCommand: String?,
+    val validationReady: Boolean,
+    val validationPassed: Boolean,
+    val runVerified: Boolean,
+) {
+    /**
+     * Returns the first-run checklist for any Python folder in plain product language.
+     */
+    fun checklistText(): String {
+        val currentStep = when {
+            !codeMapReady -> 1
+            !reviewedDiffReady -> 2
+            !reviewApprovedReady -> 3
+            !appliedReady -> 4
+            !refreshedCodeMapReady -> 5
+            !runVerified -> 6
+            else -> 6
+        }
+        val validationLine = when {
+            !appliedReady && validationCommand.isNullOrBlank() ->
+                "No validation command was inferred. Blueprint will validate after apply if it can infer a command; otherwise verify manually after Apply Approved Changes."
+            !appliedReady ->
+                "Blueprint will validate after apply with: $validationCommand"
+            validationPassed && validationCommand.isNullOrBlank() ->
+                "Validation passed after apply. Blueprint did not need a separate validation command."
+            validationPassed ->
+                "Validation passed after apply with: $validationCommand"
+            validationReady && validationCommand.isNullOrBlank() ->
+                "Validation ran after apply. Review the result before you continue."
+            validationReady ->
+                "Validation ran after apply with: $validationCommand. Review the result before you continue."
+            validationCommand.isNullOrBlank() ->
+                "No validation command was inferred. After Apply Approved Changes, verify manually or run your preferred checks."
+            else ->
+                "Validation is ready to run after apply with: $validationCommand"
+        }
+        val runLine = when {
+            runCommand.isNullOrBlank() ->
+                "Open the project entrypoint manually and verify the changed feature exists."
+            runVerified ->
+                "Run verified with: $runCommand"
+            else ->
+                "Run the changed app with: $runCommand"
+        }
+        return listOf(
+            "First-run checklist:",
+            "${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.",
+            "${markerForStep(2, currentStep, reviewedDiffReady)} Generate Code Diff -> create a reviewed code patch from your UML edits.",
+            "${markerForStep(3, currentStep, reviewApprovedReady)} Review approved -> confirm Blueprint says the reviewed code patch is safe to apply.",
+            "${markerForStep(4, currentStep, appliedReady)} Apply Approved Changes -> write the approved code patch to disk.",
+            "${markerForStep(5, currentStep, refreshedCodeMapReady)} Refresh UML From Code -> verify the code-backed UML after apply.",
+            "${markerForStep(6, currentStep, runVerified)} Run the changed app -> $runLine",
+            "",
+            "Validation:",
+            "- $validationLine",
+        ).joinToString("\n")
+    }
+
+    private fun markerForStep(step: Int, currentStep: Int, done: Boolean): String =
+        when {
+            done -> "[done]"
+            step == currentStep -> "[next]"
+            else -> "[wait]"
+        }
+}
+
 internal data class GuidedInviteScenarioState(
     val codeMapReady: Boolean,
     val prompt: String,
@@ -3716,28 +3789,48 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         GuidedInviteScenario.matchesProject(project.name, project.basePath)
 
     private fun refreshFirstRunScenario() {
-        if (!shouldShowInviteFirstRunScenario()) {
-            refreshRunControls()
-            return
-        }
-        val state = currentInviteFirstRunScenarioState()
-        firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
-        demoReceiptArea.text = state.demoReceiptText()
-        firstRunPromptButton.text = if (state.resetSuggested) "Show Reset Steps" else "Try This Change"
-        firstRunPromptButton.isEnabled = state.codeMapReady
-        firstRunPromptButton.toolTipText = if (state.resetSuggested) {
-            "All guided demo changes already exist. Restore ${state.resetPath} from git, or pick your own change."
-        } else if (state.promptReady) {
-            "Fresh demo prompt loaded: ${state.prompt}"
+        val inviteFlow = shouldShowInviteFirstRunScenario()
+        val genericState = currentFirstRunChecklistState()
+        firstRunScenarioArea.text = if (inviteFlow) {
+            GuidedInviteScenario.checklistText(currentInviteFirstRunScenarioState())
         } else {
-            "Fresh demo prompt: ${state.prompt}"
+            genericState.checklistText()
         }
-        runDemoButton.text = if (state.runVerified) "Demo Run Verified" else "Run Demo Step"
-        runDemoButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
-        runDemoButton.toolTipText = when {
-            state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
-            state.runVerified -> "Blueprint already recorded a passed demo run for: ${state.runCommand}"
-            else -> "Record the final manual demo step and expected visible result for: ${state.runCommand}"
+        if (inviteFlow) {
+            val state = currentInviteFirstRunScenarioState()
+            demoReceiptArea.text = state.demoReceiptText()
+            firstRunPromptButton.text = if (state.resetSuggested) "Show Reset Steps" else "Try This Change"
+            firstRunPromptButton.isEnabled = state.codeMapReady
+            firstRunPromptButton.toolTipText = if (state.resetSuggested) {
+                "All guided demo changes already exist. Restore ${state.resetPath} from git, or pick your own change."
+            } else if (state.promptReady) {
+                "Fresh demo prompt loaded: ${state.prompt}"
+            } else {
+                "Fresh demo prompt: ${state.prompt}"
+            }
+            runDemoButton.text = if (state.runVerified) "Demo Run Verified" else "Run Demo Step"
+            runDemoButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()
+            runDemoButton.toolTipText = when {
+                state.runCommand.isNullOrBlank() -> "Refresh UML From Code first so Blueprint can infer a run command for the current project."
+                state.runVerified -> "Blueprint already recorded a passed demo run for: ${state.runCommand}"
+                else -> "Record the final manual demo step and expected visible result for: ${state.runCommand}"
+            }
+        } else {
+            demoReceiptArea.text = genericState.checklistText()
+            firstRunPromptButton.text = "Refresh UML From Code"
+            firstRunPromptButton.isEnabled = !genericState.codeMapReady
+            firstRunPromptButton.toolTipText = if (genericState.codeMapReady) {
+                "Current Python folder is already loaded into the code-backed UML."
+            } else {
+                "Load the current Python folder into a code-backed UML diagram."
+            }
+            runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
+            runDemoButton.isEnabled = genericState.codeMapReady
+            runDemoButton.toolTipText = when {
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use this checklist to verify the project entrypoint manually."
+                genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
+                else -> "Record how you verified the changed app with: ${genericState.runCommand}"
+            }
         }
         refreshRunControls()
     }
@@ -3816,6 +3909,27 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             .orEmpty()
             .map { it.substringBefore(":").trim() }
         return GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
+    }
+
+    private fun currentFirstRunChecklistState(): FirstRunChecklistState {
+        val runner = project.service<ProjectRunService>()
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val selected = nodeList.selectedValue
+        val validation = selected?.let { validationResults[it.id] }
+        val exec = selected?.let { registry.getExecution(it.id) }
+        val review = selected?.let { registry.getReview(it.id) }
+        return FirstRunChecklistState(
+            codeMapReady = currentUmlEntityCount() > 0,
+            reviewedDiffReady = exec?.patches.orEmpty().isNotEmpty(),
+            reviewApprovedReady = reviewAllowsApply(review),
+            appliedReady = selected?.executionStatus == ExecutionStatus.APPLIED,
+            refreshedCodeMapReady = refreshedAfterApply && !umlHasPendingEdits,
+            runCommand = runner.inferredRunCommand().orEmpty().ifBlank { context.runCommands.firstOrNull() },
+            validationCommand = project.service<ProjectValidationService>().selectedCommand(),
+            validationReady = validation != null,
+            validationPassed = validation?.status == ProjectValidationService.ValidationResult.Status.PASS,
+            runVerified = activityLog.text.contains("Run the changed app", ignoreCase = true),
+        )
     }
 
     private fun currentInviteFirstRunScenarioState(): GuidedInviteScenarioState {
