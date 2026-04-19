@@ -27,6 +27,18 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Apply finished for Invite schema: 1 applied, 0 skipped."),
         )
         assertEquals(
+            "Started validation after apply for Invite schema: pytest -q",
+            receiptTextForTest("Running validation after apply for Invite schema: pytest -q"),
+        )
+        assertEquals(
+            "Skipped validation after apply for Invite schema: no command inferred.",
+            receiptTextForTest("Validation skipped after apply for Invite schema: no command inferred."),
+        )
+        assertEquals(
+            "Review approved Invite schema because Invite + accepted_at: datetime stays in scope and no blocking safety issues were reported.",
+            receiptTextForTest("Review approved Invite schema because Invite + accepted_at: datetime stays in scope and no blocking safety issues were reported."),
+        )
+        assertEquals(
             "Refreshed UML from code after apply: refreshed UML from disk with 4 class(es), 3 relationship(s).",
             receiptTextForTest("Freshness verified after apply: refreshed UML from disk with 4 class(es), 3 relationship(s)."),
         )

@@ -3761,11 +3761,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Planned reviewed code patch for")
             lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Generated reviewed code patch for")
             lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Generated reviewed code patch for")
+            lower.startsWith("running validation after apply for") -> msg.replaceFirst("Running validation after apply for", "Started validation after apply for")
+            lower.startsWith("validation skipped after apply for") -> msg.replaceFirst("Validation skipped after apply for", "Skipped validation after apply for")
             lower.startsWith("apply finished for") -> msg.replaceFirst("Apply finished for", "Applied approved changes for")
             lower.startsWith("validation passed:") -> msg.replaceFirst("Validation passed:", "Validation passed:")
             lower.startsWith("validation skipped:") -> msg.replaceFirst("Validation skipped:", "Validation skipped:")
             lower.startsWith("validation failed:") -> msg.replaceFirst("Validation failed:", "Validation failed:")
             lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Refreshed UML from code after apply:")
+            lower.startsWith("review approved") || lower.startsWith("review blocked") -> msg
             lower.startsWith("review approve") || lower.startsWith("review request_changes") || lower.startsWith("review reject") ->
                 msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "Review result: ")
             else -> msg
