@@ -28,7 +28,7 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("validationDetailsText = validationDetailsText,"))
         assertTrue(source.contains("validationAndPathsLine = validationAndPathsLine,"))
         assertTrue(source.contains("nextStepLine = nextActionLine"))
-        assertTrue(source.contains("appendLine(\"- Next: Refresh UML From Code to verify the updated code-backed UML.\")"))
+        assertTrue(source.contains("appendLine(\"- \$POST_APPLY_NEXT_STEP_LINE\")"))
     }
 
     @Test
@@ -42,7 +42,7 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("appendLine(resultDetailsSection())"))
         assertTrue(source.contains("private fun resultDetailsSection(): String ="))
         assertTrue(source.contains("appendLine(verifyChecklist)"))
-        assertTrue(source.contains("append(\"\\nVerified receipt:\\n- Review the changed paths, validation result, and inferred run command above.\\n- Blueprint already refreshed the code-backed UML automatically after apply.\\n- Use Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself.\\n- Run the changed app to confirm the feature exists.\\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.\")"))
+        assertTrue(source.contains("append(POST_APPLY_VERIFIED_RECEIPT)"))
         assertTrue(source.contains("Verify in code: Use Open Changed File to inspect the primary changed file in the IDE. This does not apply or refresh anything."))
     }
 }
