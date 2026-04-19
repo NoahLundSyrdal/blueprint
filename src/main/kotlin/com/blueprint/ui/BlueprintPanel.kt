@@ -1559,7 +1559,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val ready = graph.readyNodes()
         return when {
-            "generate code" in lower || "code nodes" in lower || "reviewed code diff" in lower -> {
+            lower.containsWorkflowQuestion() -> {
                 "When the UML looks right, click Generate Code Diff. Blueprint will prepare a reviewed code patch that you can inspect and then apply."
             }
             "abstract" in lower || "sync" in lower -> {
@@ -1606,7 +1606,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (codex.providerMode() == "mock") return false
         val lower = message.lowercase()
         if (!codex.hasOpenAIKey() && codex.providerMode() == "openai") return false
-        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "reviewed code diff", "apply").any { it in lower }) {
+        if (lower.containsWorkflowQuestion()) {
             return false
         }
         return listOf("explain", "what is", "what are", "current product", "product", "architecture", "summarize", "describe")
@@ -1635,8 +1635,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val lower = message.lowercase()
         return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field")
             .any { it in lower } &&
-            !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "code nodes", "reviewed code diff", "explain").any { it in lower }
+            !lower.containsWorkflowQuestion() &&
+            "explain" !in lower
     }
+
+    private fun String.containsWorkflowQuestion(): Boolean =
+        listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "reviewed code diff", "apply")
+            .any { it in this }
 
     private fun refineUmlWithChat(message: String) {
         status("Refining UML with ${providerText()}...")
