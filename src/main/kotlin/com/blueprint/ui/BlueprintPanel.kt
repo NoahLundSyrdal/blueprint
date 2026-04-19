@@ -3939,12 +3939,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             val runGuide = inferredRunGuideText(context)
             return listOf(
                 "No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram.",
+                "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
+                "Next steps: review the inferred source roots, open a Python file to confirm the folder you want, or keep editing the project and refresh again.",
                 runGuide,
             ).filter { it.isNotBlank() }.joinToString(" ")
         }
         val nextStep = context.notes.firstOrNull()
             ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
-        return "This folder does not look like a supported Python project yet. $nextStep"
+        return listOf(
+            "This folder does not look like a supported Python project yet.",
+            "Blueprint could not find Python files to turn into a code-backed UML diagram.",
+            nextStep,
+            "Next steps: open a Python source root, add .py files, or open source files manually while you pick the folder to map.",
+        ).filter { it.isNotBlank() }.joinToString(" ")
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
