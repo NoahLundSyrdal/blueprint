@@ -15,10 +15,12 @@ class PythonProjectAnalyzerDetectionTest {
             packageManager = "pyproject",
             frameworks = listOf("pytest"),
             testCommands = listOf("python -m pytest"),
+            runCommands = listOf("python app.py"),
             notes = emptyList(),
         ).promptContext()
 
         assertTrue(prompt.contains("sourceRoots: app, src, src/domain"))
+        assertTrue(prompt.contains("suggestedRunCommands: python app.py"))
         assertTrue(prompt.contains("Prefer Python modules under the detected source roots."))
     }
 

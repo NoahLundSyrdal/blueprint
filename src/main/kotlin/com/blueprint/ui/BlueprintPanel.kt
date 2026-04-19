@@ -2965,6 +2965,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                     }
                     val refreshNote = "Refresh UML From Code to verify."
+                    val runNote = inferredRunNote()
                     val undoNote = if (undoLastApplyButton.isEnabled) {
                         "Undo Last Apply is available if you want to roll back this reviewed code patch."
                     } else {
@@ -2982,7 +2983,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     Messages.showInfoMessage(
                         project,
-                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, undoNote, umlRefreshLine, validationBlock)
+                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, validationBlock)
+                            .filter { it.isNotBlank() }
                             .joinToString("\n\n"),
                         "Blueprint - Apply Complete"
                     )
@@ -2990,8 +2992,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         showArtifactTab("UML")
                         status(summaryLine)
                         umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram, or use Undo Last Apply to roll it back."
-                        appendChat("Blueprint", "$summaryLine\n$whatChanged\n$refreshNote\n$undoNote\n$umlRefreshLine")
-                        guideLabel.text = "Apply complete. Refresh UML From Code to verify, or use Undo Last Apply to roll back this reviewed code patch."
+                        appendChat(
+                            "Blueprint",
+                            listOf(summaryLine, whatChanged, refreshNote, runNote, undoNote, umlRefreshLine)
+                                .filter { it.isNotBlank() }
+                                .joinToString("\n"),
+                        )
+                        guideLabel.text = listOf(
+                            "Apply complete. Refresh UML From Code to verify.",
+                            inferredRunGuideText(),
+                            "Use Undo Last Apply to roll back this reviewed code patch.",
+                        ).filter { it.isNotBlank() }.joinToString(" ")
                     }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
@@ -3548,12 +3559,23 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun emptyUmlGuideText(): String {
         val context = project.service<PythonProjectAnalyzer>().analyze()
         if (context.isPythonLikely()) {
-            return "No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram."
+            val runGuide = inferredRunGuideText(context)
+            return listOf(
+                "No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram.",
+                runGuide,
+            ).filter { it.isNotBlank() }.joinToString(" ")
         }
         val nextStep = context.notes.firstOrNull()
             ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
         return "This folder does not look like a supported Python project yet. $nextStep"
     }
+
+    private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
+        context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it" }.orEmpty()
+
+    private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
+        context.runCommands.firstOrNull()?.let { "Run the changed app with: $it" }
+            ?: "Blueprint could not infer a run command yet. It looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \"__main__\" entrypoints."
 
     private fun shouldShowInviteFirstRunScenario(): Boolean =
         GuidedInviteScenario.matchesProject(project.name, project.basePath)

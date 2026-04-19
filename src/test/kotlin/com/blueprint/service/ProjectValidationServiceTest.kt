@@ -76,6 +76,7 @@ class ProjectValidationServiceTest {
             packageManager = "unknown",
             frameworks = emptyList(),
             testCommands = emptyList(),
+            runCommands = emptyList(),
             notes = emptyList(),
         )
 
@@ -130,6 +131,7 @@ class ProjectValidationServiceTest {
             packageManager = "pyproject",
             frameworks = listOf("pytest"),
             testCommands = testCommands,
+            runCommands = emptyList(),
             notes = emptyList(),
         )
 }

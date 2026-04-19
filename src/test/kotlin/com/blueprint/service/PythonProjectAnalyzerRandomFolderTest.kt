@@ -24,6 +24,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.frameworks.contains("pytest"))
         assertTrue(context.frameworks.contains("attrs"))
         assertEquals(listOf("python -m pytest", "python -m unittest discover tests"), context.testCommands)
+        assertEquals(listOf("python main.py"), context.runCommands)
     }
 
     @Test
@@ -40,6 +41,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.frameworks.contains("fastapi"))
         assertTrue(context.frameworks.contains("pydantic"))
         assertEquals(listOf("python -m pytest", "python -m unittest discover tests"), context.testCommands)
+        assertEquals(listOf("uvicorn app.api.server:app --reload", "python app/api/server.py"), context.runCommands)
     }
 
     @Test
@@ -54,6 +56,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertEquals("unknown", context.packageManager)
         assertTrue(context.frameworks.contains("flask"))
         assertEquals(listOf("python -m pytest", "python -m unittest discover tests"), context.testCommands)
+        assertEquals(listOf("flask --app src.orders.api run"), context.runCommands)
         assertFalse(context.sourceRoots.any { it.contains("site-packages") })
         assertFalse(context.sourceRoots.any { it.contains("build") })
         assertFalse(context.sourceRoots.any { it.contains("vendor") })
@@ -71,6 +74,7 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.testRoots.contains("tests"))
         assertEquals("unknown", context.packageManager)
         assertEquals(listOf("python -m unittest discover tests"), context.testCommands)
+        assertEquals(listOf("python -m "), context.runCommands)
     }
 
     private fun fakeProject(basePath: Path): Project =
