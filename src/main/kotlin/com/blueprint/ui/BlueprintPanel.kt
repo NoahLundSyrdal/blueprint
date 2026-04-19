@@ -3695,6 +3695,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
                     val commandBlock = commandReviewBlock(validationCommand, pythonContext)
+                    val receiptValidationCommandLine = validationCommandReceiptLine(result)
                     val runBlock = buildString {
                         appendLine("Run after apply:")
                         appendLine(runNote)
@@ -3748,6 +3749,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         appendLine("- $summaryLine")
                         appendLine("- $writtenPathCountLine")
                         appendLine("- $validationOutcomeLine")
+                        receiptValidationCommandLine?.let { appendLine("- $it") }
                         appendLine("- $nextActionLine")
                     }.trim()
                     val validationAndPathsLine = buildString {
@@ -3785,6 +3787,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine("- $summaryLine")
                             appendLine("- $writtenPathCountLine")
                             appendLine("- $validationOutcomeLine")
+                            receiptValidationCommandLine?.let { appendLine("- $it") }
                             appendLine("- Validation details: ${result.summaryLine()}")
                             appendLine("- Next: Refresh UML From Code to verify the updated code-backed UML.")
                             appendLine("- Run after apply: $runNote")
@@ -3918,6 +3921,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 append(result.relatedFiles.joinToString("\n") { "- $it" })
             }
         }
+
+    private fun validationCommandReceiptLine(result: ProjectValidationService.ValidationResult): String? =
+        result.command.takeIf { it.isNotBlank() && result.status != ProjectValidationService.ValidationResult.Status.SKIPPED }
+            ?.let { "Validation command: $it" }
 
     private fun openAppliedFiles() {
         val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty()
