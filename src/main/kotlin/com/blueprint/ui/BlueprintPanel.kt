@@ -4230,10 +4230,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun emptyUmlGuideText(): String {
         val context = project.service<PythonProjectAnalyzer>().analyze()
+        val folderSummary = emptyStateFolderSummary(context)
         if (context.isPythonLikely()) {
             val runGuide = inferredRunGuideText(context)
             return listOf(
                 "No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram.",
+                folderSummary,
                 "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
                 "Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet.",
                 "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
@@ -4246,6 +4248,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
         return listOf(
             "No Python files were found in the opened folder, so Blueprint cannot build a code-backed UML diagram yet.",
+            folderSummary,
             "Open the Python app folder or a Python subfolder you want to map, then click Refresh UML From Code again.",
             "If you are still choosing the folder, you can open source files manually or paste/import UML first and come back to code refresh later.",
             "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
@@ -4253,6 +4256,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Open a Python source root or add .py files, then Refresh UML From Code to start the full Blueprint loop.",
             "Next steps: open a Python source root, open a Python subfolder, add .py files, or paste/import UML while you pick the folder to map.",
         ).filter { it.isNotBlank() }.joinToString(" ")
+    }
+
+    private fun emptyStateFolderSummary(context: PythonProjectAnalyzer.PythonProjectContext): String {
+        val folderLabel = project.basePath?.replace('\\', '/') ?: context.basePath.ifBlank { project.name }
+        val detectedFiles = context.filesAnalyzed.size + context.skippedFiles.size
+        val pythonScope = when {
+            detectedFiles > 0 -> "$detectedFiles Python file${if (detectedFiles == 1) "" else "s"} detected in this folder."
+            else -> "0 Python files detected in this folder so far."
+        }
+        return "Current folder: $folderLabel. $pythonScope"
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
