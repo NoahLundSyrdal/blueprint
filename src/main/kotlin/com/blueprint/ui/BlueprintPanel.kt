@@ -471,6 +471,17 @@ internal object ReviewExplanation {
         return details(nodeTitle, exec, review, readiness, validation).joinToString("\n")
     }
 
+    fun statusLine(nodeTitle: String, exec: ExecutionArtifact?, review: ReviewArtifact?): String {
+        if (review == null) return "Review not run yet."
+        val shortTitle = nodeTitle.ifBlank { "this change" }
+        val changePhrase = changePhrase(exec)
+        return if (review.reviewStatus.uppercase() == "APPROVE") {
+            "Review approved $shortTitle because $changePhrase stays in scope and no blocking safety issues were reported."
+        } else {
+            "Review blocked $shortTitle because ${blockerLine(review)} Fix: ${fixLine(review)}"
+        }
+    }
+
     fun details(
         nodeTitle: String,
         exec: ExecutionArtifact?,
@@ -479,12 +490,7 @@ internal object ReviewExplanation {
         validation: ProjectValidationService.ValidationResult?,
     ): List<String> {
         val shortTitle = nodeTitle.ifBlank { "this change" }
-        val semanticChanges = PatchChangeSummary.semanticChangeLines(exec).take(2)
-        val changePhrase = if (semanticChanges.isEmpty()) {
-            "the reviewed code patch"
-        } else {
-            semanticChanges.joinToString(" and ")
-        }
+        val changePhrase = changePhrase(exec)
         val scopeLine = when (review.scopeCompliance.result.uppercase()) {
             "PASS" -> "Scope: stays within the selected files."
             "PARTIAL" -> "Scope: mostly in scope, but review found scope concerns."
@@ -520,6 +526,15 @@ internal object ReviewExplanation {
                 "- $dependencyLine",
                 "- $validationLine",
             )
+        }
+    }
+
+    private fun changePhrase(exec: ExecutionArtifact?): String {
+        val semanticChanges = PatchChangeSummary.semanticChangeLines(exec).take(2)
+        return if (semanticChanges.isEmpty()) {
+            "the reviewed code patch"
+        } else {
+            semanticChanges.joinToString(" and ")
         }
     }
 
@@ -2598,13 +2613,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 readiness = project.service<DependencyGraphService>().readinessFor(n),
                 validation = validationResults[n.id],
             )
+            val reviewStatusLine = ReviewExplanation.statusLine(
+                nodeTitle = n.title.ifBlank { n.id.take(8) },
+                exec = exec,
+                review = r,
+            )
             if (parseIssues.isNotEmpty()) {
-                logActivity("Review ${r.reviewStatus} with warnings for ${n.title}: ${parseIssues.joinToString("; ")}")
+                logActivity("$reviewStatusLine Warnings: ${parseIssues.joinToString("; ")}")
             } else {
-                logActivity(reviewExplanation.lineSequence().first())
+                logActivity(reviewStatusLine)
             }
-            appendChat("Blueprint", reviewExplanation)
-            status("Review ${r.reviewStatus}: ${n.title.ifBlank { n.id.take(8) }}")
+            appendChat("Blueprint", "$reviewStatusLine\n\n$reviewExplanation")
+            status(reviewStatusLine)
         }
     }
 

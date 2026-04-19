@@ -12,6 +12,33 @@ import org.junit.Test
 
 class ReviewExplanationTest {
     @Test
+    fun `approval status line summarizes why apply is safe`() {
+        val text = ReviewExplanation.statusLine(
+            nodeTitle = "Invite update",
+            exec = ExecutionArtifact(
+                patches = listOf(
+                    Patch(
+                        path = "app/models.py",
+                        action = "update",
+                        content = "class Invite:\n    accepted_at: datetime",
+                    ),
+                ),
+                summary = "Add accepted_at to Invite.",
+            ),
+            review = ReviewArtifact(
+                reviewStatus = "APPROVE",
+                summary = "Patch is scoped and safe.",
+                scopeCompliance = ScopeCompliance(result = "PASS"),
+                positiveSignals = listOf("Only the selected model file changes."),
+                recommendedNextAction = "apply",
+            ),
+        )
+
+        assertTrue(text.contains("Review approved Invite update because Invite + accepted_at: datetime stays in scope"))
+        assertTrue(text.contains("no blocking safety issues were reported"))
+    }
+
+    @Test
     fun `approval summary explains why apply is safe`() {
         val text = ReviewExplanation.summary(
             nodeTitle = "Invite update",
@@ -42,6 +69,33 @@ class ReviewExplanationTest {
         assertTrue(text.contains("- Safety: Only the selected model file changes. Fields match the UML request."))
         assertTrue(text.contains("- Dependency status: ready."))
         assertTrue(text.contains("- Validation status: will run after apply"))
+    }
+
+    @Test
+    fun `rejection status line summarizes blocker and fix`() {
+        val text = ReviewExplanation.statusLine(
+            nodeTitle = "Invite update",
+            exec = ExecutionArtifact(
+                patches = listOf(Patch(path = "app/models.py", action = "update", content = "class Invite:\n    accepted_at: datetime")),
+                summary = "Add accepted_at to Invite.",
+            ),
+            review = ReviewArtifact(
+                reviewStatus = "REQUEST_CHANGES",
+                summary = "Patch touches the wrong file.",
+                scopeCompliance = ScopeCompliance(result = "FAIL"),
+                issues = listOf(
+                    ReviewIssue(
+                        title = "Out of scope file",
+                        details = "The patch also modifies app/routes.py.",
+                        suggestedFix = "Regenerate the patch so only app/models.py changes.",
+                    ),
+                ),
+                recommendedNextAction = "revise",
+            ),
+        )
+
+        assertTrue(text.contains("Review blocked Invite update because The patch also modifies app/routes.py."))
+        assertTrue(text.contains("Fix: Regenerate the patch so only app/models.py changes."))
     }
 
     @Test
