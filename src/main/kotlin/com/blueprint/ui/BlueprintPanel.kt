@@ -543,6 +543,7 @@ internal data class PostApplyInlineSummary(
 internal data class GenerateDiffGuideSummary(
     val guideText: String,
     val nextStepDetail: String,
+    val commandSummary: String,
 )
 
 internal object PatchChangeSummary {
@@ -4079,7 +4080,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> {
                 val diffGuide = generateDiffGuideSummary()
                 primaryActionButton.text = "Generate Code Diff"
-                guideLabel.text = diffGuide.guideText
+                guideLabel.text = listOf(diffGuide.guideText, diffGuide.commandSummary)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n")
                 updateNextStepBanner("Next: Generate Code Diff", diffGuide.nextStepDetail)
             }
         }
@@ -4120,32 +4123,38 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         lines += validationCommandReviewText(validationCommand)
         lines += runCommandReviewText(context)
-        val guideText = lines.joinToString(" ")
+        val commandSummary = preApplyCommandSummary(context, validationCommand)
+        val guideText = (lines + commandSummary.lines()).joinToString(" ")
         val nextStepDetail = if (umlHasPendingEdits) {
             "Create a reviewed code patch for the current UML edits. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
         } else {
             "Turn the current UML edits into a reviewed code patch before apply. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
         }
-        return GenerateDiffGuideSummary(guideText, nextStepDetail)
+        return GenerateDiffGuideSummary(guideText, nextStepDetail, commandSummary)
     }
 
     private fun validationCommandReviewText(command: String?): String =
         command?.takeIf { it.isNotBlank() }
-            ?.let { "Validation after apply will run: $it" }
-            ?: "Validation after apply: no command inferred yet, so verify manually if you need extra checks."
+            ?.let { "Validation after apply was inferred automatically: $it" }
+            ?: "Validation after apply is unavailable. Blueprint did not infer a validation command, so verify manually if you need extra checks."
 
     private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
-        context.runCommands.firstOrNull()?.let { "Run after apply with: $it" }
-            ?: "Run after apply: ${missingRunCommandGuidance(context)}"
+        context.runCommands.firstOrNull()?.let { "Run after apply was inferred automatically: $it" }
+            ?: "Run after apply is unavailable. ${missingRunCommandGuidance(context)}"
 
-    private fun commandReviewBlock(
-        validationCommand: String?,
+    private fun preApplyCommandSummary(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+        validationCommand: String? = project.service<ProjectValidationService>().selectedCommand(),
     ): String = listOf(
         "Before apply, Blueprint expects:",
         "- ${validationCommandReviewText(validationCommand)}",
         "- ${runCommandReviewText(context)}",
     ).joinToString("\n")
+
+    private fun commandReviewBlock(
+        validationCommand: String?,
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String = preApplyCommandSummary(context, validationCommand)
 
     private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here." }

@@ -34,7 +34,7 @@ class PrimaryActionCopyRegressionTest {
 
         assertTrue(source.contains("primaryActionButton.text = \"Generate Code Diff\""))
         assertTrue(source.contains("val diffGuide = generateDiffGuideSummary()"))
-        assertTrue(source.contains("guideLabel.text = diffGuide.guideText"))
+        assertTrue(source.contains("guideLabel.text = listOf(diffGuide.guideText, diffGuide.commandSummary)"))
         assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", diffGuide.nextStepDetail)"))
     }
 

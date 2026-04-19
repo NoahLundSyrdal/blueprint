@@ -15,6 +15,6 @@ class RunCommandGuidanceRegressionTest {
         assertTrue(source.contains("private fun missingRunCommandGuidance("))
         assertTrue(source.contains("Open one of these likely entry files manually and verify the changed feature exists"))
         assertTrue(source.contains("Blueprint looked for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, and __name__ == \\\"__main__\\\" entrypoints."))
-        assertTrue(source.contains("Run after apply: "+"${'$'}{missingRunCommandGuidance(context)}"))
+        assertTrue(source.contains("Run after apply is unavailable. "+"${'$'}{missingRunCommandGuidance(context)}"))
     }
 }

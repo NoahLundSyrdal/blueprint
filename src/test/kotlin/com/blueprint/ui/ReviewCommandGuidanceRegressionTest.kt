@@ -13,7 +13,7 @@ class ReviewCommandGuidanceRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String ="))
-        assertTrue(source.contains("Run after apply: "+"${'$'}{missingRunCommandGuidance(context)}"))
+        assertTrue(source.contains("Run after apply is unavailable. "+"${'$'}{missingRunCommandGuidance(context)}"))
         assertTrue(source.contains("Open one of these likely entry files manually and verify the changed feature exists"))
     }
 }
