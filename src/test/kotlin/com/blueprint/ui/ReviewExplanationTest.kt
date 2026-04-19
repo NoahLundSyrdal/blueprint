@@ -110,14 +110,14 @@ class ReviewExplanationTest {
             readiness = DependencyGraphService.NodeReadiness(nodeId = "invite-update", ready = true, reasons = emptyList(), wave = 1),
             validation = ProjectValidationService.ValidationResult(
                 status = ProjectValidationService.ValidationResult.Status.SKIPPED,
-                reason = "No command inferred.",
+                reason = "No Python validation command was inferred for this project.",
             ),
             validationCommand = null,
         )
 
         assertTrue(text.contains("- Safety: No concrete safety issues were reported."))
         assertTrue(text.contains("- Validation after apply: Blueprint could not infer a validation command, so validation will be skipped unless you run checks manually."))
-        assertTrue(text.contains("- Validation status: skipped after apply."))
+        assertTrue(text.contains("- Validation status: skipped after apply because no validation command was inferred."))
     }
 
     @Test
@@ -216,6 +216,6 @@ class ReviewExplanationTest {
         assertTrue(text.contains("- Scope: review found out-of-scope changes."))
         assertTrue(text.contains("- Dependency status: blocked by parent node not applied."))
         assertTrue(text.contains("- Validation after apply: Blueprint could not infer a validation command, so validation will be skipped unless you run checks manually."))
-        assertTrue(text.contains("- Validation status: skipped after apply."))
+        assertTrue(text.contains("- Validation status: skipped after apply because no validation command was inferred."))
     }
 }

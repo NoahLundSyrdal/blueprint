@@ -724,7 +724,13 @@ internal object ReviewExplanation {
         }
         val validationLine = when (validation?.status) {
             ProjectValidationService.ValidationResult.Status.PASS -> "${validation.detailLabel()} status: passed after apply."
-            ProjectValidationService.ValidationResult.Status.SKIPPED -> "Validation status: skipped after apply."
+            ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                if (validation.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                    "Validation status: skipped after apply because no validation command was inferred."
+                } else {
+                    "Validation status: skipped after apply."
+                }
+            }
             ProjectValidationService.ValidationResult.Status.FAIL -> "${validation.detailLabel()} status: failed after apply."
             null -> "Validation status: will run after apply if Blueprint can infer a command."
         }
@@ -3259,7 +3265,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         append(
                             when (result.status) {
                                 ProjectValidationService.ValidationResult.Status.PASS -> "Validation passed."
-                                ProjectValidationService.ValidationResult.Status.SKIPPED -> "Validation skipped."
+                                ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                                    if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                                        "Validation skipped because no command was inferred."
+                                    } else {
+                                        "Validation skipped."
+                                    }
+                                }
                                 ProjectValidationService.ValidationResult.Status.FAIL -> "Validation failed."
                             }
                         )

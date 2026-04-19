@@ -23,6 +23,8 @@ class ApplySuccessCopyRegressionTest {
         assertTrue(source.contains("val commandBlock = commandReviewBlock(validationCommand, pythonContext)"))
         assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
         assertTrue(source.contains("status(summaryLine)"))
+        assertTrue(source.contains("ProjectValidationService.ValidationResult.Status.SKIPPED -> {"))
+        assertTrue(source.contains("Validation skipped because no command was inferred."))
         assertTrue(source.contains("guideLabel.text = listOf("))
         assertTrue(source.contains("\"Apply complete. Refresh UML From Code to verify.\""))
         assertTrue(source.contains("\"Use Undo Last Apply to roll back this reviewed code patch.\""))
