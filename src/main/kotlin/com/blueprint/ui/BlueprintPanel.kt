@@ -4334,7 +4334,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val context = project.service<PythonProjectAnalyzer>().analyze()
         val runCommand = runner.inferredRunCommand(context)
         return runCommand?.let {
-            "Run Output\n\nRun In Blueprint will launch: $it\nClick Run In Blueprint to start: $it\nBlueprint will stream stdout and stderr here. If the app keeps running, use Stop Run when you are done verifying the feature."
+            "Run Output\n\nRun In Blueprint will launch: $it\nClick Run In Blueprint to start: $it\nBlueprint will stream stdout and stderr here. If this command starts a dev server or watcher, it may keep streaming until you click Stop Run."
         } ?: "Run Output\n\n${runner.noCommandSummary(context)}\nWhen a command is available, Run In Blueprint will stream stdout and stderr here."
     }
 

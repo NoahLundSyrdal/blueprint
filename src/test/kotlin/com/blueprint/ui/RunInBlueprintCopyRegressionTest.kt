@@ -39,6 +39,7 @@ class RunInBlueprintCopyRegressionTest {
         assertTrue(source.contains("Run In Blueprint will launch: \$it"))
         assertTrue(source.contains("Click Run In Blueprint to start: \$it"))
         assertTrue(source.contains("Blueprint will stream stdout and stderr here."))
+        assertTrue(source.contains("If this command starts a dev server or watcher, it may keep streaming until you click Stop Run."))
         assertTrue(source.contains("When a command is available, Run In Blueprint will stream stdout and stderr here."))
         assertTrue(source.contains("if (runOutputArea.text.isBlank() || runOutputArea.text == \"Preparing inferred run command...\")"))
     }
