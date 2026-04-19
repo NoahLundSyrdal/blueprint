@@ -70,12 +70,13 @@ class PatchChangeSummaryTest {
 
         val summary = PatchChangeSummary.applySummary(exec, listOf("app/models.py"))
 
-        assertTrue(summary.contains("What changed:"))
+        assertTrue(summary.contains("What changed?"))
+        assertTrue(summary.contains("Plain-English summary after apply:"))
         assertTrue(summary.contains("Invite + accepted_at: datetime"))
         assertTrue(summary.contains("Changed files (1):"))
         assertTrue(summary.contains("- update app/models.py"))
         assertTrue(!summary.contains("unused.py"))
-        assertEquals("No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
+        assertEquals("What changed?\n- No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
     }
 
 
@@ -100,7 +101,8 @@ class PatchChangeSummaryTest {
 
         val summary = PatchChangeSummary.applySummary(exec, listOf("app/models.py"))
 
-        assertTrue(summary.contains("What changed:"))
+        assertTrue(summary.contains("What changed?"))
+        assertTrue(summary.contains("Plain-English summary after apply:"))
         assertTrue(summary.contains("Invite + accepted_at: datetime | None"))
         assertTrue(summary.contains("InviteAuditLog + actor_ip: str"))
         assertTrue(summary.contains("Changed files (1):"))
@@ -116,7 +118,7 @@ class PatchChangeSummaryTest {
             ),
         )
 
-        assertEquals("No code changes needed", PatchChangeSummary.applySummary(exec, listOf("app/other.py")))
+        assertEquals("What changed?\n- No code changes needed", PatchChangeSummary.applySummary(exec, listOf("app/other.py")))
     }
 
     @Test

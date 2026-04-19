@@ -22,7 +22,7 @@ class GenerateCodeDiffNoOpCopyTest {
             ),
         )
 
-        assertEquals("No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
+        assertEquals("What changed?\n- No code changes needed", PatchChangeSummary.applySummary(exec, emptyList()))
     }
 
     @Test

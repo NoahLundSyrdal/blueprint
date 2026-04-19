@@ -385,13 +385,12 @@ internal object PatchChangeSummary {
         if (exec == null) return "What changed?\n- No reviewed code patch yet."
         if (exec.patches.isEmpty()) return "What changed?\n- No code changes needed"
         val semanticChanges = semanticChanges(exec.patches, exec.summary)
-        return buildString {
-            appendLine("What changed?")
-            appendLine("Plain-English summary before apply:")
-            semanticChanges.forEach { appendLine("- $it") }
-            appendLine()
-            appendLine(changedFilesSummary(exec))
-        }.trim()
+        return buildSummary(
+            heading = "What changed?",
+            semanticHeading = "Plain-English summary before apply:",
+            semanticChanges = semanticChanges,
+            changedFilesText = changedFilesSummary(exec),
+        )
     }
 
     fun semanticChangeLines(exec: ExecutionArtifact?, changedPaths: Collection<String>? = null): List<String> {
@@ -401,18 +400,32 @@ internal object PatchChangeSummary {
     }
 
     fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
-        if (exec == null || appliedPaths.isEmpty()) return "No code changes needed"
+        if (exec == null || appliedPaths.isEmpty()) return "What changed?\n- No code changes needed"
         val appliedPathSet = appliedPaths.toSet()
         val changedFiles = exec.patches.filter { it.path in appliedPathSet }
-        if (changedFiles.isEmpty()) return "No code changes needed"
+        if (changedFiles.isEmpty()) return "What changed?\n- No code changes needed"
         val semanticChanges = semanticChanges(changedFiles, exec.summary)
-        return buildString {
-            appendLine("What changed:")
+        return buildSummary(
+            heading = "What changed?",
+            semanticHeading = "Plain-English summary after apply:",
+            semanticChanges = semanticChanges,
+            changedFilesText = changedFilesSummary(changedFiles),
+        )
+    }
+
+    private fun buildSummary(
+        heading: String,
+        semanticHeading: String,
+        semanticChanges: List<String>,
+        changedFilesText: String,
+    ): String =
+        buildString {
+            appendLine(heading)
+            appendLine(semanticHeading)
             semanticChanges.forEach { appendLine("- $it") }
             appendLine()
-            appendLine(changedFilesSummary(changedFiles))
+            appendLine(changedFilesText)
         }.trim()
-    }
 
     fun changedFilesSummary(exec: ExecutionArtifact?): String =
         when {
