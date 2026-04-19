@@ -27,6 +27,6 @@ class GuidedInviteResetRegressionTest {
         assertTrue(source.contains("GuidedInviteScenario.resetImportedInviteFile(project.basePath)"))
         assertTrue(source.contains("\"Reset Demo Sandbox\""))
         assertTrue(source.contains("\"Invite demo sandbox reset\""))
-        assertTrue(source.contains("\"Reset the invite demo sandbox at \${state.resetPath}. Refresh UML From Code to confirm the clean code-backed UML before you run Try This Change again.\""))
+        assertTrue(source.contains("\"Reset the invite demo sandbox at \${state.resetPath}. Refresh UML From Code, then use Try This Change to load a fresh prompt for the clean sandbox.\""))
     }
 }

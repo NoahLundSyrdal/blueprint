@@ -349,8 +349,8 @@ internal data class GuidedInviteScenarioState(
         }
         val tryChangeLine = when {
             !codeMapReady -> "[wait] Try This Change -> load the current code map first."
-            promptReady || umlDraftReady -> "[pass] Try This Change -> expected visible result: $prompt"
-            else -> "[next] Try This Change -> expected visible result: $prompt"
+            promptReady || umlDraftReady -> "[pass] Try This Change -> loaded fresh prompt for the current code map: $prompt"
+            else -> "[next] Try This Change -> load a fresh prompt for the current code map."
         }
         return listOf(
             "Demo receipt:",
@@ -444,7 +444,7 @@ internal object GuidedInviteScenario {
                 "[done] Refresh UML From Code -> current code map is loaded.",
                 if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
-                "[next] Reset the invite demo sandbox with Reset Demo Sandbox for ${state.resetPath}, or use Try This Change again after reset.",
+                "[next] Reset the invite demo sandbox with Reset Demo Sandbox for ${state.resetPath}, then use Try This Change to load a fresh prompt for the clean sandbox.",
                 "[wait] Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.",
                 "[wait] Blueprint reviews the fresh code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the fresh reviewed code patch.",
@@ -459,7 +459,7 @@ internal object GuidedInviteScenario {
             return listOf(
                 "Demo prompt scenario:",
                 "[next] Refresh UML From Code -> load the current code map first so Blueprint can choose a fresh demo change.",
-                "[wait] Try This Change -> available after the current code map loads.",
+                "[wait] Try This Change -> load a fresh prompt for the current code map.",
                 "[wait] Generate Code Diff -> available after the UML draft is updated.",
                 "[wait] Blueprint reviews the code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the reviewed code patch.",
@@ -496,7 +496,7 @@ internal object GuidedInviteScenario {
             "Demo prompt scenario:",
             "${stepMarker(1, currentStep, state.codeMapReady)} Refresh UML From Code -> expect Project, User, and Invite in the current code map.",
             if (state.promptReady) {
-                "${stepMarker(2, currentStep, state.umlDraftReady)} Try This Change: \"${state.prompt}\" -> $expectedResult"
+                "${stepMarker(2, currentStep, state.umlDraftReady)} Try This Change: \"${state.prompt}\" -> loaded fresh prompt for the current code map; $expectedResult"
             } else {
                 "${stepMarker(2, currentStep, false)} Try This Change -> use the button to load the fresh prompt into chat first."
             },
@@ -1006,7 +1006,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 if (GuidedInviteScenario.resetImportedInviteFile(project.basePath)) {
                     appendChat(
                         "Blueprint",
-                        "Reset the invite demo sandbox at ${state.resetPath}. Refresh UML From Code to confirm the clean code-backed UML before you run Try This Change again."
+                        "Reset the invite demo sandbox at ${state.resetPath}. Refresh UML From Code, then use Try This Change to load a fresh prompt for the clean sandbox."
                     )
                     logActivity("Demo e2e step passed: Reset invite demo sandbox at ${state.resetPath}.")
                     status("Invite demo sandbox reset")
@@ -1020,7 +1020,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
             } else {
                 chatInput.text = state.prompt
-                appendChat("Blueprint", "Fresh demo prompt loaded into chat: \"${state.prompt}\". Send it as-is, or edit it before Generate Code Diff.")
+                appendChat("Blueprint", "Fresh prompt loaded for the current sandbox: \"${state.prompt}\". Send it as-is, or edit it before Generate Code Diff.")
                 logActivity("Demo e2e step passed: Try This Change prepared \"${state.prompt}\".")
                 status("Fresh demo prompt loaded")
                 refreshFirstRunScenario()
@@ -4124,9 +4124,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             firstRunPromptButton.toolTipText = if (state.resetSuggested) {
                 "All guided demo changes already exist. Reset ${state.resetPath} to the baseline demo sandbox, or pick your own change."
             } else if (state.promptReady) {
-                "Fresh demo prompt loaded: ${state.prompt}"
+                "Fresh prompt already loaded for the current sandbox: \"${state.prompt}\""
             } else {
-                "Fresh demo prompt: ${state.prompt}"
+                "Fresh prompt for the current sandbox: \"${state.prompt}\""
             }
             runDemoButton.text = if (state.runVerified) "Demo Run Verified" else "Run Demo Step"
             runDemoButton.isEnabled = state.codeMapReady && !state.runCommand.isNullOrBlank()

@@ -74,7 +74,7 @@ class GuidedInviteScenarioTest {
         assertEquals("Demo prompt scenario:", firstLines[0])
         assertTrue(firstLines[1].startsWith("[next]"))
         assertTrue(first.contains("load the current code map first so Blueprint can choose a fresh demo change"))
-        assertTrue(first.contains("Try This Change -> available after the current code map loads."))
+        assertTrue(first.contains("Try This Change -> load a fresh prompt for the current code map."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
         assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
         assertTrue(first.contains("Run the changed app -> no run command was inferred yet, so open the project entrypoint or main screen manually to verify the feature."))
@@ -141,7 +141,7 @@ class GuidedInviteScenarioTest {
         assertEquals("Demo prompt scenario:", middleLines[0])
         assertTrue(middleLines[1].startsWith("[done]"))
         assertTrue(middleLines[2].startsWith("[next]"))
-        assertTrue(middle.contains("Try This Change: \"add an InviteReminder entity\""))
+        assertTrue(middle.contains("Try This Change: \"add an InviteReminder entity\" -> loaded fresh prompt for the current code map; expect InviteReminder linked from Invite in the UML draft."))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
         assertTrue(middle.contains("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
         assertTrue(middle.indexOf("Generate Code Diff -> expect a reviewed code patch") < middle.indexOf("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
@@ -171,6 +171,7 @@ class GuidedInviteScenarioTest {
             ),
         )
         assertTrue(loadedPrompt.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
+        assertTrue(loadedPrompt.contains("Generate Code Diff -> expect a reviewed code patch for blueprint_demo/imported_invite/models.py."))
 
         val fieldPrompt = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
@@ -214,7 +215,7 @@ class GuidedInviteScenarioTest {
             ),
         )
         assertTrue(reset.contains("Guided demo prompt loaded: \"reset blueprint_demo/imported_invite/models.py to the demo baseline\"."))
-        assertTrue(reset.contains("Reset the invite demo sandbox with Reset Demo Sandbox for blueprint_demo/imported_invite/models.py"))
+        assertTrue(reset.contains("Reset the invite demo sandbox with Reset Demo Sandbox for blueprint_demo/imported_invite/models.py, then use Try This Change to load a fresh prompt for the clean sandbox."))
         assertTrue(reset.contains("Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change."))
         assertTrue(reset.contains("Blueprint reviews the fresh code patch before apply."))
         assertTrue(reset.contains("Apply Approved Changes -> blocked until review approves the fresh reviewed code patch."))
@@ -334,7 +335,7 @@ class GuidedInviteScenarioTest {
             runCommand = "python main.py",
         ).demoReceiptText()
         assertTrue(passed.contains("[pass] Refresh UML From Code -> expected visible result: current code map is loaded."))
-        assertTrue(passed.contains("[pass] Try This Change -> expected visible result: add an InviteReminder entity"))
+        assertTrue(passed.contains("[pass] Try This Change -> loaded fresh prompt for the current code map: add an InviteReminder entity"))
         assertTrue(passed.contains("[pass] Apply Approved Changes -> expected visible result: code files are written to disk."))
         assertTrue(passed.contains("[pass] Run the changed app -> verified with: python main.py"))
         assertFalse(passed.contains("[wait]"))
@@ -348,7 +349,7 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("runDemoButton.text = if (state.runVerified) \"Demo Run Verified\" else \"Run Demo Step\""))
         assertTrue(source.contains("demoReceiptArea.text = state.demoReceiptText()"))
         assertTrue(source.contains("All guided demo changes already exist. Reset \${state.resetPath} to the baseline demo sandbox, or pick your own change."))
-        assertTrue(source.contains("Reset the invite demo sandbox at \${state.resetPath}. Refresh UML From Code to confirm the clean code-backed UML before you run Try This Change again."))
+        assertTrue(source.contains("Reset the invite demo sandbox at \${state.resetPath}. Refresh UML From Code, then use Try This Change to load a fresh prompt for the clean sandbox."))
     }
 
     @Test
@@ -356,10 +357,11 @@ class GuidedInviteScenarioTest {
         val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
-        assertTrue(source.contains("Reset the invite demo sandbox at \${state.resetPath}. Refresh UML From Code to confirm the clean code-backed UML before you run Try This Change again."))
+        assertTrue(source.contains("Reset the invite demo sandbox at \${state.resetPath}. Refresh UML From Code, then use Try This Change to load a fresh prompt for the clean sandbox."))
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
-        assertTrue(source.contains("Fresh demo prompt: "))
-        assertTrue(source.contains("Fresh demo prompt loaded into chat:"))
+        assertTrue(source.contains("Fresh prompt for the current sandbox:"))
+        assertTrue(source.contains("Fresh prompt already loaded for the current sandbox:"))
+        assertTrue(source.contains("Fresh prompt loaded for the current sandbox:"))
         assertTrue(source.contains("Demo e2e step passed: Try This Change prepared"))
         assertTrue(source.contains("Manual demo runner"))
         assertTrue(source.contains("Demo receipt:"))
