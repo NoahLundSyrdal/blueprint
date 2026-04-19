@@ -3424,7 +3424,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     refreshUmlAfterSuccessfulApply()
                     refreshArtifactSummary()
                     logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
-                    status(result.summaryLine())
                     val changedPaths = applyResult.applied.distinct().sorted()
                     postApplyChangedPaths = changedPaths
                     val summaryLine = buildString {
@@ -3445,8 +3444,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             }
                         )
                     }
-                    postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
+                    status(summaryLine)
                     val nextActionLine = "Next: Refresh UML From Code to manually verify the updated code-backed UML."
+                    postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
                     val refreshNote = "${postApplyVerifyState} Refresh UML From Code runs a separate manual verification refresh when you want to confirm it yourself."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
@@ -3486,6 +3486,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         }.trim()
                     }
                     val validationAndPathsLine = buildString {
+                        appendLine(summaryLine)
                         appendLine(result.summaryLine())
                         appendLine(runBlock)
                         append(changedFilesText)
@@ -3510,10 +3511,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     postApplyInlineSummary = PostApplyInlineSummary(
                         changedPaths = changedPaths,
                         summaryLine = nextActionLine,
-                        validationAndPathsLine = buildString {
-                            appendLine(summaryLine)
-                            append(validationAndPathsLine)
-                        }.trim(),
+                        validationAndPathsLine = validationAndPathsLine,
                         nextStepLine = refreshNote,
                         verifyChecklist = verifyChecklist,
                     )
@@ -3534,7 +3532,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     )
                     SwingUtilities.invokeLater {
                         showArtifactTab("UML")
-                        status(summaryLine)
                         umlStatusLabel.text = "UML: automatically refreshed from code after apply. Refresh UML From Code for a separate manual verification refresh, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
