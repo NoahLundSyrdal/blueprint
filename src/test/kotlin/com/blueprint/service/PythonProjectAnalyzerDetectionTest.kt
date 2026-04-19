@@ -26,8 +26,10 @@ class PythonProjectAnalyzerDetectionTest {
     fun `implementation detects namespace-friendly src and app roots`() {
         val source = Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/service/PythonProjectAnalyzer.kt"))
 
+        assertTrue(source.contains("if (baseHasTopLevelPythonFiles(base)) roots += \".\""))
         assertTrue(source.contains("listOf(\"src\", \"app\")"))
         assertTrue(source.contains("return namespaceSourceRoot(base, file)"))
+        assertTrue(source.contains("private fun baseHasTopLevelPythonFiles(base: Path): Boolean"))
         assertTrue(source.contains("private fun containsPythonSources(dir: Path, maxDepth: Int): Boolean"))
         assertTrue(source.contains("\"generated\""))
         assertTrue(source.contains("\"vendor\""))

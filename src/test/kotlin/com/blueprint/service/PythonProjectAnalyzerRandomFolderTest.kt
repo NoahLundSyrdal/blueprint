@@ -16,6 +16,7 @@ class PythonProjectAnalyzerRandomFolderTest {
 
         assertEquals(listOf("pyproject.toml"), context.configFiles)
         assertTrue(context.isPythonLikely())
+        assertTrue(context.sourceRoots.contains("."))
         assertFalse(context.sourceRoots.isEmpty())
         assertFalse(context.sourceRoots.any { it.contains("venv") })
         assertTrue(context.testRoots.contains("tests"))

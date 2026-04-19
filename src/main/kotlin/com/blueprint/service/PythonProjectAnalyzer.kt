@@ -105,6 +105,7 @@ class PythonProjectAnalyzer(private val project: Project) {
 
     private fun detectSourceRoots(base: Path, maxDepth: Int): List<String> {
         val roots = mutableSetOf<String>()
+        if (baseHasTopLevelPythonFiles(base)) roots += "."
         listOf("src", "app").forEach { rootName ->
             val root = base.resolve(rootName)
             if (!Files.isDirectory(root)) return@forEach
@@ -232,6 +233,14 @@ class PythonProjectAnalyzer(private val project: Project) {
             return parts.first()
         }
         return parts.first()
+    }
+
+    private fun baseHasTopLevelPythonFiles(base: Path): Boolean {
+        Files.list(base).use { stream ->
+            return stream.anyMatch { path ->
+                Files.isRegularFile(path) && path.fileName.toString().endsWith(".py")
+            }
+        }
     }
 
     private fun containsPythonSources(dir: Path, maxDepth: Int): Boolean {
