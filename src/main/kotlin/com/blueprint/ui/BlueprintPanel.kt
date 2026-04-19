@@ -4245,12 +4245,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val nextStep = context.notes.firstOrNull()
             ?: "Open a Python folder or add .py files, then click Refresh UML From Code again."
         return listOf(
-            "This folder does not look like a supported Python project yet.",
-            "Blueprint could not find Python files to turn into a code-backed UML diagram.",
+            "No Python files were found in the opened folder, so Blueprint cannot build a code-backed UML diagram yet.",
+            "Open the Python app folder or a Python subfolder you want to map, then click Refresh UML From Code again.",
+            "If you are still choosing the folder, you can open source files manually or paste/import UML first and come back to code refresh later.",
             "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
             nextStep,
             "Open a Python source root or add .py files, then Refresh UML From Code to start the full Blueprint loop.",
-            "Next steps: open a Python source root, add .py files, or open source files manually while you pick the folder to map.",
+            "Next steps: open a Python source root, open a Python subfolder, add .py files, or paste/import UML while you pick the folder to map.",
         ).filter { it.isNotBlank() }.joinToString(" ")
     }
 

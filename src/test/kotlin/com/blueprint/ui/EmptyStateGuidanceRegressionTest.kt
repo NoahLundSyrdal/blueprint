@@ -18,8 +18,9 @@ class EmptyStateGuidanceRegressionTest {
         assertTrue(source.contains("No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram."))
         assertTrue(source.contains("Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet."))
         assertTrue(source.contains("Blueprint found Python files, but no classes were extracted into the code-backed UML yet."))
-        assertTrue(source.contains("This folder does not look like a supported Python project yet."))
-        assertTrue(source.contains("Blueprint could not find Python files to turn into a code-backed UML diagram."))
+        assertTrue(source.contains("No Python files were found in the opened folder, so Blueprint cannot build a code-backed UML diagram yet."))
+        assertTrue(source.contains("Open the Python app folder or a Python subfolder you want to map, then click Refresh UML From Code again."))
+        assertTrue(source.contains("If you are still choosing the folder, you can open source files manually or paste/import UML first and come back to code refresh later."))
     }
 
     @Test
@@ -29,7 +30,7 @@ class EmptyStateGuidanceRegressionTest {
         assertTrue(source.contains("val nextStep = context.notes.firstOrNull()"))
         assertTrue(source.contains("?: \"Open a Python folder or add .py files, then click Refresh UML From Code again.\""))
         assertTrue(source.contains("Next steps: review the inferred source roots, open a Python file to confirm the folder you want, or keep editing the project and refresh again."))
-        assertTrue(source.contains("Next steps: open a Python source root, add .py files, or open source files manually while you pick the folder to map."))
+        assertTrue(source.contains("Next steps: open a Python source root, open a Python subfolder, add .py files, or paste/import UML while you pick the folder to map."))
         assertTrue(source.contains("joinToString(\" \")"))
     }
 }
