@@ -1140,6 +1140,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
     private val runDemoButton = JButton("Run Demo Step").apply { addActionListener { runDemoVerificationStep() } }
     private val runAppButton = JButton("Run In Blueprint").apply { addActionListener { toggleRunInBlueprint() } }
+    private val runStatusNoteLabel = JLabel().apply {
+        foreground = BlueprintTheme.Muted
+        font = BlueprintTheme.font(12f)
+    }
     private val runOutputArea = JBTextArea(8, 40).apply {
         isEditable = false
         lineWrap = true
@@ -1799,6 +1803,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
                 add(runAppButton)
                 add(openLikelyEntryFileButton)
+            })
+            add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                add(runStatusNoteLabel)
             })
             add(JPanel(BorderLayout()).apply {
                 border = BorderFactory.createTitledBorder("Run Output")
@@ -4391,6 +4398,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (runOutputArea.text.isBlank() || runOutputArea.text == "Preparing inferred run command...") {
             runOutputArea.text = runOutputIdleHint()
         }
+        runStatusNoteLabel.text = disabledRunExplanation(context, runCommand)
     }
 
     private fun toggleRunInBlueprint() {
@@ -4449,6 +4457,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         return runCommand?.let {
             "Run Output\n\nRun In Blueprint will launch: $it\nClick Run In Blueprint to start: $it\nBlueprint will stream stdout and stderr here. If this command starts a dev server or watcher, it may keep streaming until you click Stop Run."
         } ?: "Run Output\n\n${runner.noCommandSummary(context)}\nWhen a command is available, Run In Blueprint will stream stdout and stderr here."
+    }
+
+    private fun disabledRunExplanation(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+        runCommand: String?,
+    ): String = when {
+        !runCommand.isNullOrBlank() -> "Run readiness: ready. Click Run In Blueprint to launch $runCommand."
+        context.runEntryCandidates.isEmpty() ->
+            "Run readiness: no runnable Python entrypoint inferred yet. Next: Refresh UML From Code, then inspect a likely entry file manually if needed."
+        else ->
+            "Run readiness: Blueprint found likely entry files but no single safe default command yet. Next: Open Likely Entry File or Refresh UML From Code if you changed folders."
     }
 
     private fun missingRunCommandGuidance(
