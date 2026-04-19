@@ -11,7 +11,7 @@ class PostApplyNextStepPriorityRegressionTest {
 
     @Test
     fun `post apply guidance prioritizes verify and run before file inspection`() {
-        assertTrue(source.contains("Refresh UML From Code to verify."))
+        assertTrue(source.contains("Refresh UML From Code to verify the updated code-backed UML."))
         assertTrue(source.contains("- Run the changed app to confirm the feature exists."))
         assertTrue(source.contains("- Review the changed paths, validation result, and inferred run command above."))
         assertTrue(source.contains("- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote."))

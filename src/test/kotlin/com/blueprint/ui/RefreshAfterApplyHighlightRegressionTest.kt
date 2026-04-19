@@ -12,6 +12,7 @@ class RefreshAfterApplyHighlightRegressionTest {
 
         assertTrue(source.contains("private var postApplyChangedPaths: List<String> = emptyList()"))
         assertTrue(source.contains("private var postApplyHighlightMessage: String? = null"))
+        assertTrue(source.contains("private var postApplyVerifyState: String? = null"))
         assertTrue(source.contains("postApplyChangedPaths = changedPaths"))
         assertTrue(source.contains("postApplyHighlightMessage = null"))
         assertTrue(source.contains("focusChangedEntityAfterRefresh()"))
@@ -21,6 +22,7 @@ class RefreshAfterApplyHighlightRegressionTest {
         assertTrue(source.contains("postApplyHighlightMessage = \"Blueprint highlighted "))
         assertTrue(source.contains("status(\"Refreshed UML and highlighted "))
         assertTrue(source.contains("val umlRefreshLine = \"Blueprint automatically refreshed the code-backed UML from disk after apply.\""))
+        assertTrue(source.contains("val verifyStateLine = postApplyVerifyState ?: \"Blueprint automatically refreshed the code-backed UML from disk after apply.\""))
         assertTrue(source.contains("val highlightLine = postApplyHighlightMessage ?: \"Blueprint refreshed the code-backed UML after apply.\""))
     }
 

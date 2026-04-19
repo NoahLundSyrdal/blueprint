@@ -1074,7 +1074,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
     private val verifyInUmlButton = JButton("Refresh UML From Code").apply {
         isEnabled = false
-        toolTipText = "Rerun Refresh UML From Code after apply so you can verify the changed files in the code-backed UML again."
+        toolTipText = "After apply, Blueprint refreshes UML automatically. Use Refresh UML From Code to rerun that refresh yourself and verify the changed files again."
         addActionListener { refreshUmlAfterApplyVerification() }
     }
     private val openLikelyEntryFileButton = JButton("Open Likely Entry File").apply {
@@ -1159,6 +1159,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private var refreshedAfterApply = false
     private var postApplyChangedPaths: List<String> = emptyList()
     private var postApplyHighlightMessage: String? = null
+    private var postApplyVerifyState: String? = null
     private var postApplyInlineSummary: PostApplyInlineSummary? = null
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
@@ -3364,7 +3365,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             }
                         )
                     }
-                    val refreshNote = "Blueprint already refreshed the code-backed UML from disk after apply. Refresh UML From Code to verify again whenever you want to rerun that refresh."
+                    postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
+                    val refreshNote = "${postApplyVerifyState} Refresh UML From Code reruns that refresh when you want to verify it yourself."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3380,6 +3382,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }
                     val umlRefreshLine = "Blueprint automatically refreshed the code-backed UML from disk after apply."
                     val highlightLine = postApplyHighlightMessage ?: "Blueprint refreshed the code-backed UML after apply."
+                    val verifyStateLine = postApplyVerifyState ?: "Blueprint automatically refreshed the code-backed UML from disk after apply."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     val changedPathsBlock = buildString {
                         appendLine("Changed paths:")
@@ -3419,6 +3422,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             changedPaths.forEach { appendLine("  - $it") }
                         }
                         appendLine("- $umlRefreshLine")
+                        appendLine("- $verifyStateLine")
                         appendLine("- $highlightLine")
                         appendLine("- $refreshNote")
                     }.trim()
@@ -3439,7 +3443,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }
                     Messages.showInfoMessage(
                         project,
-                        listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
+                        listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine, validationBlock)
                             .filter { it.isNotBlank() }
                             .joinToString("\n\n") + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
                         "Blueprint - Apply Complete"
@@ -3450,14 +3454,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         umlStatusLabel.text = "UML: refreshed from code after apply. Refresh UML From Code to verify again, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
-                            listOf(summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)
+                            listOf(summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine)
                                 .filter { it.isNotBlank() }
                                 .joinToString("\n"),
                         )
                         guideLabel.text = listOf(
                             "Apply complete. Review the refreshed code-backed UML now.",
-                            "Refresh UML From Code to verify.",
-                            "Refresh UML From Code lets you verify the reload yourself.",
+                            verifyStateLine,
+                            "Refresh UML From Code reruns that refresh when you want to verify it yourself.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
@@ -4715,8 +4719,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun refreshUmlAfterApplyVerification() {
         verifyInUmlButton.isEnabled = false
-        logActivity("Refresh UML From Code rereads the changed code from disk after apply.")
-        status("Verifying applied changes in UML")
+        postApplyVerifyState = "Blueprint reran Refresh UML From Code after apply so you can verify the latest code-backed UML yourself."
+        logActivity("Refresh UML From Code reran after apply so you can verify the changed code from disk yourself.")
+        status("Rerunning Refresh UML From Code after apply")
         generateProjectUml()
     }
 
@@ -4733,10 +4738,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         postApplyChangedPaths = emptyList()
         if (match == null) {
             postApplyHighlightMessage = "Blueprint refreshed the code-backed UML after apply, but did not find a matching UML entity to highlight from the changed paths."
+            if (postApplyVerifyState == null) {
+                postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
+            }
             logActivity("Refreshed UML after apply but did not find a changed entity to highlight.")
             return
         }
         val (changedPath, matched) = match
+        if (postApplyVerifyState == null) {
+            postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
+        }
         postApplyHighlightMessage = "Blueprint highlighted ${matched.name} from $changedPath after refresh."
         selectedCanvasId = matched.id
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
