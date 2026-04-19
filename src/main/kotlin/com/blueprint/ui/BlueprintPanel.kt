@@ -378,6 +378,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
+    private val undoLastApplyButton = JButton("Undo Last Apply").apply {
+        isEnabled = false
+        addActionListener { undoChanges() }
+    }
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
     private val advancedMode = JBCheckBox("Advanced")
     private val filterCombo = JComboBox(NodeFilter.values())
@@ -924,6 +928,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(previewDiffButton)
                 add(applyApprovedButton)
+                add(undoLastApplyButton)
             },
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Save").apply { addActionListener { saveCurrent() } })
@@ -1952,6 +1957,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.update(n)
         project.service<NodeExecutionService>().executeNodeAsync(n, plan) { exec ->
             registry.setExecution(n.id, exec)
+            undoLastApplyButton.isEnabled = false
             execArea.text = exec.rawJson.ifBlank { JsonExtractor.toJson(exec) }
             showArtifactTab("Execution JSON")
             n.executionStatus = when (exec.status) {
@@ -2193,6 +2199,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
             )
         }
+        undoLastApplyButton.isEnabled = result.applied.isNotEmpty()
         registry.update(n)
         refreshArtifactSummary()
         logActivity("Apply finished for ${n.title.ifBlank { n.id.take(8) }}: ${result.applied.size} applied, ${result.skipped.size} skipped.")
@@ -2208,6 +2215,38 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 project,
                 "Applied ${result.applied.size} file change(s).\n\n${result.applied.joinToString("\n")}",
                 "Blueprint - Apply Complete"
+            )
+        }
+    }
+
+    private fun undoChanges() {
+        val svc = project.service<ApplyChangesService>()
+        val record = svc.lastUndo ?: return status("Nothing to undo")
+        val fileList = record.entries.joinToString("\n") { it.path }
+        val confirm = Messages.showYesNoDialog(
+            project,
+            "Restore ${record.entries.size} file(s) from before the last apply of '${record.nodeTitle}'?\n\n" +
+                "$fileList\n\n" +
+                "Files edited since apply will be skipped to avoid data loss.",
+            "Blueprint - Undo Last Apply",
+            Messages.getWarningIcon()
+        )
+        if (confirm != Messages.YES) return
+        val result = svc.undoLast()
+        undoLastApplyButton.isEnabled = false
+        logActivity("Undo apply for '${record.nodeTitle}': ${result.restored.size} restored, ${result.skipped.size} skipped.")
+        status("Undo complete: ${result.restored.size} restored, ${result.skipped.size} skipped")
+        if (result.skipped.isNotEmpty()) {
+            Messages.showWarningDialog(
+                project,
+                "Skipped (restore manually):\n" + result.skipped.joinToString("\n") { "${it.first} — ${it.second}" },
+                "Blueprint - Undo Partially Complete"
+            )
+        } else {
+            Messages.showInfoMessage(
+                project,
+                "Restored ${result.restored.size} file(s):\n$fileList",
+                "Blueprint - Undo Complete"
             )
         }
     }
@@ -2386,6 +2425,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = nodeList.selectedValue ?: run {
             applyApprovedButton.isEnabled = false
             applyApprovedButton.text = "Apply Approved Changes"
+            undoLastApplyButton.isEnabled = false
             updateOverviewSummary()
             selectedLabel.text = "Selected: none"
             artifactLabel.text = "Artifacts: not planned"
