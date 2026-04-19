@@ -2126,6 +2126,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun loadGeneratedUml(generated: PythonUmlGenerator.GeneratedUml) {
+        if (!refreshedAfterApply) {
+            postApplyInlineSummary = null
+        }
         val context = project.service<PythonProjectAnalyzer>().analyze()
         setUmlEditorText(generated.text, pendingEdits = false)
         focusChangedEntityAfterRefresh()
@@ -2395,6 +2398,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     registry.setReview(n.id, review)
                     lastReviewedUmlByNodeId[n.id] = normalizedUmlText()
                     refreshedAfterApply = false
+                    postApplyInlineSummary = null
                     reviewArea.text = review.rawJson.ifBlank { JsonExtractor.toJson(review) }
                     refreshArtifactSummary()
                     showArtifactTab("Review")
