@@ -21,9 +21,9 @@ class VerifyInUmlActionRegressionTest {
         assertTrue(source.contains("appendLine(\"- Blueprint already reloaded the changed code into the UML automatically after apply.\")"))
         assertTrue(source.contains("Click Refresh UML From Code to verify the updated code-backed UML again whenever you want to confirm it yourself."))
         assertTrue(source.contains("private fun refreshUmlAfterApplyVerification() {"))
-        assertTrue(source.contains("postApplyVerifyState = \"Blueprint reran Refresh UML From Code after apply so you can verify the latest code-backed UML yourself.\""))
-        assertTrue(source.contains("logActivity(\"Refresh UML From Code reran after apply so you can verify the changed code from disk yourself.\")"))
-        assertTrue(source.contains("status(\"Rerunning Refresh UML From Code after apply\")"))
+        assertTrue(source.contains("postApplyVerifyState = \"Blueprint reran Refresh UML From Code after apply and verified the latest code-backed UML.\""))
+        assertTrue(source.contains("logActivity(\"Refresh UML From Code reran after apply and verified the changed code-backed UML from disk.\")"))
+        assertTrue(source.contains("status(\"Verifying updated code-backed UML after apply\")"))
         assertTrue(source.contains("generateProjectUml()"))
     }
 }

@@ -4521,9 +4521,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             firstRunPromptButton.text = "Refresh UML From Code"
             firstRunPromptButton.isEnabled = !genericState.codeMapReady
             firstRunPromptButton.toolTipText = if (genericState.codeMapReady) {
-                "Current Python folder is already loaded into the code-backed UML."
+                "Current Python folder is already loaded into the code-backed UML. Refresh again anytime if the code on disk changes."
             } else {
-                "Load the current Python folder into a code-backed UML diagram."
+                "Load the current Python folder into a code-backed UML diagram for the first time."
             }
             runChecklistActionButton.text = if (genericState.runVerified) "Run The Changed App Again" else "Run The Changed App"
             runChecklistActionButton.isEnabled = genericState.codeMapReady && !genericState.runCommand.isNullOrBlank()
@@ -5131,9 +5131,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun refreshUmlAfterApplyVerification() {
         verifyInUmlButton.isEnabled = false
-        postApplyVerifyState = "Blueprint reran Refresh UML From Code after apply so you can verify the latest code-backed UML yourself."
-        logActivity("Refresh UML From Code reran after apply so you can verify the changed code from disk yourself.")
-        status("Rerunning Refresh UML From Code after apply")
+        postApplyVerifyState = "Blueprint reran Refresh UML From Code after apply and verified the latest code-backed UML."
+        logActivity("Refresh UML From Code reran after apply and verified the changed code-backed UML from disk.")
+        status("Verifying updated code-backed UML after apply")
         generateProjectUml()
     }
 
