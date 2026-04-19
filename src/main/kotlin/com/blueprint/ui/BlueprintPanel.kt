@@ -4321,8 +4321,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         return when {
             registry.getExecution(selected.id) == null ->
                 "Next: Generate Code Diff" to "Create a reviewed code patch for: $shortTitle."
-            !reviewApproved ->
-                "Next: Review approved" to "Wait for review approval so Blueprint can explain why the patch is safe before you apply changes for: $shortTitle."
+            !reviewApproved -> {
+                val reviewDetail = review?.let { ReviewExplanation.statusLine(shortTitle, registry.getExecution(selected.id), it) }
+                    ?: "Review not run yet. Generate Code Diff first so Blueprint can explain why the patch is safe to apply."
+                "Next: Review approved" to reviewDetail
+            }
             selected.executionStatus != ExecutionStatus.APPLIED ->
                 "Next: Apply Approved Changes" to "Apply the approved reviewed code patch for: $shortTitle."
             graph.readyNodes().any { it.id != selected.id } ->
