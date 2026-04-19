@@ -1262,6 +1262,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private var postApplyHighlightMessage: String? = null
     private var postApplyVerifyState: String? = null
     private var postApplyInlineSummary: PostApplyInlineSummary? = null
+    private var completedRunReceiptCycle = false
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -4307,6 +4308,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         validationCommand: String? = project.service<ProjectValidationService>().selectedCommand(),
     ): GenerateDiffGuideSummary {
         val lines = mutableListOf("Change the UML with chat or direct edits, then Generate Code Diff.")
+        firstEditHint(context)?.let { lines += it }
         lines += generateDiffValidationHint(validationCommand)
         if (umlHasPendingEdits) {
             lines += "Generate Code Diff will create a reviewed code patch for your current UML edits."
@@ -4321,6 +4323,36 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Turn the current UML edits into a reviewed code patch before apply. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
         }
         return GenerateDiffGuideSummary(guideText, nextStepDetail, commandSummary)
+    }
+
+    private fun firstEditHint(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String? {
+        if (umlHasPendingEdits || registry.all().isNotEmpty()) return null
+        val suggestions = safeFirstRefinementSuggestions(context)
+        if (suggestions.isEmpty()) return null
+        return "Safe first refinement: ${suggestions.joinToString(" ")}".trim()
+    }
+
+    private fun safeFirstRefinementSuggestions(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+    ): List<String> {
+        val candidates = context.runEntryCandidates.map { it.substringAfterLast('/') }
+        return when {
+            candidates.any { it == "main.py" || it == "app.py" } -> listOf(
+                "Ask for one reviewable app-facing change such as 'add a status field to the main model' or 'rename one label shown by the entry flow'.",
+                "Keep the first edit scoped to one entity, one field, or one relationship before Generate Code Diff.",
+            )
+            candidates.any { it == "__main__.py" } -> listOf(
+                "Ask for one reviewable package change such as 'add a field to the primary CLI model' or 'link one helper class to the main package'.",
+                "Keep the first edit scoped to one entity, one field, or one relationship before Generate Code Diff.",
+            )
+            context.filesAnalyzed.isNotEmpty() -> listOf(
+                "Ask for one reviewable UML change such as 'add a field to one class', 'rename one relationship', or 'extract one helper entity'.",
+                "Keep the first edit scoped to one entity, one field, or one relationship before Generate Code Diff.",
+            )
+            else -> emptyList()
+        }
     }
 
     private fun generateDiffValidationHint(command: String?): String =
@@ -4748,6 +4780,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             append(copyableSummary)
         }.trim()
         copyRunSummaryButton.isEnabled = true
+        completedRunReceiptCycle = true
         guideLabel.text = banner
         appendChat("Blueprint", banner)
         Messages.showInfoMessage(project, banner, "Blueprint - End-to-End Success")
@@ -5192,6 +5225,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun beginPrimaryAction(buttonText: String, detail: String) {
+        maybeLogNewIterationBoundary(buttonText)
         primaryActionBusy = true
         primaryActionButton.text = buttonText
         primaryActionButton.isEnabled = false
@@ -5202,6 +5236,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         safetyArea.text = "Working with ${providerText()}. Apply stays blocked until a reviewed patch is ready."
         logActivity(detail)
     }
+
+    private fun maybeLogNewIterationBoundary(buttonText: String) {
+        if (!completedRunReceiptCycle || buttonText != "Generating Code Diff...") return
+        val nextCycle = activityIterationCount() + 1
+        logActivity("New iteration started - returning to Generate Code Diff after a completed run. Iteration $nextCycle keeps this receipt easy to scan.")
+        completedRunReceiptCycle = false
+    }
+
+    private fun activityIterationCount(): Int =
+        activityLog.text.lineSequence().count { it.contains("Receipt marker - Iteration ") }
 
     private fun endPrimaryAction() {
         primaryActionBusy = false
@@ -5264,6 +5308,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("review blocked") -> "Step 3 blocked - $msg"
             lower.startsWith("review approve") || lower.startsWith("review request_changes") || lower.startsWith("review reject") ->
                 "Step 3 review result - " + msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "")
+            lower.startsWith("new iteration started -") ->
+                msg.replaceFirst("New iteration started -", "Receipt marker - Iteration ${activityIterationCount() + 1} started -")
             else -> msg
         }
     }
