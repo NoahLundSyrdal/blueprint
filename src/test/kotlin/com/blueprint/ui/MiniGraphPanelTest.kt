@@ -98,8 +98,8 @@ class MiniGraphPanelTest {
         val cardTooltip = panel.getToolTipText(mouseEvent(panel, 40, 70)).orEmpty()
         val badgeTooltip = panel.getToolTipText(mouseEvent(panel, 42, 157)).orEmpty()
 
-        assertTrue(cardTooltip.contains("Use the open badge or double-click to open source."))
-        assertTrue(badgeTooltip.contains("Open source for this code-backed card."))
+        assertTrue(cardTooltip.contains("Use the open file badge or double-click to open the source file."))
+        assertTrue(badgeTooltip.contains("Open the source file for this code-backed card."))
     }
 
     @Test
@@ -123,7 +123,7 @@ class MiniGraphPanelTest {
         val tooltip = panel.getToolTipText(mouseEvent(panel, 40, 70)).orEmpty()
 
         assertFalse(tooltip.contains("open source"))
-        assertFalse(tooltip.contains("open badge"))
+        assertFalse(tooltip.contains("open file badge"))
     }
 
     @Test

@@ -191,7 +191,7 @@ class MiniGraphPanel : JPanel() {
     override fun getToolTipText(event: MouseEvent): String? {
         val sourceNode = sourceBadgeAt(event.point)
         if (sourceNode != null) {
-            return "<html><b>${escape(sourceNode.title)}</b><br/>Open source for this code-backed card.</html>"
+            return "<html><b>${escape(sourceNode.title)}</b><br/>Open the source file for this code-backed card.</html>"
         }
         return nodeAt(event.point)?.let { node ->
             "<html><b>${escape(node.title)}</b><br/>" +
@@ -200,7 +200,7 @@ class MiniGraphPanel : JPanel() {
                 "Status: ${node.status}<br/>" +
                 node.kind.takeIf { it.isNotBlank() }?.let { "Kind: ${escape(it)}<br/>" }.orEmpty() +
                 "Source: ${escape(node.sourceDescription())}<br/>" +
-                node.hasSourceTarget().takeIf { it }?.let { "Use the open badge or double-click to open source.<br/>" }.orEmpty() +
+                node.hasSourceTarget().takeIf { it }?.let { "Use the open file badge or double-click to open the source file.<br/>" }.orEmpty() +
                 "Wave: ${node.wave}<br/>" +
                 node.summaryLine("Fields", node.fields, node.fieldOverflowCount).takeIf { it.isNotBlank() }
                     ?.let { "${escape(it)}<br/>" }.orEmpty() +
@@ -404,8 +404,8 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun paintSourceBadge(g: Graphics2D, card: RoundRectangle2D.Float, textLeft: Int): RoundRectangle2D.Float {
-        val label = "open"
-        val width = 44
+        val label = "file"
+        val width = 36
         val x = textLeft
         val y = (card.y + card.height - 22).toInt()
         val badge = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), 16f, 8f, 8f)
