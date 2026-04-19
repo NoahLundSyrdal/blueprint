@@ -385,7 +385,7 @@ internal object PatchChangeSummary {
             appendLine("What changed:")
             semanticChanges.forEach { appendLine("- $it") }
             appendLine()
-            append(changedFilesSummary(changedFiles))
+            appendLine(changedFilesSummary(changedFiles))
         }.trim()
     }
 

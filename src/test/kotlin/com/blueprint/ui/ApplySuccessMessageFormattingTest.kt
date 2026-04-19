@@ -17,7 +17,9 @@ class ApplySuccessMessageFormattingTest {
         assertTrue(source.contains("changedPaths.forEach { appendLine(\"- \$it\") }"))
         assertTrue(source.contains("appendLine(\"Validation:\")"))
         assertTrue(source.contains("appendLine(validationReportText(result))"))
+        assertTrue(source.contains("appendLine(changedFilesSummary(changedFiles))"))
         assertFalse(source.contains("append(validationReportText(result))"))
+        assertFalse(source.contains("append(changedFilesSummary(changedFiles))"))
     }
 
     @Test
