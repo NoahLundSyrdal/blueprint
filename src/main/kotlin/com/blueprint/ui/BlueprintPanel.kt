@@ -345,6 +345,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private var restoredFromSession = false
     private var restoredAt: Long = 0L
     private var refreshingList = false
+    private var primaryActionBusy = false
 
     private val listModel = DefaultListModel<BlueprintNode>()
     private val nodeList = JBList(listModel).apply {
@@ -1556,6 +1557,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun runPrimaryProductAction() {
+        if (primaryActionBusy) return
         when {
             selectedNodeCanApply() -> applyChanges(null)
             currentUmlEntityCount() == 0 -> generateProjectUml()
@@ -1571,6 +1573,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun generateCodeDiffFromCurrentUml() {
+        beginPrimaryAction("Generating Code Diff...", "Blueprint is turning the current UML into a reviewed code patch.")
         val text = umlEditor.text.trim()
         if (text.isBlank() || !text.contains("classDiagram")) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
@@ -1581,6 +1584,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 return
             }
             generateProjectUml()
+            endPrimaryAction()
             return
         }
         val parsed = project.service<UmlImportService>().parse(text)
@@ -1596,11 +1600,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             showArtifactTab("Review")
             reviewSummaryArea.text = "No parseable UML entities. Click Refresh UML From Code, then ask chat for the architecture change again."
             safetyArea.text = "No diff generated."
+            endPrimaryAction()
             return
         }
         importUmlText(text, "current UML")
         val nodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
-        if (nodes.isEmpty()) return status("No code nodes created")
+        if (nodes.isEmpty()) {
+            status("No code nodes created")
+            endPrimaryAction()
+            return
+        }
         generateFirstRealCodeDiff(nodes)
     }
 
@@ -1614,12 +1623,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             reviewSummaryArea.text = if (checked == 0) {
                 "No implementation nodes were ready to run."
             } else {
-                "No code changes were generated. The current UML appears to match the code for $checked checked node(s)."
+                "No code changes needed. The current UML already appears to match the code for $checked checked node(s)."
             }
             safetyArea.text = "No diff to apply."
             showArtifactTab("Review")
-            status("No code changes")
-            logActivity("Generate Code Diff found no changed patches across $checked node(s).")
+            status("No code changes needed")
+            appendChat(
+                "Blueprint",
+                "No code changes needed. The UML already appears to match the current code for $checked checked node(s)."
+            )
+            logActivity("Generate Code Diff completed with no-op result across $checked node(s).")
+            endPrimaryAction()
             return
         }
 
@@ -1646,6 +1660,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         safetyArea.text = "Review gate is on. Apply stays blocked unless review approves the patch."
         n.executionStatus = ExecutionStatus.EXECUTING
         registry.update(n)
+        logActivity("Planning code diff for ${n.title.ifBlank { n.id.take(8) }} with ${providerText()}.")
 
         project.service<NodePlanningService>().generatePlanAsync(n) { plan ->
             registry.setPlan(n.id, plan)
@@ -1657,9 +1672,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 showArtifactTab("Review")
                 status("Code diff blocked at planning")
                 logActivity("Code diff blocked at plan for ${n.title.ifBlank { n.id.take(8) }}")
+                endPrimaryAction()
                 return@generatePlanAsync
             }
 
+            status("Writing code patch for ${n.title.ifBlank { n.id.take(8) }}...")
+            reviewSummaryArea.text = "Plan ready. Writing a scoped patch for ${n.title.ifBlank { n.id.take(8) }}..."
+            logActivity("Plan ready for ${n.title.ifBlank { n.id.take(8) }}; writing patch.")
             project.service<NodeExecutionService>().executeNodeAsync(n, plan) { exec ->
                 val changedPatches = exec.patches.filter { patchChangesDisk(it) }
                 val changedExec = exec.copy(
@@ -1688,11 +1707,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     showArtifactTab("Review")
                     val title = n.title.ifBlank { n.id.take(8) }
                     status("No changes for $title; checking next node")
-                    logActivity("Skipped no-op code diff for $title")
+                    reviewSummaryArea.text = "No code changes for $title. Checking the next UML implementation node..."
+                    logActivity("No-op code diff for $title; generated content matched disk.")
                     onNoChange?.invoke(title)
                     return@executeNodeAsync
                 }
 
+                status("Reviewing code diff for ${n.title.ifBlank { n.id.take(8) }}...")
+                reviewSummaryArea.text = "Patch generated. Reviewing scope and safety before apply..."
+                logActivity("Patch generated for ${n.title.ifBlank { n.id.take(8) }}: ${changedExec.patches.size} file(s). Reviewing safety.")
                 project.service<ReviewService>().reviewAsync(n, changedExec) { review ->
                     registry.setReview(n.id, review)
                     reviewArea.text = review.rawJson.ifBlank { JsonExtractor.toJson(review) }
@@ -1704,6 +1727,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             "${changedExec.patches.size} file(s), review ${review.reviewStatus}."
                     )
                     status("Code diff ready: review ${review.reviewStatus}")
+                    endPrimaryAction()
                 }
             }
         }
@@ -3055,6 +3079,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun updateGuide() {
+        if (primaryActionBusy) return
         refreshFirstRunScenario()
         when {
             nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
@@ -3300,6 +3325,24 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun status(msg: String) {
         statusLabel.text = msg
+    }
+
+    private fun beginPrimaryAction(buttonText: String, detail: String) {
+        primaryActionBusy = true
+        primaryActionButton.text = buttonText
+        primaryActionButton.isEnabled = false
+        guideLabel.text = detail
+        status(buttonText.removeSuffix("..."))
+        showArtifactTab("Review")
+        reviewSummaryArea.text = detail
+        safetyArea.text = "Working with ${providerText()}. Apply stays blocked until a reviewed patch is ready."
+        logActivity(detail)
+    }
+
+    private fun endPrimaryAction() {
+        primaryActionBusy = false
+        primaryActionButton.isEnabled = true
+        updateGuide()
     }
 
     private fun logActivity(msg: String) {
