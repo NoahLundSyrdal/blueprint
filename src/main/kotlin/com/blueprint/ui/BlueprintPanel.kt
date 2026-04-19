@@ -4992,47 +4992,51 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun receiptText(msg: String): String {
         val lower = msg.lowercase(Locale.getDefault())
         return when {
-            lower.startsWith("abstracted code to uml:") -> msg.replaceFirst("Abstracted code to UML:", "Scanned project and generated UML:")
-            lower.startsWith("updated the uml using") -> "Refined the UML draft from chat context and grounded source facts."
-            lower.startsWith("planning code diff for") -> msg.replaceFirst("Planning code diff for", "Started Generate Code Diff for")
-            lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Planned reviewed code patch for")
-            lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Generated reviewed code patch for")
-            lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Generated reviewed code patch for")
+            lower.startsWith("abstracted code to uml:") -> msg.replaceFirst("Abstracted code to UML:", "Step 1 complete - Scanned project and generated UML:")
+            lower.startsWith("updated the uml using") -> "Step complete - Refined the UML draft from chat context and grounded source facts."
+            lower.startsWith("planning code diff for") -> msg.replaceFirst("Planning code diff for", "Step 2 started - Generate Code Diff for")
+            lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Step 2 progress - Planned reviewed code patch for")
+            lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Step 2 complete - Generated reviewed code patch for")
+            lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Step 2 complete - Generated reviewed code patch for")
             lower.startsWith("generate code diff used existing nodes because") ->
-                "Generate Code Diff kept the last reviewed patch because the current UML could not be parsed."
-            lower.startsWith("generate code diff completed with no file changes because") -> msg
-            lower.startsWith("generate code diff found no file changes because") -> msg
+                "Step 2 blocked - Generate Code Diff kept the last reviewed patch because the current UML could not be parsed."
+            lower.startsWith("generate code diff completed with no file changes because") -> "Step 2 complete - $msg"
+            lower.startsWith("generate code diff found no file changes because") -> "Step 2 complete - $msg"
+            lower.startsWith("generate code diff found no uml-backed work items ready to run") -> "Step 2 complete - $msg"
             lower.startsWith("generate code diff completed with no-op result across") ->
-                "Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk."
+                "Step 2 complete - Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk."
             lower.startsWith("no-op code diff for") ->
-                msg.replaceFirst("No-op code diff for", "No file changes were needed for")
+                "Step 2 complete - " + msg.replaceFirst("No-op code diff for", "No file changes were needed for")
                     .replace("; generated content matched disk.", " because that UML-backed request already matched the code on disk.")
             lower.startsWith("code diff blocked at plan for") ->
-                msg.replaceFirst("Code diff blocked at plan for", "Generate Code Diff stopped at planning for") + ". Review the blocked plan before continuing."
+                msg.replaceFirst("Code diff blocked at plan for", "Step 2 blocked - Generate Code Diff stopped at planning for") + ". Review the blocked plan before continuing."
             lower.startsWith("cannot execute ") ->
                 msg.replaceFirst("Cannot execute", "Blocked by dependencies for")
                     .replace(" yet:", ":")
-            lower.startsWith("running validation after apply for") -> msg.replaceFirst("Running validation after apply for", "Started validation after apply for")
-            lower.startsWith("validation skipped after apply for") -> msg.replaceFirst("Validation skipped after apply for", "Skipped validation after apply for")
-            lower.startsWith("apply finished for") -> msg.replaceFirst("Apply finished for", "Applied approved changes for")
+            lower.startsWith("running validation after apply for") -> msg.replaceFirst("Running validation after apply for", "Step 4 validation started -")
+            lower.startsWith("validation skipped after apply for") -> msg.replaceFirst("Validation skipped after apply for", "Step 4 validation skipped -")
+            lower.startsWith("apply finished for") -> msg.replaceFirst("Apply finished for", "Step 4 complete - Applied approved changes for")
             lower.startsWith("undo apply for '") -> msg.replaceFirst("Undo apply for '", "Rolled back apply for '")
-            lower.startsWith("validation passed:") -> msg.replaceFirst("Validation passed:", "Validation passed:")
-            lower.startsWith("validation skipped:") -> msg.replaceFirst("Validation skipped:", "Validation skipped:")
-            lower.startsWith("validation failed:") -> msg.replaceFirst("Validation failed:", "Validation failed:")
-            lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Refreshed UML from code after apply:")
-            lower.startsWith("demo e2e step passed:") -> msg.removePrefix("Demo e2e step passed: ")
-            lower.startsWith("demo e2e step failed:") -> msg.removePrefix("Demo e2e step failed: ")
+            lower.startsWith("validation passed:") -> "Step 4 validation passed - " + msg.removePrefix("Validation passed: ")
+            lower.startsWith("validation skipped:") -> "Step 4 validation skipped - " + msg.removePrefix("Validation skipped: ")
+            lower.startsWith("validation failed:") -> "Step 4 validation failed - " + msg.removePrefix("Validation failed: ")
+            lower.startsWith("freshness verified after apply:") -> msg.replaceFirst("Freshness verified after apply:", "Step 5 complete - Refreshed UML from code after apply:")
+            lower.startsWith("demo e2e step passed:") -> "Step 6 complete - " + msg.removePrefix("Demo e2e step passed: ")
+            lower.startsWith("demo e2e step failed:") -> "Step 6 blocked - " + msg.removePrefix("Demo e2e step failed: ")
             lower.startsWith("opened diff preview for") -> msg.replaceFirst("Opened diff preview for", "Opened reviewed diff for")
-            lower.startsWith("inspected the only changed file after apply:") -> msg
-            lower.startsWith("inspected one changed file after apply from the chooser:") -> msg
+            lower.startsWith("inspected the only changed file after apply:") -> "Optional inspection - $msg"
+            lower.startsWith("inspected one changed file after apply from the chooser:") -> "Optional inspection - $msg"
             lower.startsWith("opened source for") -> msg.replaceFirst("Opened source for", "Opened source file for")
-            lower.startsWith("uml import found no entities") -> "Could not build UML from the imported text because no entities were found."
+            lower.startsWith("opened likely entry file for manual verification:") -> msg.replaceFirst("Opened likely entry file for manual verification:", "Optional run check - Opened likely entry file for manual verification:")
+            lower.startsWith("uml import found no entities") -> "Import blocked - Could not build UML from the imported text because no entities were found."
             lower.startsWith("saved node ") -> msg.replaceFirst("Saved node", "Saved workflow node")
             lower.startsWith("removed node ") -> msg.replaceFirst("Removed node", "Removed workflow node")
+            lower.startsWith("refreshed dependency wave preview") -> "Optional advanced view - Refreshed dependency wave preview"
             lower.startsWith("mode changed to") -> msg
-            lower.startsWith("review approved") || lower.startsWith("review blocked") -> msg
+            lower.startsWith("review approved") -> "Step 3 complete - $msg"
+            lower.startsWith("review blocked") -> "Step 3 blocked - $msg"
             lower.startsWith("review approve") || lower.startsWith("review request_changes") || lower.startsWith("review reject") ->
-                msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "Review result: ")
+                "Step 3 review result - " + msg.replaceFirst(Regex("^Review\\s+", RegexOption.IGNORE_CASE), "")
             else -> msg
         }
     }
