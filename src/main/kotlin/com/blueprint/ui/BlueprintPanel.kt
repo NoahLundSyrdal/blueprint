@@ -4261,7 +4261,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             if (exec?.patches.orEmpty().isNotEmpty()) {
                 appendLine()
-                appendLine("Next: open Preview Diff to inspect the raw diff before apply.")
+                appendLine("What changed? Review the plain-English summary below, then open Preview Diff to inspect the raw diff before apply.")
             }
             appendLine()
             appendLine(scopeSentence)
