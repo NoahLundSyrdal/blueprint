@@ -222,10 +222,10 @@ class GuidedInviteScenarioTest {
                 runCommand = null,
             ),
         )
-        assertTrue(reset.contains("Freshness: this guided prompt likely matches code already in blueprint_demo/imported_invite/models.py, so reset is recommended for a predictable fresh demo run."))
+        assertTrue(reset.contains("Freshness: this guided prompt already appears in blueprint_demo/imported_invite/models.py, so Reset Demo Sandbox is recommended to remove that existing change before a predictable fresh demo run."))
         assertTrue(reset.contains("Guided demo prompt loaded: \"reset blueprint_demo/imported_invite/models.py to the demo baseline\"."))
-        assertTrue(reset.contains("Reset Demo Sandbox is optional but recommended here because it restores blueprint_demo/imported_invite/models.py to the baseline invite demo file for a predictable fresh demo run."))
-        assertTrue(reset.contains("If you skip reset, make your own UML-backed change instead of reusing the stale guided prompt."))
+        assertTrue(reset.contains("Reset Demo Sandbox is optional but recommended here because blueprint_demo/imported_invite/models.py already contains the guided change and reset restores the baseline invite demo file for a predictable fresh demo run."))
+        assertTrue(reset.contains("If you skip reset, make a different UML-backed change instead of reusing the guided change that is already on disk."))
         assertTrue(reset.contains("After reset, click Try This Change to load a fresh prompt for the clean sandbox."))
         assertTrue(reset.contains("Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change."))
         assertTrue(reset.contains("Blueprint reviews the fresh code patch before apply."))
@@ -383,8 +383,8 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("firstRunPromptButton.text = if (state.resetSuggested) \"Reset Demo Sandbox\" else \"Try This Change\""))
         assertTrue(source.contains("runDemoButton.text = if (state.runVerified) \"Demo Run Verified\" else \"Run Demo Step\""))
         assertTrue(source.contains("demoReceiptArea.text = state.demoReceiptText()"))
-        assertTrue(source.contains("The guided demo prompt likely matches code that is already in \${state.resetPath}. Reset Demo Sandbox is optional but recommended for a predictable fresh invite demo run. If you skip reset, make your own UML-backed change instead."))
-        assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make your own UML-backed change instead."))
+        assertTrue(source.contains("The guided demo prompt likely matches code that is already in \${state.resetPath}. Reset Demo Sandbox is optional but recommended because that file already contains the guided change. If you skip reset, make a different UML-backed change instead."))
+        assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file and removed the guided change that was already there. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make a different UML-backed change instead."))
     }
 
     @Test
@@ -392,9 +392,9 @@ class GuidedInviteScenarioTest {
         val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
-        assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make your own UML-backed change instead."))
+        assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file and removed the guided change that was already there. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make a different UML-backed change instead."))
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
-        assertTrue(source.contains("Freshness: this guided prompt likely matches code already in \${state.resetPath}, so reset is recommended for a predictable fresh demo run."))
+        assertTrue(source.contains("Freshness: this guided prompt already appears in \${state.resetPath}, so Reset Demo Sandbox is recommended to remove that existing change before a predictable fresh demo run."))
         assertTrue(source.contains("Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state. That keeps the suggested change aligned with what Refresh UML From Code just found, not an older canned demo step."))
         assertTrue(source.contains("Prompt state: the suggested guided prompt is fresh for the current code map because it was chosen from the latest Refresh UML From Code result."))
         assertTrue(source.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change because Blueprint will choose it from the latest Refresh UML From Code result."))
