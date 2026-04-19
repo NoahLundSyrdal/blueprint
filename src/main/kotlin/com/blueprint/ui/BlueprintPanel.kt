@@ -252,6 +252,7 @@ internal data class GuidedInviteScenarioState(
     val expectedRelationSource: String?,
     val expectedRelationTarget: String?,
     val resetSuggested: Boolean,
+    val resetPath: String,
     val umlDraftReady: Boolean,
     val reviewedDiffReady: Boolean,
     val appliedReady: Boolean,
@@ -305,9 +306,13 @@ internal object GuidedInviteScenario {
     fun checklistText(state: GuidedInviteScenarioState): String {
         if (state.resetSuggested) {
             return listOf(
+                "Demo prompt scenario:",
                 "[done] Abstract Code to UML -> current code map is loaded.",
                 "[done] Guided demo changes already exist in this sandbox.",
-                "[next] No safe fresh demo change remains. Reset the sandbox or try your own architecture change.",
+                "[next] Reset the invite demo sandbox by restoring ${state.resetPath}, or try your own architecture change.",
+                "",
+                "Your own change:",
+                "[next] Edit the UML directly or ask chat for a different architecture change, then Generate Code Diff.",
             ).joinToString("\n")
         }
         val currentStep = when {
@@ -331,11 +336,15 @@ internal object GuidedInviteScenario {
             else -> "expect ${state.expectedEntity} to appear in the refreshed current code map."
         }
         return listOf(
+            "Demo prompt scenario:",
             "${stepMarker(1, currentStep, state.codeMapReady)} Abstract Code to UML -> expect Project, User, and Invite in the current code map.",
             "${stepMarker(2, currentStep, state.umlDraftReady)} Try this change: \"${state.prompt}\" -> $expectedResult",
             "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
             "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk.",
             "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
+            "",
+            "Your own change:",
+            "[next] Edit the UML directly or ask chat for a different architecture change when you are not following the demo prompt.",
         ).joinToString("\n")
     }
 
@@ -663,7 +672,18 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         rows = 5
     }
     private val firstRunPromptButton = JButton("Try This Change").apply {
-        addActionListener { currentInvitePrompt()?.let(::sendSuggestedChat) }
+        addActionListener {
+            val state = currentInviteFirstRunScenarioState()
+            if (state.resetSuggested) {
+                Messages.showInfoMessage(
+                    project,
+                    "To get a fresh invite demo path, restore ${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code.\n\nYou can also ignore the demo path and ask for your own architecture change.",
+                    "Blueprint - Reset Demo Path"
+                )
+            } else {
+                sendSuggestedChat(state.prompt)
+            }
+        }
     }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
@@ -1379,7 +1399,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun seedInitialChat() {
-        val demoPrompt = if (shouldShowInviteFirstRunScenario()) currentInvitePrompt() ?: "reset the invite demo sandbox" else "add a Supplier entity"
+        val demoPrompt = if (shouldShowInviteFirstRunScenario()) {
+            currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"
+        } else {
+            "add a Supplier entity"
+        }
         appendChat(
             "Blueprint",
             """
@@ -1479,7 +1503,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "uml" in lower || "diagram" in lower -> {
                 if (shouldShowInviteFirstRunScenario()) {
-                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${currentInvitePrompt() ?: "reset the invite demo sandbox"}', then click Generate Code Diff."
+                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"}', then click Generate Code Diff."
                 } else {
                     "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
                 }
@@ -3411,10 +3435,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!shouldShowInviteFirstRunScenario()) return
         val state = currentInviteFirstRunScenarioState()
         firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
-        firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Path" else "Try This Change"
+        firstRunPromptButton.text = if (state.resetSuggested) "Show Reset Steps" else "Try This Change"
         firstRunPromptButton.isEnabled = state.codeMapReady
         firstRunPromptButton.toolTipText = if (state.resetSuggested) {
-            "All guided demo changes already exist. Reset the sandbox or pick your own change."
+            "All guided demo changes already exist. Restore ${state.resetPath} from git, or pick your own change."
         } else {
             state.prompt
         }
@@ -3456,7 +3480,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
         }
         val activePlan = promptPlan ?: GuidedInviteScenario.PromptPlan(
-            prompt = "reset the invite demo sandbox",
+            prompt = "restore ${GuidedInviteScenario.PATCH_PATH} from git",
             expectedEntity = "Invite",
             expectedField = "expires_at",
         )
@@ -3481,6 +3505,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             expectedRelationSource = activePlan.relationSource,
             expectedRelationTarget = activePlan.relationTarget,
             resetSuggested = promptPlan == null,
+            resetPath = GuidedInviteScenario.PATCH_PATH,
             umlDraftReady = hasExpectedDraft,
             reviewedDiffReady = reviewedInviteDiff,
             appliedReady = appliedInviteDiff,

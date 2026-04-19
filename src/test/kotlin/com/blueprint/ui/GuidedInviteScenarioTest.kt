@@ -59,6 +59,7 @@ class GuidedInviteScenarioTest {
                 expectedRelationSource = "Invite",
                 expectedRelationTarget = "InvitePolicy",
                 resetSuggested = false,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
                 appliedReady = false,
@@ -66,8 +67,10 @@ class GuidedInviteScenarioTest {
             ),
         )
         val firstLines = first.lines()
-        assertTrue(firstLines[0].startsWith("[next]"))
+        assertEquals("Demo prompt scenario:", firstLines[0])
+        assertTrue(firstLines[1].startsWith("[next]"))
         assertTrue(first.contains("Try this change: \"add an InvitePolicy entity\""))
+        assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
@@ -77,6 +80,7 @@ class GuidedInviteScenarioTest {
                 expectedRelationSource = "Invite",
                 expectedRelationTarget = "InviteReminder",
                 resetSuggested = false,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = true,
                 reviewedDiffReady = false,
                 appliedReady = false,
@@ -84,25 +88,28 @@ class GuidedInviteScenarioTest {
             ),
         )
         val middleLines = middle.lines()
-        assertTrue(middleLines[0].startsWith("[done]"))
+        assertEquals("Demo prompt scenario:", middleLines[0])
         assertTrue(middleLines[1].startsWith("[done]"))
-        assertTrue(middleLines[2].startsWith("[next]"))
+        assertTrue(middleLines[2].startsWith("[done]"))
+        assertTrue(middleLines[3].startsWith("[next]"))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
 
         val reset = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
                 codeMapReady = true,
-                prompt = "reset the invite demo sandbox",
+                prompt = "restore blueprint_demo/imported_invite/models.py from git",
                 expectedEntity = "Invite",
                 expectedRelationSource = null,
                 expectedRelationTarget = null,
                 resetSuggested = true,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
                 appliedReady = false,
                 refreshedCodeMapReady = false,
             ),
         )
-        assertTrue(reset.contains("No safe fresh demo change remains"))
+        assertTrue(reset.contains("restoring blueprint_demo/imported_invite/models.py"))
+        assertTrue(reset.contains("Your own change:"))
     }
 }
