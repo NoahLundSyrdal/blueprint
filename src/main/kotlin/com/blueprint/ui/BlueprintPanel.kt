@@ -373,6 +373,18 @@ private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: Lis
     return "$candidateReason Run command: $runCommand"
 }
 
+private fun verifiedRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
+    val candidates = runEntryCandidates.take(3)
+    return when {
+        candidates.isEmpty() ->
+            "Run command confidence: Blueprint verified $runCommand and did not detect competing entry files, so it remains the recommended default."
+        candidates.size == 1 ->
+            "Run command confidence: Blueprint verified $runCommand against the strongest entry file signal (${candidates.first()}), so it remains the recommended default."
+        else ->
+            "Run command confidence: Blueprint verified $runCommand and still sees other likely entry files (${candidates.joinToString(", ")}), so treat this as the current best default and re-check those files if you switch app targets."
+    }
+}
+
 private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(4)
     val candidateList = candidates.joinToString(", ")
@@ -4702,6 +4714,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Blueprint completed the path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
         }
         val copyableSummary = runResultSummary(runCommand, visibleResult, demoFlow)
+        val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
+        val runConfidence = verifiedRunCommandReason(runCommand, pythonContext.runEntryCandidates)
         val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
         val inspectAction = when (changedPaths.size) {
             0 -> "Inspect the current code in the IDE if you want to confirm the final state file by file."
@@ -4712,6 +4726,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Next steps:",
             "- $inspectAction",
             "- Copy Result Summary if you want a reusable issue-comment or demo recap.",
+            "- $runConfidence",
             "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
             "- Refine the UML again when you are ready for another reviewed code patch.",
         ).joinToString("\n")
@@ -4743,10 +4758,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
         val validationSummary = postApplyInlineSummary?.copyableResultSummary
             ?: "Result summary\n- Validation: not recorded yet\n- Run after apply: not recorded yet\n- Changed paths: none"
+        val runConfidence = verifiedRunCommandReason(runCommand, project.service<PythonProjectAnalyzer>().analyze().runEntryCandidates)
         return buildString {
             appendLine("Copyable result summary")
             appendLine("- $flowLabel completed for the current Python folder.")
             appendLine("- Run verified with: $runCommand")
+            appendLine("- $runConfidence")
             appendLine("- Visible result: $visibleResult")
             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
             append(validationSummary.removePrefix("Result summary\n"))
