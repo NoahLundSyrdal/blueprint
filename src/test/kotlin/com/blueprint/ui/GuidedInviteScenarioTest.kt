@@ -164,6 +164,16 @@ class GuidedInviteScenarioTest {
         assertTrue(reset.contains("Your own change:"))
     }
 
+
+    @Test
+    fun `reset state switches button copy to reset guidance`() {
+        val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
+
+        assertTrue(source.contains("firstRunPromptButton.text = if (state.resetSuggested) \"Show Reset Steps\" else \"Try This Change\""))
+        assertTrue(source.contains("All guided demo changes already exist. Restore \${state.resetPath} from git, or pick your own change."))
+        assertTrue(source.contains("To get a fresh invite demo path, restore \${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code."))
+    }
+
     @Test
     fun `fresh guided prompt copy stays discoverable in ui source`() {
         val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
