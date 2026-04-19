@@ -524,6 +524,11 @@ internal data class PostApplyInlineSummary(
     val nextStepLine: String,
 )
 
+internal data class GenerateDiffGuideSummary(
+    val guideText: String,
+    val nextStepDetail: String,
+)
+
 internal object PatchChangeSummary {
     /**
      * Builds the review-tab summary shown before apply from the reviewed patch content.
@@ -3920,9 +3925,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 updateNextStepBanner("Next: Refresh UML From Code", "Load the current Python project into a code-backed UML diagram before editing.")
             }
             else -> {
+                val diffGuide = generateDiffGuideSummary()
                 primaryActionButton.text = "Generate Code Diff"
-                guideLabel.text = "Change the UML with chat or direct edits, then Generate Code Diff."
-                updateNextStepBanner("Next: Generate Code Diff", "Turn the current UML edits into a reviewed code patch before apply.")
+                guideLabel.text = diffGuide.guideText
+                updateNextStepBanner("Next: Generate Code Diff", diffGuide.nextStepDetail)
             }
         }
     }
@@ -3943,6 +3949,25 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }.orEmpty()
+
+    private fun generateDiffGuideSummary(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+        validationCommand: String? = project.service<ProjectValidationService>().selectedCommand(),
+    ): GenerateDiffGuideSummary {
+        val lines = mutableListOf("Change the UML with chat or direct edits, then Generate Code Diff.")
+        if (umlHasPendingEdits) {
+            lines += "Generate Code Diff will create a reviewed code patch for your current UML edits."
+        }
+        lines += validationCommandReviewText(validationCommand)
+        lines += runCommandReviewText(context)
+        val guideText = lines.joinToString(" ")
+        val nextStepDetail = if (umlHasPendingEdits) {
+            "Create a reviewed code patch for the current UML edits. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
+        } else {
+            "Turn the current UML edits into a reviewed code patch before apply. ${validationCommandReviewText(validationCommand)} ${runCommandReviewText(context)}"
+        }
+        return GenerateDiffGuideSummary(guideText, nextStepDetail)
+    }
 
     private fun validationCommandReviewText(command: String?): String =
         command?.takeIf { it.isNotBlank() }

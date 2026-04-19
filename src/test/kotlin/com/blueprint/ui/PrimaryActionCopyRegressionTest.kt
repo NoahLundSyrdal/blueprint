@@ -33,8 +33,9 @@ class PrimaryActionCopyRegressionTest {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("primaryActionButton.text = \"Generate Code Diff\""))
-        assertTrue(source.contains("guideLabel.text = \"Change the UML with chat or direct edits, then Generate Code Diff.\""))
-        assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", \"Turn the current UML edits into a reviewed code patch before apply.\")"))
+        assertTrue(source.contains("val diffGuide = generateDiffGuideSummary()"))
+        assertTrue(source.contains("guideLabel.text = diffGuide.guideText"))
+        assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", diffGuide.nextStepDetail)"))
     }
 
     @Test
