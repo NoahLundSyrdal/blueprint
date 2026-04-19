@@ -12,7 +12,7 @@ class ReviewSummaryPlainEnglishRegressionTest {
     fun `review summary prompts plain English overview before raw diff`() {
         assertTrue(
             source.contains(
-                "What changed? Review the plain-English summary below, then open Preview Diff to inspect the raw diff before apply."
+                "What changed? explains the intent. Preview Diff confirms the exact file edits before apply."
             )
         )
         assertFalse(source.contains("Next: open Preview Diff to inspect the raw diff before apply."))

@@ -615,11 +615,16 @@ internal object PatchChangeSummary {
         semanticHeading: String,
         semanticChanges: List<String>,
         changedFilesText: String,
+        diffGuidance: String? = null,
     ): String =
         buildString {
             appendLine(heading)
             appendLine(semanticHeading)
             semanticChanges.forEach { appendLine("- $it") }
+            diffGuidance?.let {
+                appendLine()
+                appendLine(it)
+            }
             appendLine()
             appendLine(changedFilesText)
         }.trim()
@@ -4598,6 +4603,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val changedFilesInline = reviewChangedFilesInline(exec)
         val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
+            appendLine("Review this patch in one place:")
+            appendLine("- Read What changed? for the plain-English summary.")
+            appendLine("- Open Preview Diff to inspect the exact file edits.")
+            appendLine("- Confirm the changed files and approval reason before apply.")
+            appendLine()
             appendLine(changedFilesHeader)
             appendLine(changedFilesInline)
             appendLine("Diff status: ${freshness.badge}")
@@ -4609,7 +4619,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             if (exec?.patches.orEmpty().isNotEmpty()) {
                 appendLine()
-                appendLine("What changed? Review the plain-English summary below, then open Preview Diff to inspect the raw diff before apply.")
+                appendLine("What changed? explains the intent. Preview Diff confirms the exact file edits before apply.")
             }
             appendLine()
             appendLine(scopeSentence)
@@ -4637,7 +4647,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "was reviewed for scope"
         }
         val evidenceReason = acceptedEvidence?.let { " It also matches the requested UML because $it." }.orEmpty()
-        return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported.$evidenceReason"
+        return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported. That is why Apply Approved Changes is unlocked now.$evidenceReason"
     }
 
     private fun reviewChangedFilesHeader(exec: ExecutionArtifact?): String {
