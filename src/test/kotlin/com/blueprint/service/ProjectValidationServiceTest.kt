@@ -27,11 +27,29 @@ class ProjectValidationServiceTest {
     }
 
     @Test
-    fun `returns no command for projects without tests`() {
+    fun `falls back to import compile validation for source only projects`() {
         val context = context(
             testCommands = emptyList(),
             testRoots = emptyList(),
             configFiles = emptyList(),
+        )
+
+        val command = ProjectValidationService.chooseValidationCommand(context)
+
+        assertTrue(command!!.contains("compileall.compile_dir"))
+    }
+
+    @Test
+    fun `returns no command for projects without sources or tests`() {
+        val context = PythonProjectAnalyzer.PythonProjectContext(
+            basePath = "/tmp/project",
+            configFiles = emptyList(),
+            sourceRoots = emptyList(),
+            testRoots = emptyList(),
+            packageManager = "unknown",
+            frameworks = emptyList(),
+            testCommands = emptyList(),
+            notes = emptyList(),
         )
 
         assertNull(ProjectValidationService.chooseValidationCommand(context))

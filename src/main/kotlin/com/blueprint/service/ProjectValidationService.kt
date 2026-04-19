@@ -162,17 +162,17 @@ class ProjectValidationService(private val project: Project) {
     )
 
     companion object {
-        private val PYTHON_FILE = Regex("""(?:[A-Za-z]:)?[./\w\-\s]+\.py""")
+        private val PYTHON_FILE = Regex("""(?:[A-Za-z]:)?[./\\w\\-\\s]+\\.py""")
 
         fun chooseValidationCommand(context: PythonProjectAnalyzer.PythonProjectContext): String? {
             val inferred = context.testCommands
                 .firstOrNull { it.contains("pytest") }
                 ?: context.testCommands.firstOrNull()
             if (!inferred.isNullOrBlank()) return inferred
-            return if (context.testRoots.isNotEmpty() || context.configFiles.any { it == "pytest.ini" || it == "pyproject.toml" }) {
-                "python -m pytest"
-            } else {
-                null
+            return when {
+                context.testRoots.isNotEmpty() || context.configFiles.any { it == "pytest.ini" || it == "pyproject.toml" } -> "python -m pytest"
+                context.sourceRoots.isNotEmpty() -> IMPORT_COMPILE_VALIDATION_COMMAND
+                else -> null
             }
         }
 
@@ -196,8 +196,7 @@ class ProjectValidationService(private val project: Project) {
                     lower.startsWith("===") ||
                     lower.startsWith("___")
             }
-            val lines = (if (interesting.isNotEmpty()) interesting else cleaned.takeLast(maxLines))
-                .take(maxLines)
+            val lines = (if (interesting.isNotEmpty()) interesting else cleaned.takeLast(maxLines)).take(maxLines)
             val excerpt = lines.joinToString("\n")
             return if (excerpt.length <= maxChars) excerpt else excerpt.take(maxChars).trimEnd() + "\n..."
         }
@@ -247,6 +246,42 @@ class ProjectValidationService(private val project: Project) {
                 print(f"{failures} failed, {ran - failures} passed via Blueprint fallback runner")
                 sys.exit(1)
             print(f"{ran} passed via Blueprint fallback runner")
+            PY
+        """.trimIndent()
+
+        private val IMPORT_COMPILE_VALIDATION_COMMAND = """
+            python - <<'PY'
+            import compileall
+            import pathlib
+            import sys
+
+            root = pathlib.Path.cwd()
+            source_roots = [p for p in [root / "app", root / "src"] if p.exists()]
+            if not source_roots:
+                source_roots = [
+                    path.parent for path in root.rglob("*.py")
+                    if ".venv" not in path.parts and "venv" not in path.parts and "site-packages" not in path.parts
+                ]
+            checked = []
+            failures = []
+
+            for candidate in source_roots:
+                if not candidate.exists() or not candidate.is_dir():
+                    continue
+                if candidate in checked:
+                    continue
+                checked.append(candidate)
+                ok = compileall.compile_dir(str(candidate), quiet=1, force=False)
+                if not ok:
+                    failures.append(str(candidate.relative_to(root) if candidate != root else candidate))
+
+            if not checked:
+                print("No Python source roots found for import/compile validation.")
+                sys.exit(5)
+            if failures:
+                print("Import/compile validation failed for: " + ", ".join(failures))
+                sys.exit(1)
+            print("Import/compile validation passed for: " + ", ".join(str(path.relative_to(root) if path != root else path) for path in checked))
             PY
         """.trimIndent()
     }

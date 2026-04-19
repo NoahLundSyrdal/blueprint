@@ -102,17 +102,21 @@ class PythonProjectAnalyzer(private val project: Project) {
 
     private fun detectSourceRoots(base: Path, maxDepth: Int): List<String> {
         val roots = mutableSetOf<String>()
-        val src = base.resolve("src")
-        if (Files.isDirectory(src)) {
-            Files.list(src).use { stream ->
-                stream.filter { Files.isDirectory(it) && Files.isRegularFile(it.resolve("__init__.py")) }
+        listOf("src", "app").forEach { rootName ->
+            val root = base.resolve(rootName)
+            if (!Files.isDirectory(root)) return@forEach
+            roots += rootName
+            Files.list(root).use { stream ->
+                stream.filter { Files.isDirectory(it) }
+                    .filter { !shouldSkipDir(it.fileName.toString()) }
+                    .filter { containsPythonSources(it, maxDepth = 2) }
                     .forEach { roots += base.relativize(it).toString().replace('\\', '/') }
             }
         }
         Files.list(base).use { stream ->
             stream.filter { Files.isDirectory(it) }
                 .filter { !shouldSkipDir(it.fileName.toString()) }
-                .filter { Files.isRegularFile(it.resolve("__init__.py")) }
+                .filter { containsPythonSources(it, maxDepth = 2) }
                 .forEach { roots += base.relativize(it).toString().replace('\\', '/') }
         }
         walkPythonFiles(base, maxDepth)
@@ -210,8 +214,35 @@ class PythonProjectAnalyzer(private val project: Project) {
                 break
             }
         }
-        return lastPackage?.let { base.relativize(it).toString().replace('\\', '/') }
+        if (lastPackage != null) {
+            return base.relativize(lastPackage).toString().replace('\\', '/')
+        }
+        return namespaceSourceRoot(base, file)
     }
+
+    private fun namespaceSourceRoot(base: Path, file: Path): String? {
+        val relative = runCatching { base.relativize(file.parent ?: return null) }.getOrNull() ?: return null
+        val parts = relative.map { it.toString() }
+        if (parts.isEmpty()) return null
+        if (parts.first() in listOf("src", "app")) {
+            return parts.first()
+        }
+        return parts.first()
+    }
+
+    private fun containsPythonSources(dir: Path, maxDepth: Int): Boolean {
+        if (!Files.isDirectory(dir)) return false
+        Files.walk(dir, maxDepth).use { stream ->
+            return stream.anyMatch { path ->
+                Files.isRegularFile(path) &&
+                    path.fileName.toString().endsWith(".py") &&
+                    !baseRelativeParts(dir, path).any { shouldSkipDir(it) }
+            }
+        }
+    }
+
+    private fun baseRelativeParts(base: Path, path: Path): List<String> =
+        runCatching { base.relativize(path).map { it.toString() }.toList() }.getOrDefault(emptyList())
 
     private fun readSmall(path: Path, maxChars: Int): String =
         try {
