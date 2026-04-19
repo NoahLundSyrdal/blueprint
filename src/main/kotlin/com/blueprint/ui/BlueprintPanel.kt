@@ -3348,7 +3348,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             }
                         )
                     }
-                    val refreshNote = "Blueprint already refreshed the code-backed UML from disk after apply. Use Verify In UML to rerun that reread when you want an explicit verification click, or use Refresh UML From Code again later."
+                    val refreshNote = "Blueprint already refreshed the code-backed UML from disk after apply. Refresh UML From Code to verify again whenever you want to rerun that reread."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3387,7 +3387,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val verifyChecklist = buildString {
                         appendLine("Verify in UML tab:")
                         appendLine("- Automatic refresh after apply already reread the changed code from disk.")
-                        appendLine("- Verify In UML reruns that code reread when you want an explicit verification click.")
+                        appendLine("- Refresh UML From Code reruns that code reread when you want an explicit verification click.")
                         appendLine("- $summaryLine")
                         appendLine("- ${result.summaryLine()}")
                         if (changedPaths.isEmpty()) {
@@ -3419,13 +3419,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         project,
                         listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
                             .filter { it.isNotBlank() }
-                            .joinToString("\n\n") + "\n\nRefresh UML From Code to verify." + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
+                            .joinToString("\n\n") + if (openChangedFilesNote.isBlank()) "" else "\n\n$openChangedFilesNote",
                         "Blueprint - Apply Complete"
                     )
                     SwingUtilities.invokeLater {
                         showArtifactTab("UML")
                         status(summaryLine)
-                        umlStatusLabel.text = "UML: refreshed from code after apply. Refresh UML From Code to verify, or use Undo Last Apply to roll it back."
+                        umlStatusLabel.text = "UML: refreshed from code after apply. Refresh UML From Code to verify again, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
                             listOf(summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)
@@ -3435,7 +3435,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         guideLabel.text = listOf(
                             "Apply complete. Review the refreshed code-backed UML now.",
                             "Refresh UML From Code to verify.",
-                            "Verify In UML reruns that code reread when you want an explicit verification click. Refresh UML From Code stays available for the general refresh action.",
+                            "Refresh UML From Code reruns that code reread when you want an explicit verification click.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
