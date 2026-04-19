@@ -4670,8 +4670,37 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "Blueprint - Run Demo Step"
         )
         logActivity("Demo e2e step passed: Run the changed app with $runCommand. Confirmed visible result: $expectedVisibleResult")
+        showRunVerificationSuccessBanner(runCommand, expectedVisibleResult, true)
         status("Demo run and visible result recorded")
         refreshFirstRunScenario()
+    }
+
+    private fun showRunVerificationSuccessBanner(
+        runCommand: String,
+        visibleResult: String,
+        demoFlow: Boolean,
+    ) {
+        val flowSummary = if (demoFlow) {
+            "Blueprint completed the full demo path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
+        } else {
+            "Blueprint completed the path: code-backed UML -> refined UML -> reviewed code patch -> applied changes -> refreshed UML -> running app."
+        }
+        val recordedSteps = listOf(
+            "- Code-backed UML is loaded for the current Python folder.",
+            "- UML changes were refined into a reviewed code patch.",
+            "- Approved changes were applied and UML was refreshed from code.",
+            "- Run verified with: $runCommand",
+            "- Visible result: $visibleResult",
+        ).joinToString("\n")
+        val banner = buildString {
+            appendLine("End-to-end success")
+            appendLine(flowSummary)
+            appendLine()
+            append(recordedSteps)
+        }.trim()
+        guideLabel.text = banner
+        appendChat("Blueprint", banner)
+        Messages.showInfoMessage(project, banner, "Blueprint - End-to-End Success")
     }
 
     private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
