@@ -124,4 +124,18 @@ class PatchChangeSummaryBehaviorTest {
         assertTrue(summary.contains("InvitePolicy + id: str"))
         assertTrue(summary.contains("Changed files (2):"))
     }
+
+    @Test
+    fun `semantic change lines fall back for delete patch and create patch without fields`() {
+        val exec = ExecutionArtifact(
+            summary = "Remove legacy code and add an empty marker class.",
+            patches = listOf(
+                Patch(path = "app/legacy.py", action = PatchAction.delete.name, content = ""),
+                Patch(path = "app/marker.py", action = PatchAction.create.name, content = "class Marker:"),
+            ),
+        )
+
+        assertEquals(listOf("legacy.py deleted", "Added class Marker"), PatchChangeSummary.semanticChangeLines(exec))
+    }
 }
+
