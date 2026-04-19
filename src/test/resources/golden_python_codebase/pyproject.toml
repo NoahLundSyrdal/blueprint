@@ -1,0 +1,11 @@
+[project]
+name = "golden-invite"
+version = "0.1.0"
+dependencies = [
+    "fastapi",
+    "pytest",
+    "sqlalchemy",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
