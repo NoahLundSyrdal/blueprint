@@ -2541,19 +2541,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     refreshArtifactSummary()
                     logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
                     status(result.summaryLine())
-                    Messages.showInfoMessage(
-                        project,
-                        buildString {
-                            append("Applied ${applyResult.applied.size} file change(s).")
-                            if (applyResult.applied.isNotEmpty()) {
-                                append("\n\n")
-                                append(applyResult.applied.joinToString("\n"))
-                            }
-                            append("\n\n")
-                            append(validationReportText(result))
-                        },
-                        "Blueprint - Apply Complete",
-                    )
+                    // --- UX: explicit applied-success plus next steps (#35) ---
+val addedFields = patches.sumOf { patch -> Regex("^\\s*([a-zA-Z_][a-zA-Z_0-9]*)\\s*:").findAll(patch.content).count() }
+val classes = patches.sumOf { patch -> Regex("class ([a-zA-Z_][a-zA-Z_0-9]*)").findAll(patch.content).count() }
+val summaryLine = "Applied ${applyResult.applied.size} file(s), $addedFields field(s), $classes class(es), validation: ${result.status}" + if (result.status == ProjectValidationService.ValidationResult.Status.PASS) "\n\nSee refreshed UML to verify applied changes." else ""
+Messages.showInfoMessage(
+    project,
+    summaryLine + "\n\n" +
+        (if (applyResult.applied.isNotEmpty()) "Changed files:\n" + applyResult.applied.joinToString("\n") + "\n\n" else "") +
+        validationReportText(result),
+    "Blueprint - Apply Complete"
+)
+SwingUtilities.invokeLater {
+    showArtifactTab("UML")
+    status("Refresh UML From Code to verify changes.")
+    umlStatusLabel.text = "UML: Refreshed after apply. Verify new fields/classes are present."
+}
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
                     node.executionStatus = ExecutionStatus.FAILED
