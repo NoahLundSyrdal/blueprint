@@ -24,11 +24,12 @@ object PythonModelModuleRenderer {
 
     fun renderWithReport(outputs: List<NodeContract>, existingContent: String = ""): RenderResult {
         val classes = orderedModelOutputs(outputs)
-        val imports = requiredImports(classes)
+        val mergedClasses = mergeExistingFieldDefaults(classes, existingContent)
+        val imports = requiredImports(mergedClasses)
         val body = if (existingContent.isBlank()) {
-            renderFreshModule(classes)
+            renderFreshModule(mergedClasses)
         } else {
-            mergeIntoExisting(existingContent, classes)
+            mergeIntoExisting(existingContent, mergedClasses)
         }
         val content = ensureImports(body, imports).trimEnd() + "\n"
         return RenderResult(
@@ -57,6 +58,7 @@ object PythonModelModuleRenderer {
                 when {
                     old == null -> changes += "add field ${proposed.name}.${field.name}"
                     old.type != field.type -> changes += "update field ${proposed.name}.${field.name}: ${old.type} -> ${field.type}"
+                    old.defaultExpression != field.defaultExpression -> changes += "preserve field default ${proposed.name}.${field.name}"
                 }
             }
             existing.fields
@@ -70,7 +72,9 @@ object PythonModelModuleRenderer {
             .filterNot { wanted -> existingLines.any { it.trim() == wanted } }
             .forEach { changes += "add import $it" }
 
-        return changes.distinct()
+        return changes
+            .filterNot { it.startsWith("preserve field default ") }
+            .distinct()
     }
 
     private fun renderFreshModule(classes: List<ModelSpec>): String =
@@ -101,8 +105,9 @@ object PythonModelModuleRenderer {
             if (spec == null) {
                 out += lines.subList(block.start, block.endExclusive)
             } else {
+                val mergedSpec = mergeExistingFieldDefaults(spec, block.fields.orEmpty())
                 val pending = classes.filterNot { it.name in handled || it.name == spec.name }
-                val ownedInsertions = pending.filter { insertion -> spec.referencesType(insertion.name) }
+                val ownedInsertions = pending.filter { insertion -> mergedSpec.referencesType(insertion.name) }
                 ownedInsertions.forEach { insertion ->
                     if (out.isNotEmpty() && out.last().isNotBlank()) out += ""
                     out += renderClass(insertion, preservedBody = emptyList()).lines()
@@ -110,7 +115,7 @@ object PythonModelModuleRenderer {
                     out += ""
                 }
                 handled += spec.name
-                out += renderClass(spec, preservedBody = preservedClassBody(lines.subList(block.classLine + 1, block.endExclusive))).lines()
+                out += renderClass(mergedSpec, preservedBody = preservedClassBody(lines.subList(block.classLine + 1, block.endExclusive))).lines()
             }
             index = block.endExclusive
         }
@@ -132,12 +137,35 @@ object PythonModelModuleRenderer {
                 appendLine("    pass")
                 return@buildString
             }
-            spec.fields.forEach { field -> appendLine("    ${field.name}: ${field.type}") }
+            spec.fields.forEach { field ->
+                val defaultSuffix = field.defaultExpression?.let { " = $it" }.orEmpty()
+                appendLine("    ${field.name}: ${field.type}$defaultSuffix")
+            }
             if (preservedBody.isNotEmpty()) {
                 if (spec.fields.isNotEmpty()) appendLine()
                 preservedBody.forEach { appendLine(it) }
             }
         }.trimEnd()
+
+    private fun mergeExistingFieldDefaults(classes: List<ModelSpec>, existingContent: String): List<ModelSpec> {
+        if (existingContent.isBlank()) return classes
+        val existingByClass = modelSpecsInContent(existingContent)
+        return classes.map { spec ->
+            mergeExistingFieldDefaults(spec, existingByClass[spec.name]?.fields.orEmpty())
+        }
+    }
+
+    private fun mergeExistingFieldDefaults(spec: ModelSpec, existingFields: List<ModelField>): ModelSpec {
+        if (existingFields.isEmpty()) return spec
+        val existingByName = existingFields.associateBy { it.name }
+        return spec.copy(
+            fields = spec.fields.map { field ->
+                val existing = existingByName[field.name] ?: return@map field
+                if (existing.type != field.type) return@map field
+                field.copy(defaultExpression = existing.defaultExpression)
+            },
+        )
+    }
 
     private fun preservedClassBody(bodyLines: List<String>): List<String> {
         val kept = bodyLines.filterNot { line ->
@@ -186,8 +214,12 @@ object PythonModelModuleRenderer {
 
     private fun ensureImports(content: String, imports: List<String>): String {
         val lines = content.lines().toMutableList()
+        val dataclassImport = lines.indexOfFirst { it.trim() == "from dataclasses import dataclass" }
+        if ("from dataclasses import dataclass, field" in imports && dataclassImport >= 0) {
+            lines[dataclassImport] = "from dataclasses import dataclass, field"
+        }
         val missing = imports.filterNot { wanted -> lines.any { it.trim() == wanted } }
-        if (missing.isEmpty()) return content
+        if (missing.isEmpty()) return lines.joinToString("\n")
         val insertAt = importInsertionIndex(lines)
         lines.addAll(insertAt, missing + "")
         return lines.joinToString("\n")
@@ -208,7 +240,9 @@ object PythonModelModuleRenderer {
 
     private fun requiredImports(classes: List<ModelSpec>): List<String> {
         val typeNames = classes.flatMap { spec -> spec.fields.flatMap { typeIdentifiers(it.type) } }.toSet()
+        val defaultNames = classes.flatMap { spec -> spec.fields.flatMap { defaultIdentifiers(it.defaultExpression) } }.toSet()
         val imports = mutableListOf("from dataclasses import dataclass")
+        if ("field" in defaultNames) imports[0] = "from dataclasses import dataclass, field"
         val datetimeNames = listOf("date", "datetime", "time", "timedelta").filter { it in typeNames }
         if (datetimeNames.isNotEmpty()) imports += "from datetime import ${datetimeNames.sorted().joinToString(", ")}"
         if ("Decimal" in typeNames) imports += "from decimal import Decimal"
@@ -309,7 +343,7 @@ object PythonModelModuleRenderer {
                         endExclusive = cls.endExclusive.coerceAtMost(lines.size).coerceAtLeast((cls.classLine - 1).coerceAtLeast(0) + 1),
                         fields = cls.fields
                             .filter { it.name.matches(IDENTIFIER) && it.type.isNotBlank() }
-                            .map { ModelField(it.name, it.type) },
+                            .map { ModelField(it.name, it.type, it.defaultExpression) },
                     )
                 }
         } catch (_: Throwable) {
@@ -335,10 +369,28 @@ object PythonModelModuleRenderer {
             .replace("&gt;", ">")
             .trim()
         val name = cleaned.substringBefore(":", "").trim()
-        val type = cleaned.substringAfter(":", "").trim()
+        val typePart = cleaned.substringAfter(":", "").trim()
         if (!name.matches(IDENTIFIER)) return null
-        if (type.isBlank()) return null
-        return ModelField(name, type)
+        if (typePart.isBlank()) return null
+        val (type, defaultExpression) = splitTypeAndDefault(typePart)
+        return ModelField(name, type, defaultExpression)
+    }
+
+    private fun splitTypeAndDefault(typePart: String): Pair<String, String?> {
+        val equalsIndex = typePart.indexOf('=')
+        if (equalsIndex < 0) return typePart.trim() to null
+        val type = typePart.substring(0, equalsIndex).trim()
+        val defaultExpression = typePart.substring(equalsIndex + 1).trim().takeIf { it.isNotEmpty() }
+        return type to defaultExpression
+    }
+
+    private fun defaultIdentifiers(raw: String?): List<String> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return Regex("""[A-Za-z_][A-Za-z0-9_]*""")
+            .findAll(raw)
+            .map { it.value }
+            .filterNot { it in builtinTypeNames }
+            .toList()
     }
 
     private fun trimLeadingBlankLines(lines: MutableList<String>) {
@@ -350,7 +402,7 @@ object PythonModelModuleRenderer {
     }
 
     data class ModelSpec(val name: String, val fields: List<ModelField>)
-    data class ModelField(val name: String, val type: String)
+    data class ModelField(val name: String, val type: String, val defaultExpression: String? = null)
     data class RenderResult(val content: String, val changes: List<String>)
 
     private data class ClassBlock(
@@ -370,7 +422,11 @@ object PythonModelModuleRenderer {
         val endExclusive: Int = 1,
         val fields: List<AstField> = emptyList(),
     )
-    private data class AstField(val name: String = "", val type: String = "")
+    private data class AstField(
+        val name: String = "",
+        val type: String = "",
+        val defaultExpression: String? = null,
+    )
 
     private val IDENTIFIER = Regex("""[A-Za-z_][A-Za-z0-9_]*""")
     private val CLASS_HEADER = Regex("""^class\s+([A-Za-z_][A-Za-z0-9_]*)\b.*:\s*$""")
@@ -406,7 +462,11 @@ for node in module.body:
     fields = []
     for item in node.body:
         if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-            fields.append({"name": item.target.id, "type": unparse(item.annotation, "Any")})
+            fields.append({
+                "name": item.target.id,
+                "type": unparse(item.annotation, "Any"),
+                "defaultExpression": unparse(item.value, None),
+            })
     classes.append({
         "name": node.name,
         "start": start,
