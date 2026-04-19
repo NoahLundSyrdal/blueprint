@@ -65,6 +65,7 @@ class GuidedInviteScenarioTest {
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = false,
+                runCommand = null,
             ),
         )
         val firstLines = first.lines()
@@ -74,6 +75,7 @@ class GuidedInviteScenarioTest {
         assertTrue(first.contains("Try This Change -> available after the current code map loads."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
         assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
+        assertTrue(first.contains("Run the changed app -> no run command was inferred yet, so open the project entrypoint manually to verify the feature."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -91,6 +93,25 @@ class GuidedInviteScenarioTest {
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,
+                runCommand = null,
+            ),
+        )
+        val runReady = GuidedInviteScenario.checklistText(
+            GuidedInviteScenarioState(
+                codeMapReady = true,
+                prompt = "add an InviteReminder entity",
+                expectedEntity = "InviteReminder",
+                expectedRelationSource = "Invite",
+                expectedRelationTarget = "InviteReminder",
+                resetSuggested = false,
+                resetPath = GuidedInviteScenario.PATCH_PATH,
+                umlDraftReady = true,
+                reviewedDiffReady = true,
+                reviewApprovedReady = true,
+                appliedReady = true,
+                refreshedCodeMapReady = true,
+                promptReady = true,
+                runCommand = "python main.py",
             ),
         )
         val approved = GuidedInviteScenario.checklistText(
@@ -108,6 +129,7 @@ class GuidedInviteScenarioTest {
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,
+                runCommand = null,
             ),
         )
         val middleLines = middle.lines()
@@ -121,6 +143,8 @@ class GuidedInviteScenarioTest {
         assertTrue(middle.indexOf("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked.") < middle.indexOf("Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
         assertTrue(approved.contains("[done] Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
         assertTrue(approved.contains("[next] Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
+        assertTrue(runReady.contains("[done] Refresh UML From Code -> expect InviteReminder to appear in the refreshed current code map."))
+        assertTrue(runReady.contains("[done] Run the changed app -> start with: python main.py"))
 
         val loadedPrompt = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
@@ -137,6 +161,7 @@ class GuidedInviteScenarioTest {
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = false,
+                runCommand = null,
             ),
         )
         assertTrue(loadedPrompt.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
@@ -156,6 +181,7 @@ class GuidedInviteScenarioTest {
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,
+                runCommand = null,
             ),
         )
         assertTrue(fieldPrompt.contains("expect Invite to include expires_at in the UML draft."))
@@ -176,6 +202,7 @@ class GuidedInviteScenarioTest {
                 appliedReady = false,
                 refreshedCodeMapReady = false,
                 promptReady = true,
+                runCommand = null,
             ),
         )
         assertTrue(reset.contains("Guided demo prompt loaded: \"restore blueprint_demo/imported_invite/models.py from git\"."))

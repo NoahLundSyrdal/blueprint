@@ -259,6 +259,7 @@ internal data class GuidedInviteScenarioState(
     val appliedReady: Boolean,
     val refreshedCodeMapReady: Boolean,
     val promptReady: Boolean,
+    val runCommand: String?,
 )
 
 internal object GuidedInviteScenario {
@@ -306,6 +307,10 @@ internal object GuidedInviteScenario {
         }
 
     fun checklistText(state: GuidedInviteScenarioState): String {
+        val runStep = when {
+            state.runCommand.isNullOrBlank() -> "Run the changed app -> no run command was inferred yet, so open the project entrypoint manually to verify the feature."
+            else -> "Run the changed app -> start with: ${state.runCommand}"
+        }
         if (state.resetSuggested) {
             return listOf(
                 "Demo prompt scenario:",
@@ -316,6 +321,8 @@ internal object GuidedInviteScenario {
                 "[wait] Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.",
                 "[wait] Blueprint reviews the fresh code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the fresh reviewed code patch.",
+                "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
+                "[wait] $runStep",
                 "",
                 "Your own change:",
                 "[next] Edit the UML directly or ask chat for a different architecture change, then Generate Code Diff.",
@@ -330,6 +337,7 @@ internal object GuidedInviteScenario {
                 "[wait] Blueprint reviews the code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the reviewed code patch.",
                 "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
+                "[wait] $runStep",
                 "",
                 "Your own change:",
                 "[next] You can skip the demo path and ask chat for a different architecture change after the first UML refresh.",
@@ -342,7 +350,7 @@ internal object GuidedInviteScenario {
             !state.reviewApprovedReady -> 4
             !state.appliedReady -> 5
             !state.refreshedCodeMapReady -> 6
-            else -> 0
+            else -> 7
         }
         val expectedResult = when {
             state.expectedRelationSource != null && state.expectedRelationTarget != null ->
@@ -368,6 +376,7 @@ internal object GuidedInviteScenario {
             "${stepMarker(4, currentStep, state.reviewApprovedReady)} Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked.",
             "${stepMarker(5, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
             "${stepMarker(6, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
+            "${stepMarker(7, currentStep, state.refreshedCodeMapReady)} $runStep",
             "",
             "Your own change:",
             "[next] Edit the UML directly or ask chat for a different architecture change when you are not following the demo prompt.",
@@ -3675,6 +3684,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appliedReady = appliedInviteDiff,
             refreshedCodeMapReady = refreshedReady,
             promptReady = promptReady,
+            runCommand = project.service<PythonProjectAnalyzer>().analyze().runCommands.firstOrNull(),
         )
     }
 
