@@ -4497,7 +4497,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
     private fun reviewApprovalSentence(exec: ExecutionArtifact?, review: ReviewArtifact?): String? {
         if (!reviewAllowsApply(review)) return null
-        val changePhrase = PatchChangeSummary.semanticChangeLines(exec).take(2).ifEmpty { listOf("the reviewed code patch") }
+        val changePhrase = PatchChangeSummary.semanticChangeLines(exec, exec?.patches.orEmpty().map { it.path })
+            .take(2)
+            .ifEmpty { listOf("the reviewed code patch") }
             .joinToString(" and ")
         val acceptedEvidence = review?.acceptanceReview.orEmpty()
             .filter { it.result.uppercase() == "PASS" }
