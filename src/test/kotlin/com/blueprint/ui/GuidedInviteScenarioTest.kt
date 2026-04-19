@@ -72,6 +72,7 @@ class GuidedInviteScenarioTest {
         assertTrue(first.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(first.contains("Try This Change -> available after the current code map loads."))
         assertTrue(first.contains("Review Approved Changes -> wait for Blueprint to approve the reviewed code patch before apply."))
+        assertTrue(first.contains("Apply Approved Changes -> blocked until review approves the reviewed code patch."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -156,7 +157,10 @@ class GuidedInviteScenarioTest {
         assertTrue(reset.contains("Guided demo prompt loaded: \"restore blueprint_demo/imported_invite/models.py from git\"."))
         assertTrue(reset.contains("restoring blueprint_demo/imported_invite/models.py"))
         assertTrue(reset.contains("Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change."))
-        assertTrue(reset.contains("Apply Approved Changes -> available after a fresh reviewed code patch is approved."))
+        assertTrue(reset.contains("Review Approved Changes -> wait for Blueprint to approve the fresh reviewed code patch before apply."))
+        assertTrue(reset.contains("Apply Approved Changes -> blocked until review approves the fresh reviewed code patch."))
+        assertTrue(reset.indexOf("Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.") < reset.indexOf("Review Approved Changes -> wait for Blueprint to approve the fresh reviewed code patch before apply."))
+        assertTrue(reset.indexOf("Review Approved Changes -> wait for Blueprint to approve the fresh reviewed code patch before apply.") < reset.indexOf("Apply Approved Changes -> blocked until review approves the fresh reviewed code patch."))
         assertTrue(reset.contains("Your own change:"))
     }
 
