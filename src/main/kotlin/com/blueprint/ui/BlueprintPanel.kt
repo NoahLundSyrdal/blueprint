@@ -769,7 +769,7 @@ private fun postApplyVerifyChecklist(summaryLine: String, validationSummary: Str
     buildString {
         appendLine(POST_APPLY_VERIFY_HEADING)
         appendLine(POST_APPLY_VERIFY_RELOADED_LINE)
-        appendLine("- Click $POST_APPLY_VERIFY_PROMPT")
+        appendLine("- $POST_APPLY_VERIFY_PROMPT")
         appendLine("- $summaryLine")
         appendLine("- $validationSummary")
         if (changedPaths.isEmpty()) {
@@ -5729,7 +5729,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Step 2 complete - Reviewed code patch is ready for")
             lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Step 2 complete - Reviewed code patch is ready for")
             lower.startsWith("generate code diff used existing nodes because") ->
-                "Step 2 blocked - Generate Code Diff kept the last reviewed patch because the current UML could not be parsed."
+                "Step 2 blocked - Generate Code Diff kept the last reviewed code patch because the current UML could not be parsed."
             lower.startsWith("generate code diff completed with no file changes because") -> "Step 2 complete - $msg"
             lower.startsWith("generate code diff found no file changes because") -> "Step 2 complete - $msg"
             lower.startsWith("generate code diff found no uml-backed work items ready to run") -> "Step 2 complete - $msg"

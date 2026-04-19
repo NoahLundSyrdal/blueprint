@@ -35,7 +35,7 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Validation skipped after apply for Invite schema: no command inferred."),
         )
         assertEquals(
-            "Step 2 blocked - Generate Code Diff kept the last reviewed patch because the current UML could not be parsed.",
+            "Step 2 blocked - Generate Code Diff kept the last reviewed code patch because the current UML could not be parsed.",
             receiptTextForTest("Generate Code Diff used existing nodes because the UML text was not parseable."),
         )
         assertEquals(
