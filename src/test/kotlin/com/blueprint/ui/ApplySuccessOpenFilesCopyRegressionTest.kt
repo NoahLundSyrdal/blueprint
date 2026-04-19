@@ -13,8 +13,8 @@ class ApplySuccessOpenFilesCopyRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("val openChangedFilesNote = when (changedPaths.size) {"))
-        assertTrue(source.contains("1 -> \"Optional next step: Use Open Changed File after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote.\""))
-        assertTrue(source.contains("else -> \"Optional next step: Use Open Changed Files after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote.\""))
+        assertTrue(source.contains("1 -> \"Optional after verification: Use Open Changed File if you want to inspect exactly what Blueprint wrote.\""))
+        assertTrue(source.contains("else -> \"Optional after verification: Use Open Changed Files if you want to inspect exactly what Blueprint wrote.\""))
         assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
         assertTrue(source.contains("+ if (openChangedFilesNote.isBlank()) \"\" else \"\\n\\n\$openChangedFilesNote\""))
         assertTrue(source.contains("\"Blueprint - Apply Complete\""))

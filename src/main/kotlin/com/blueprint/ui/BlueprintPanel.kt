@@ -1038,7 +1038,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 if (GuidedInviteScenario.resetImportedInviteFile(project.basePath)) {
                     appendChat(
                         "Blueprint",
-                        "Reset Demo Sandbox restored ${state.resetPath} to the baseline invite demo file. Refresh UML From Code, then click Try This Change for a fresh prompt."
+                        "Reset Demo Sandbox restored ${state.resetPath} to the baseline invite demo file. Refresh UML From Code, then click Try This Change for a fresh prompt. You can still skip the reset and make your own UML edit instead."
                     )
                     logActivity("Demo e2e step passed: Reset invite demo sandbox at ${state.resetPath}.")
                     status("Invite demo sandbox reset")
@@ -1084,7 +1084,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
     private val openAppliedFilesButton = JButton("Open Changed Files").apply {
         isEnabled = false
-        toolTipText = "Open the file(s) Blueprint last wrote to disk. This stays separate from Apply Approved Changes."
+        toolTipText = "Optional after verification: open the file(s) Blueprint last wrote to disk to inspect what changed."
         addActionListener { openAppliedFiles() }
     }
     private val undoLastApplyButton = JButton("Undo Last Apply").apply {
@@ -3434,8 +3434,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     verifyInUmlButton.isEnabled = true
                     val openChangedFilesNote = when (changedPaths.size) {
                         0 -> ""
-                        1 -> "Optional next step: Use Open Changed File after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote."
-                        else -> "Optional next step: Use Open Changed Files after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote."
+                        1 -> "Optional after verification: Use Open Changed File if you want to inspect exactly what Blueprint wrote."
+                        else -> "Optional after verification: Use Open Changed Files if you want to inspect exactly what Blueprint wrote."
                     }
                     Messages.showInfoMessage(
                         project,
@@ -3537,7 +3537,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Refresh UML From Code to verify the updated code-backed UML.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
+            append("\nVerified receipt:\n- Review the changed paths, validation result, and inferred run command above.\n- Refresh UML From Code to verify the updated code-backed UML.\n- Run the changed app to confirm the feature exists.\n- Open Changed Files is optional after verification if you want to inspect what Blueprint wrote.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
@@ -4232,7 +4232,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Sandbox" else "Try This Change"
             firstRunPromptButton.isEnabled = state.codeMapReady
             firstRunPromptButton.toolTipText = if (state.resetSuggested) {
-                "All guided demo changes already exist. Click Reset Demo Sandbox to restore ${state.resetPath} to the baseline invite demo file, or pick your own change."
+                "The guided demo prompt likely matches code that is already in ${state.resetPath}. Click Reset Demo Sandbox for a fresh invite demo run, or keep your own UML edit instead."
             } else if (state.promptReady) {
                 "Fresh prompt already loaded for the current sandbox: \"${state.prompt}\""
             } else {
@@ -4491,7 +4491,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String =
         when {
             state.resetSuggested ->
-                "Click Reset Demo Sandbox to restore the invite demo file, refresh UML from code, then click Try This Change again so Blueprint can load a fresh prompt for the clean sandbox state."
+                "The guided demo prompt likely matches code already in the invite demo file. Click Reset Demo Sandbox for a fresh run, or keep your own UML edit instead."
             state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
                 "Expect Invite to show expires_at in the refreshed UML and in the running feature path."
             state.expectedRelationSource != null && state.expectedRelationTarget != null ->

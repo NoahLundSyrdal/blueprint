@@ -10,7 +10,7 @@ class PostApplyOpenFilesActionRegressionTest {
 
     @Test
     fun `apply dialog points to open changed files as an optional inspection step`() {
-        assertTrue(source.contains("Optional next step: Use Open Changed File after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote."))
-        assertTrue(source.contains("Optional next step: Use Open Changed Files after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote."))
+        assertTrue(source.contains("Optional after verification: Use Open Changed File if you want to inspect exactly what Blueprint wrote."))
+        assertTrue(source.contains("Optional after verification: Use Open Changed Files if you want to inspect exactly what Blueprint wrote."))
     }
 }

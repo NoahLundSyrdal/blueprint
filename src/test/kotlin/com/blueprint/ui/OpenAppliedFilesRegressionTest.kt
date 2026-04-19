@@ -13,12 +13,12 @@ class OpenAppliedFilesRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private val openAppliedFilesButton = JButton(\"Open Changed Files\").apply {"))
-        assertTrue(source.contains("toolTipText = \"Open the file(s) Blueprint last wrote to disk. This stays separate from Apply Approved Changes.\""))
+        assertTrue(source.contains("toolTipText = \"Optional after verification: open the file(s) Blueprint last wrote to disk to inspect what changed.\""))
         assertTrue(source.contains("addActionListener { openAppliedFiles() }"))
         assertTrue(source.contains("add(openAppliedFilesButton)"))
         assertTrue(source.contains("openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()"))
         assertTrue(source.contains("openAppliedFilesButton.text = if (changedPaths.size == 1) \"Open Changed File\" else \"Open Changed Files\""))
-        assertTrue(source.contains("Open Changed Files remains available if you want to inspect what Blueprint wrote after verification."))
+        assertTrue(source.contains("Open Changed Files is optional after verification if you want to inspect what Blueprint wrote."))
     }
 
     @Test
