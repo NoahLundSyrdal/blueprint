@@ -23,6 +23,7 @@ class FirstRunChecklistScopeNoteTest {
         ).checklistText()
 
         assertFalse(text.contains("Scope note:"))
+        assertTrue(text.contains("Run readiness: Blueprint has not inferred a project run command yet."))
     }
 
     @Test
@@ -43,6 +44,7 @@ class FirstRunChecklistScopeNoteTest {
             ),
         ).checklistText()
 
+        assertTrue(text.contains("Run readiness: Blueprint has not inferred a project run command yet."))
         assertTrue(text.contains("- Scope note: 1 Python path was skipped during Refresh UML From Code (unsupported or non-importable Python file). Inspect Skipped paths like scripts/bootstrap.py if the UML looks incomplete."))
     }
 }

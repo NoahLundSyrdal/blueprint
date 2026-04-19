@@ -304,8 +304,25 @@ internal data class FirstRunChecklistState(
                 "Run the changed app with: $runCommand"
         }
         val skippedLine = skippedFilesSummaryLine()
+        val resetAdviceLine = when {
+            appliedReady && !refreshedCodeMapReady ->
+                "Freshness: Blueprint already applied the reviewed code patch. Refresh UML From Code to verify the current code-backed UML before you keep going."
+            refreshedCodeMapReady ->
+                "Freshness: the code-backed UML is refreshed from the current files on disk."
+            else -> null
+        }
+        val runReadinessLine = when {
+            runCommand.isNullOrBlank() ->
+                "Run readiness: Blueprint has not inferred a project run command yet."
+            runVerified ->
+                "Run readiness: verified with $runCommand."
+            else ->
+                "Run readiness: Blueprint inferred $runCommand for this project."
+        }
         return buildList {
             add("First-run checklist:")
+            resetAdviceLine?.let { add(it) }
+            add(runReadinessLine)
             add("${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.")
             skippedLine?.let { add(it) }
             add("${markerForStep(2, currentStep, reviewedDiffReady)} Generate Code Diff -> create a reviewed code patch from your UML edits.")
@@ -463,9 +480,21 @@ internal object GuidedInviteScenario {
             state.runVerified -> "Run the changed app -> pass. Verified with: ${state.runCommand}"
             else -> "Run the changed app -> start with: ${state.runCommand}; verify the new feature appears."
         }
+        val freshnessLine = if (state.resetSuggested) {
+            "Freshness: this guided prompt likely matches code already in ${state.resetPath}, so reset is recommended for a predictable fresh demo run."
+        } else {
+            "Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state."
+        }
+        val promptStateLine = when {
+            !state.codeMapReady -> "Prompt state: Refresh UML From Code first so Blueprint can choose a fresh demo prompt for the current sandbox."
+            state.promptReady || state.umlDraftReady -> "Prompt state: the suggested guided prompt is fresh for the current code map."
+            else -> "Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change."
+        }
         if (state.resetSuggested) {
             return listOf(
                 "Demo prompt scenario:",
+                freshnessLine,
+                promptStateLine,
                 "[done] Refresh UML From Code -> current code map is loaded.",
                 if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
@@ -484,6 +513,8 @@ internal object GuidedInviteScenario {
         if (!state.codeMapReady) {
             return listOf(
                 "Demo prompt scenario:",
+                freshnessLine,
+                promptStateLine,
                 "[next] Refresh UML From Code -> load the current code map first so Blueprint can choose a fresh demo change.",
                 "[wait] Try This Change -> load a fresh prompt for the current code map.",
                 "[wait] Generate Code Diff -> available after the UML draft is updated.",
@@ -520,6 +551,8 @@ internal object GuidedInviteScenario {
         }
         return listOf(
             "Demo prompt scenario:",
+            freshnessLine,
+            promptStateLine,
             "${stepMarker(1, currentStep, state.codeMapReady)} Refresh UML From Code -> expect Project, User, and Invite in the current code map.",
             if (state.promptReady) {
                 "${stepMarker(2, currentStep, state.umlDraftReady)} Try This Change: \"${state.prompt}\" -> loaded fresh prompt for the current code map; $expectedResult"

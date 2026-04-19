@@ -73,7 +73,8 @@ class GuidedInviteScenarioTest {
         )
         val firstLines = first.lines()
         assertEquals("Demo prompt scenario:", firstLines[0])
-        assertTrue(firstLines[1].startsWith("[next]"))
+        assertTrue(firstLines[1].startsWith("Freshness:"))
+        assertTrue(firstLines[2].startsWith("Prompt state:"))
         assertTrue(first.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(first.contains("Try This Change -> load a fresh prompt for the current code map."))
         assertTrue(first.contains("Blueprint reviews the code patch before apply."))
@@ -142,8 +143,10 @@ class GuidedInviteScenarioTest {
         )
         val middleLines = middle.lines()
         assertEquals("Demo prompt scenario:", middleLines[0])
-        assertTrue(middleLines[1].startsWith("[done]"))
-        assertTrue(middleLines[2].startsWith("[next]"))
+        assertTrue(middleLines[1].startsWith("Freshness:"))
+        assertTrue(middleLines[2].startsWith("Prompt state:"))
+        assertTrue(middleLines[3].startsWith("[done]"))
+        assertTrue(middleLines[4].startsWith("[next]"))
         assertTrue(middle.contains("Try This Change: \"add an InviteReminder entity\" -> loaded fresh prompt for the current code map; expect InviteReminder linked from Invite in the UML draft."))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
         assertTrue(middle.contains("Review approved -> the reviewed code patch is approved and Apply Approved Changes is now unlocked."))
@@ -173,6 +176,7 @@ class GuidedInviteScenarioTest {
                 runCommand = null,
             ),
         )
+        assertTrue(loadedPrompt.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change."))
         assertTrue(loadedPrompt.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
         assertTrue(loadedPrompt.contains("Generate Code Diff -> expect a reviewed code patch for blueprint_demo/imported_invite/models.py."))
 
@@ -217,6 +221,7 @@ class GuidedInviteScenarioTest {
                 runCommand = null,
             ),
         )
+        assertTrue(reset.contains("Freshness: this guided prompt likely matches code already in blueprint_demo/imported_invite/models.py, so reset is recommended for a predictable fresh demo run."))
         assertTrue(reset.contains("Guided demo prompt loaded: \"reset blueprint_demo/imported_invite/models.py to the demo baseline\"."))
         assertTrue(reset.contains("Click Reset Demo Sandbox to restore blueprint_demo/imported_invite/models.py to the baseline invite demo file."))
         assertTrue(reset.contains("Then click Try This Change to load a fresh prompt for the clean sandbox."))
@@ -244,6 +249,7 @@ class GuidedInviteScenarioTest {
             runVerified = false,
         ).checklistText()
         assertTrue(fresh.contains("First-run checklist:"))
+        assertTrue(fresh.contains("Run readiness: Blueprint has not inferred a project run command yet."))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
         assertTrue(fresh.contains("Blueprint could not infer a run command yet. Verify manually with this checklist:"))
         assertTrue(fresh.contains("- Open the likely entrypoint manually."))
@@ -267,6 +273,7 @@ class GuidedInviteScenarioTest {
                 PythonProjectAnalyzer.SkippedFile("notes.txt.py", "unsupported or non-importable Python file"),
             ),
         ).checklistText()
+        assertTrue(patchReady.contains("Run readiness: Blueprint inferred python main.py for this project."))
         assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
         assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). Inspect Skipped paths like generated/schema.py, build/tmp.py if the UML looks incomplete."))
         assertTrue(patchReady.contains("[next] Review approved -> confirm Blueprint says the reviewed code patch is safe to apply."))
@@ -284,6 +291,8 @@ class GuidedInviteScenarioTest {
             validationPassed = true,
             runVerified = true,
         ).checklistText()
+        assertTrue(applied.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
+        assertTrue(applied.contains("Run readiness: verified with python main.py."))
         assertTrue(applied.contains("[done] Apply Approved Changes -> write the approved code patch to disk."))
         assertTrue(applied.contains("[done] Refresh UML From Code -> verify the code-backed UML after apply."))
         assertTrue(applied.contains("[done] Run the changed app -> Run verified with: python main.py"))
@@ -301,6 +310,8 @@ class GuidedInviteScenarioTest {
             validationPassed = false,
             runVerified = false,
         ).checklistText()
+        assertTrue(noRunCommand.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
+        assertTrue(noRunCommand.contains("Run readiness: Blueprint has not inferred a project run command yet."))
         assertTrue(noRunCommand.contains("[next] Run the changed app -> Blueprint could not infer a run command yet. Verify manually with this checklist:"))
         assertTrue(noRunCommand.contains("- Open the likely entrypoint manually."))
         assertTrue(noRunCommand.contains("- Confirm the changed feature exists."))
@@ -373,6 +384,10 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
         assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file. Refresh UML From Code, then click Try This Change for a fresh prompt. You can still skip the reset and make your own UML edit instead."))
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
+        assertTrue(source.contains("Freshness: this guided prompt likely matches code already in \${state.resetPath}, so reset is recommended for a predictable fresh demo run."))
+        assertTrue(source.contains("Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state."))
+        assertTrue(source.contains("Prompt state: the suggested guided prompt is fresh for the current code map."))
+        assertTrue(source.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change."))
         assertTrue(source.contains("Fresh prompt for the current sandbox:"))
         assertTrue(source.contains("Fresh prompt already loaded for the current sandbox:"))
         assertTrue(source.contains("Fresh prompt loaded for the current sandbox:"))
