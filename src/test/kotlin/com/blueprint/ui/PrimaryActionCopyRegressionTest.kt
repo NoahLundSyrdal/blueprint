@@ -1,5 +1,6 @@
 package com.blueprint.ui
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
@@ -24,8 +25,9 @@ class PrimaryActionCopyRegressionTest {
         assertTrue(source.contains("guideLabel.text = \"Review approved the reviewed code patch because it stays in scope and has no blocking safety issues. Apply Approved Changes to write it to disk, then Blueprint will validate the project.\""))
         assertTrue(source.contains("updateNextStepBanner(\"Next: Apply Approved Changes\", \"Review approved the current patch because it stays in scope and has no blocking safety issues, so this is the safe time to write it to disk.\")"))
         assertTrue(source.contains("val reviewDetail = review?.let { ReviewExplanation.statusLine(shortTitle, registry.getExecution(selected.id), it) }"))
+        assertTrue(source.contains("\"Next: Review\" to reviewDetail"))
         assertTrue(source.contains("?: \"Review not run yet. Generate Code Diff first so Blueprint can explain why the patch is safe to apply.\""))
-        assertTrue(source.contains("\"Next: Review approved\" to reviewDetail"))
+        assertFalse(source.contains("\"Next: Review approved\" to reviewDetail"))
     }
 
     @Test

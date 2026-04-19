@@ -1183,7 +1183,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
     private val verifyInUmlButton = JButton("Refresh UML From Code").apply {
         isEnabled = false
-        toolTipText = "After apply, Blueprint already refreshed the code-backed UML once. Use Refresh UML From Code to run a separate manual verification refresh when you want to confirm it yourself."
+        toolTipText = "After apply, Blueprint already refreshed the code-backed UML once. Use Refresh UML From Code to run a separate verification refresh when you want to confirm it yourself."
         addActionListener { refreshUmlAfterApplyVerification() }
     }
     private val openLikelyEntryFileButton = JButton("Open Likely Entry File").apply {
@@ -3470,9 +3470,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                     }
                     status(summaryLine)
-                    val nextActionLine = "Next: Refresh UML From Code to manually verify the updated code-backed UML."
+                    val nextActionLine = "Next: Refresh UML From Code to verify the updated code-backed UML."
                     postApplyVerifyState = "Blueprint automatically refreshed the code-backed UML from disk after apply."
-                    val refreshNote = "${postApplyVerifyState} Refresh UML From Code runs a separate manual verification refresh when you want to confirm it yourself."
+                    val refreshNote = "${postApplyVerifyState} Refresh UML From Code runs a separate verification refresh when you want to confirm it yourself."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3519,7 +3519,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     val verifyChecklist = buildString {
                         appendLine("Refresh UML From Code verification:")
                         appendLine("- Blueprint already reloaded the changed code into the UML automatically after apply.")
-                        appendLine("- Click Refresh UML From Code when you want a separate manual verification refresh.")
+                        appendLine("- Click Refresh UML From Code when you want a separate verification refresh.")
                         appendLine("- $summaryLine")
                         appendLine("- ${result.summaryLine()}")
                         if (changedPaths.isEmpty()) {
@@ -3543,7 +3543,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine("Result summary")
                             appendLine("- $summaryLine")
                             appendLine("- Validation: ${result.summaryLine()}")
-                            appendLine("- Next: Refresh UML From Code to verify.")
+                            appendLine("- Next: Refresh UML From Code to verify the updated code-backed UML.")
                             appendLine("- Run after apply: $runNote")
                             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
                         }.trim(),
@@ -3571,7 +3571,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     )
                     SwingUtilities.invokeLater {
                         showArtifactTab("UML")
-                        umlStatusLabel.text = "UML: automatically refreshed from code after apply. Refresh UML From Code for a separate manual verification refresh, or use Undo Last Apply to roll it back."
+                        umlStatusLabel.text = "UML: automatically refreshed from code after apply. Refresh UML From Code for a separate verification refresh, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
                             listOf(nextActionLine, summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, verifyStateLine, highlightLine)
@@ -3579,10 +3579,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                                 .joinToString("\n"),
                         )
                         guideLabel.text = listOf(
-                            "Next: Refresh UML From Code to manually verify the updated code-backed UML.",
+                            "Next: Refresh UML From Code to verify the updated code-backed UML.",
                             summaryLine,
                             verifyStateLine,
-                            "Refresh UML From Code runs a separate manual verification refresh when you want to confirm it yourself.",
+                            "Refresh UML From Code runs a separate verification refresh when you want to confirm it yourself.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
@@ -5091,14 +5091,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             !reviewApproved -> {
                 val reviewDetail = review?.let { ReviewExplanation.statusLine(shortTitle, registry.getExecution(selected.id), it) }
                     ?: "Review not run yet. Generate Code Diff first so Blueprint can explain why the patch is safe to apply."
-                "Next: Review approved" to reviewDetail
+                "Next: Review" to reviewDetail
             }
             selected.executionStatus != ExecutionStatus.APPLIED ->
                 "Next: Apply Approved Changes" to "Apply the approved reviewed code patch for: $shortTitle."
             graph.readyNodes().any { it.id != selected.id } ->
                 "Next: Generate Code Diff" to "Another UML-backed change is ready when you want a new reviewed code patch."
             else ->
-                "Next: Refresh UML From Code" to "All current work is applied. Blueprint already refreshed the code-backed UML automatically after apply. Refresh UML From Code to run a separate manual verification refresh, then run the changed app or make another change."
+                "Next: Refresh UML From Code" to "All current work is applied. Blueprint already refreshed the code-backed UML automatically after apply. Refresh UML From Code to run a separate verification refresh, then run the changed app or make another change."
         }
     }
 

@@ -27,7 +27,7 @@ class ApplySuccessMessageFormattingTest {
     fun `apply completion copy points to refresh and avoids fake semantic counts`() {
         val source = Files.readString(sourcePath)
 
-        assertTrue(source.contains("val refreshNote = \"\${postApplyVerifyState} Refresh UML From Code runs a separate manual verification refresh when you want to confirm it yourself.\""))
+        assertTrue(source.contains("val refreshNote = \"\${postApplyVerifyState} Refresh UML From Code runs a separate verification refresh when you want to confirm it yourself.\""))
         assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("val umlRefreshLine = \"Blueprint automatically refreshed the code-backed UML from disk after apply.\""))
         assertTrue(source.contains("val highlightLine = postApplyHighlightMessage ?: \"Blueprint refreshed the code-backed UML after apply.\""))

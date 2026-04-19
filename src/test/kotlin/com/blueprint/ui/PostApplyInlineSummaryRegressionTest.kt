@@ -19,7 +19,7 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("summaryLine = summaryLine"))
         assertTrue(source.contains("validationAndPathsLine = validationAndPathsLine,"))
         assertTrue(source.contains("nextStepLine = nextActionLine"))
-        assertTrue(source.contains("appendLine(\"- Next: Refresh UML From Code to verify.\")"))
+        assertTrue(source.contains("appendLine(\"- Next: Refresh UML From Code to verify the updated code-backed UML.\")"))
     }
 
     @Test
