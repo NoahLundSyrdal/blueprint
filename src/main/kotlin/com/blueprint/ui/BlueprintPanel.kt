@@ -1204,6 +1204,28 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         foreground = BlueprintTheme.Muted
         font = BlueprintTheme.font(12f)
     }
+    private val manualRunFallbackCard = RoundedSurfacePanel(BorderLayout(0, 6), BlueprintTheme.WarningSurface, BlueprintTheme.Warning).apply {
+        border = BorderFactory.createCompoundBorder(
+            RoundedLineBorder(BlueprintTheme.Warning, radius = 16, padding = Insets(10, 12, 10, 12)),
+            BorderFactory.createEmptyBorder(4, 4, 4, 4)
+        )
+        isVisible = false
+        add(JLabel("Manual run fallback").apply {
+            foreground = BlueprintTheme.Warning
+            font = BlueprintTheme.font(12f, Font.BOLD)
+        }, BorderLayout.NORTH)
+        add(JBTextArea().apply {
+            isEditable = false
+            isFocusable = false
+            lineWrap = true
+            wrapStyleWord = true
+            isOpaque = false
+            foreground = BlueprintTheme.Text
+            border = BorderFactory.createEmptyBorder()
+            font = BlueprintTheme.font(12f)
+            text = missingRunCommandChecklist(emptyList())
+        }, BorderLayout.CENTER)
+    }
     private val runOutputArea = JBTextArea(8, 40).apply {
         isEditable = false
         lineWrap = true
@@ -1881,6 +1903,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
                 add(runStatusNoteLabel)
+            })
+            add(manualRunFallbackCard.apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
             })
             add(JPanel(BorderLayout()).apply {
                 border = BorderFactory.createTitledBorder("Run Output")
@@ -4583,6 +4609,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runAppButton.text = "Stop Run"
             runAppButton.isEnabled = true
             runAppButton.toolTipText = "Stop the inferred project command running inside Blueprint."
+            manualRunFallbackCard.isVisible = false
             return
         }
         val runCommand = runner.inferredRunCommand(context)
@@ -4598,6 +4625,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runOutputArea.text = runOutputIdleHint()
         }
         runStatusNoteLabel.text = disabledRunExplanation(context, runCommand)
+        updateManualRunFallbackCard(context, runCommand)
     }
 
     private fun toggleRunInBlueprint() {
@@ -4672,6 +4700,28 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun missingRunCommandGuidance(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
     ): String = missingRunCommandChecklist(context.runEntryCandidates)
+
+    private fun updateManualRunFallbackCard(
+        context: PythonProjectAnalyzer.PythonProjectContext,
+        runCommand: String?,
+    ) {
+        if (!runCommand.isNullOrBlank()) {
+            manualRunFallbackCard.isVisible = false
+            return
+        }
+        val body = manualRunFallbackCard.components.filterIsInstance<JBTextArea>().first()
+        val firstCandidate = context.runEntryCandidates.firstOrNull()
+        body.text = buildString {
+            appendLine("Blueprint could not run this app automatically yet.")
+            appendLine("What Blueprint can do now: Refresh UML From Code to re-check the current Python folder and Open Likely Entry File to inspect the strongest launcher candidate.")
+            append(missingRunCommandChecklist(context.runEntryCandidates))
+            if (firstCandidate != null) {
+                append("\n\nLikely entry file action: Open Likely Entry File (${firstCandidate.substringAfterLast('/')}) opens $firstCandidate in the IDE without running or applying anything.")
+            }
+        }.trim()
+        manualRunFallbackCard.isVisible = true
+        manualRunFallbackCard.revalidate()
+    }
 
     private fun updateLikelyEntryFileAction(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
