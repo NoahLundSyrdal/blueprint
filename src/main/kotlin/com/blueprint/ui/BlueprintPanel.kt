@@ -917,6 +917,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val providerLabel = JLabel(providerText())
     private val actionProviderLabel = JLabel(providerText())
     private val guideLabel = JLabel("Start by reading the current project into an editable UML diagram.")
+    private val nextStepTitleLabel = JLabel("Next: Refresh UML From Code")
+    private val nextStepDetailLabel = JLabel("Read the current Python project and draw the first UML diagram.")
     private val firstRunScenarioArea = JBTextArea(5, 40).apply {
         isEditable = false
         isFocusable = false
@@ -1552,9 +1554,23 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     preferredSize = Dimension(260, 44)
                     font = font.deriveFont(java.awt.Font.BOLD, 13f)
                 }, BorderLayout.WEST)
-                add(guideLabel.apply {
-                    foreground = Color(0x444444)
-                }, BorderLayout.CENTER)
+                add(
+                    JPanel().apply {
+                        layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                        add(nextStepTitleLabel.apply {
+                            foreground = BlueprintTheme.TextStrong
+                            font = BlueprintTheme.font(12f, Font.BOLD)
+                        })
+                        add(nextStepDetailLabel.apply {
+                            foreground = BlueprintTheme.Muted
+                            font = BlueprintTheme.font(12f)
+                        })
+                        add(guideLabel.apply {
+                            foreground = Color(0x444444)
+                        })
+                    },
+                    BorderLayout.CENTER,
+                )
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(mockMode)
@@ -3754,18 +3770,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
                 primaryActionButton.text = "Generate Code Diff"
                 guideLabel.text = "Validation failed after apply. Adjust the UML or code, then Generate Code Diff again."
+                updateNextStepBanner("Next: Generate Code Diff", "Validation failed after apply, so the reviewed code patch needs another pass.")
             }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
                 guideLabel.text = "Review approved the reviewed code patch. Apply Approved Changes to write it to disk, then Blueprint will validate the project."
+                updateNextStepBanner("Next: Apply Approved Changes", "Review approved the current patch, so this is the safe time to write it to disk.")
             }
             currentUmlEntityCount() == 0 -> {
                 primaryActionButton.text = "Refresh UML From Code"
                 guideLabel.text = emptyUmlGuideText()
+                updateNextStepBanner("Next: Refresh UML From Code", "Load the current Python project into a code-backed UML diagram before editing.")
             }
             else -> {
                 primaryActionButton.text = "Generate Code Diff"
                 guideLabel.text = "Change the UML with chat or direct edits, then Generate Code Diff."
+                updateNextStepBanner("Next: Generate Code Diff", "Turn the current UML edits into a reviewed code patch before apply.")
             }
         }
     }
@@ -4149,6 +4169,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun normalizedUmlText(): String = PatchFreshness.normalize(umlEditor.text)
+
+    private fun updateNextStepBanner(title: String, detail: String) {
+        nextStepTitleLabel.text = title
+        nextStepDetailLabel.text = detail
+    }
 
     private fun guidedNextState(): Pair<String, String> {
         val entityCount = currentUmlEntityCount()

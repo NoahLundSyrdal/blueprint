@@ -12,6 +12,7 @@ class PrimaryActionCopyRegressionTest {
 
         assertTrue(source.contains("primaryActionButton.text = \"Refresh UML From Code\""))
         assertTrue(source.contains("guideLabel.text = emptyUmlGuideText()"))
+        assertTrue(source.contains("updateNextStepBanner(\"Next: Refresh UML From Code\", \"Load the current Python project into a code-backed UML diagram before editing.\")"))
         assertTrue(source.contains("\"No code-backed UML is loaded yet. Click Refresh UML From Code to read the current project into an editable UML diagram.\""))
     }
 
@@ -21,6 +22,7 @@ class PrimaryActionCopyRegressionTest {
 
         assertTrue(source.contains("primaryActionButton.text = \"Apply Approved Changes\""))
         assertTrue(source.contains("guideLabel.text = \"Review approved the reviewed code patch. Apply Approved Changes to write it to disk, then Blueprint will validate the project.\""))
+        assertTrue(source.contains("updateNextStepBanner(\"Next: Apply Approved Changes\", \"Review approved the current patch, so this is the safe time to write it to disk.\")"))
     }
 
     @Test
@@ -29,5 +31,13 @@ class PrimaryActionCopyRegressionTest {
 
         assertTrue(source.contains("primaryActionButton.text = \"Generate Code Diff\""))
         assertTrue(source.contains("guideLabel.text = \"Change the UML with chat or direct edits, then Generate Code Diff.\""))
+        assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", \"Turn the current UML edits into a reviewed code patch before apply.\")"))
+    }
+
+    @Test
+    fun `next step banner includes failed validation guidance`() {
+        val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
+
+        assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", \"Validation failed after apply, so the reviewed code patch needs another pass.\")"))
     }
 }
