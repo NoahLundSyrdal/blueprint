@@ -849,6 +849,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val validationResults = mutableMapOf<String, ProjectValidationService.ValidationResult>()
     private val lastReviewedUmlByNodeId = mutableMapOf<String, String>()
     private var refreshedAfterApply = false
+    private var postApplyChangedPaths: List<String> = emptyList()
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -1848,6 +1849,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun loadGeneratedUml(generated: PythonUmlGenerator.GeneratedUml) {
         setUmlEditorText(generated.text, pendingEdits = false)
+        focusChangedEntityAfterRefresh()
         umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned."
         graphArea.text = buildString {
             appendLine("Abstracted Python codebase to editable UML.")
@@ -2952,6 +2954,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
                     status(result.summaryLine())
                     val changedPaths = applyResult.applied.distinct().sorted()
+                    postApplyChangedPaths = changedPaths
                     val summaryLine = buildString {
                         append("Applied ")
                         append(if (changedPaths.size == 1) "1 file." else "${changedPaths.size} files.")
@@ -2972,6 +2975,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         "Undo Last Apply is not available for this apply result."
                     }
                     val umlRefreshLine = "Code-backed UML was refreshed from disk after apply."
+                    val highlightLine = "Blueprint highlighted the best-matching changed entity when it could."
                     val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)
                     val changedPathsBlock = buildString {
                         appendLine("Changed paths:")
@@ -2983,7 +2987,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     Messages.showInfoMessage(
                         project,
-                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, validationBlock)
+                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
                             .filter { it.isNotBlank() }
                             .joinToString("\n\n"),
                         "Blueprint - Apply Complete"
@@ -2994,7 +2998,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
-                            listOf(summaryLine, whatChanged, refreshNote, runNote, undoNote, umlRefreshLine)
+                            listOf(summaryLine, whatChanged, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)
                                 .filter { it.isNotBlank() }
                                 .joinToString("\n"),
                         )
@@ -3764,6 +3768,20 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (nodeList.selectedValue != null) {
             refreshArtifactSummary()
         }
+    }
+
+    private fun focusChangedEntityAfterRefresh() {
+        val changedPath = postApplyChangedPaths.firstOrNull() ?: return
+        val ir = project.service<IRStore>().load() ?: return
+        val matched = ir.components.firstOrNull { component ->
+            val sourcePath = component.sourceRef?.path
+            sourcePath != null && changedPath.endsWith(sourcePath)
+        } ?: return
+        postApplyChangedPaths = emptyList()
+        selectedCanvasId = matched.id
+        updateMiniGraph(project.service<DependencyGraphService>().analyze())
+        status("Refreshed UML and highlighted ${matched.name} from $changedPath")
+        logActivity("Refreshed UML highlighted ${matched.name} from $changedPath.")
     }
 
     private fun normalizedUmlText(): String = PatchFreshness.normalize(umlEditor.text)

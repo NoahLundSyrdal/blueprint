@@ -13,9 +13,10 @@ class WhatChangedAfterApplyReceiptTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("appendChat("))
-        assertTrue(source.contains("listOf(summaryLine, whatChanged, refreshNote, runNote, undoNote, umlRefreshLine)"))
+        assertTrue(source.contains("listOf(summaryLine, whatChanged, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)"))
         assertTrue(source.contains("val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)"))
         assertTrue(source.contains("val undoNote = if (undoLastApplyButton.isEnabled)"))
         assertTrue(source.contains("val umlRefreshLine = \"Code-backed UML was refreshed from disk after apply.\""))
+        assertTrue(source.contains("val highlightLine = \"Blueprint highlighted the best-matching changed entity when it could.\""))
     }
 }
