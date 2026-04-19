@@ -2018,7 +2018,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "create patch",
             "apply patch",
             "refresh from code",
-            "code nodes",
             "apply",
         ).any { it in this }
 
