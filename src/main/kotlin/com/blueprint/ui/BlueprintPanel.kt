@@ -3413,8 +3413,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     verifyInUmlButton.isEnabled = true
                     val openChangedFilesNote = when (changedPaths.size) {
                         0 -> ""
-                        1 -> "Next: Open Changed File to inspect what Blueprint wrote before you rerun the app."
-                        else -> "Next: Open Changed Files to inspect what Blueprint wrote before you rerun the app."
+                        1 -> "Optional: Open Changed File to inspect what Blueprint wrote after you verify the refreshed UML and rerun the app."
+                        else -> "Optional: Open Changed Files to inspect what Blueprint wrote after you verify the refreshed UML and rerun the app."
                     }
                     Messages.showInfoMessage(
                         project,
@@ -3516,7 +3516,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nVerify In UML reruns that code reread when you want an explicit verification click. Refresh UML From Code stays available for the general refresh action. Open Changed Files to inspect what Blueprint wrote before you rerun the app.")
+            append("\nVerify In UML reruns that code reread when you want an explicit verification click. Then run the changed app to confirm the feature exists. Open Changed Files remains available if you want to inspect what Blueprint wrote after verification.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
@@ -4698,7 +4698,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             graph.readyNodes().any { it.id != selected.id } ->
                 "Next: Generate Code Diff" to "Another UML-backed change is ready when you want a new reviewed code patch."
             else ->
-                "Next: Refresh UML From Code" to "All current work is applied. Re-abstract the updated codebase."
+                "Next: Refresh UML From Code" to "All current work is applied. Refresh UML From Code to verify the updated code-backed UML, then run the changed app or make another change."
         }
     }
 

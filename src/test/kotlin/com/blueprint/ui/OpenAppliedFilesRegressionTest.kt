@@ -18,7 +18,7 @@ class OpenAppliedFilesRegressionTest {
         assertTrue(source.contains("add(openAppliedFilesButton)"))
         assertTrue(source.contains("openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()"))
         assertTrue(source.contains("openAppliedFilesButton.text = if (changedPaths.size == 1) \"Open Changed File\" else \"Open Changed Files\""))
-        assertTrue(source.contains("Open Changed Files to inspect what Blueprint wrote before you rerun the app."))
+        assertTrue(source.contains("Open Changed Files remains available if you want to inspect what Blueprint wrote after verification."))
     }
 
     @Test
