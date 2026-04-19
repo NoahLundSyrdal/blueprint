@@ -12,8 +12,8 @@ class RunCommandGuidanceRegressionTest {
     fun `apply success and empty state surface inferred run guidance`() {
         val source = Files.readString(sourcePath)
 
-        assertTrue(source.contains("val runNote = inferredRunNote()"))
-        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
+        assertTrue(source.contains("val runNote = inferredRunNote(pythonContext)"))
+        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
         assertTrue(source.contains("val runGuide = inferredRunGuideText(context)"))
         assertTrue(source.contains("When you want to run the app, start with:"))
         assertTrue(source.contains("Run the changed app with:"))

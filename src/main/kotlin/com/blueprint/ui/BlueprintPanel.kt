@@ -3187,7 +3187,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                     }
                     val refreshNote = "Refresh UML From Code to verify."
-                    val runNote = inferredRunNote()
+                    val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
+                    val validationCommand = project.service<ProjectValidationService>().selectedCommand()
+                    val runNote = inferredRunNote(pythonContext)
+                    val commandBlock = commandReviewBlock(validationCommand, pythonContext)
                     val undoNote = if (undoLastApplyButton.isEnabled) {
                         "Undo Last Apply is available if you want to roll back this reviewed code patch."
                     } else {
@@ -3206,7 +3209,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     Messages.showInfoMessage(
                         project,
-                        listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
+                        listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
                             .filter { it.isNotBlank() }
                             .joinToString("\n\n"),
                         "Blueprint - Apply Complete"
@@ -3217,7 +3220,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram, or use Undo Last Apply to roll it back."
                         appendChat(
                             "Blueprint",
-                            listOf(summaryLine, whatChanged, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)
+                            listOf(summaryLine, whatChanged, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine)
                                 .filter { it.isNotBlank() }
                                 .joinToString("\n"),
                         )
@@ -3544,6 +3547,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val report = graph.analyze()
         val readiness = graph.readinessFor(n)
+        val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
+        val validationCommand = project.service<ProjectValidationService>().selectedCommand()
         updateOverviewSummary(report)
         val reviewFreshness = reviewFreshnessFor(n, exec)
         val canApply = n.executionStatus != ExecutionStatus.APPLIED &&
@@ -3573,19 +3578,30 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 review = it,
                 readiness = readiness,
                 validation = validation,
-                validationCommand = project.service<ProjectValidationService>().selectedCommand(),
+                validationCommand = validationCommand,
             )
         }
+        val commandBlock = commandReviewBlock(validationCommand, pythonContext)
         safetyArea.text = when {
             validation?.status == ProjectValidationService.ValidationResult.Status.FAIL -> validationReportText(validation)
             validation?.status == ProjectValidationService.ValidationResult.Status.PASS -> validationReportText(validation)
             validation?.status == ProjectValidationService.ValidationResult.Status.SKIPPED -> validationReportText(validation)
             issues.isNotEmpty() || scopeDrops.isNotEmpty() ->
-                (issues + scopeDrops).distinct().joinToString("\n") { "- $it" }
-            reviewDetails != null -> reviewDetails.joinToString("\n")
-            n.executionStatus == ExecutionStatus.FAILED -> "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing."
-            exec?.status == "PARTIAL" -> "Execution is PARTIAL. Inspect the diff and validation notes before applying."
-            exec?.status == "BLOCKED" -> "Execution is BLOCKED. Do not apply until the node is revised."
+                listOf((issues + scopeDrops).distinct().joinToString("\n") { "- $it" }, commandBlock).joinToString("\n\n")
+            reviewDetails != null -> listOf(reviewDetails.joinToString("\n"), commandBlock).joinToString("\n\n")
+            n.executionStatus == ExecutionStatus.FAILED -> listOf(
+                "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing.",
+                commandBlock,
+            ).joinToString("\n\n")
+            exec?.status == "PARTIAL" -> listOf(
+                "Execution is PARTIAL. Inspect the diff and validation notes before applying.",
+                commandBlock,
+            ).joinToString("\n\n")
+            exec?.status == "BLOCKED" -> listOf(
+                "Execution is BLOCKED. Do not apply until the node is revised.",
+                commandBlock,
+            ).joinToString("\n\n")
+            !exec?.patches.isNullOrEmpty() -> commandBlock
             else -> "No safety issues reported yet."
         }
         dependencyBlockArea.text = if (readiness.reasons.isEmpty()) {
@@ -3806,6 +3822,24 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "When you want to run the app, start with: $it or click Run In Blueprint." }.orEmpty()
+
+    private fun validationCommandReviewText(command: String?): String =
+        command?.takeIf { it.isNotBlank() }
+            ?.let { "Validation after apply will run: $it" }
+            ?: "Validation after apply: no command inferred yet, so verify manually if you need extra checks."
+
+    private fun runCommandReviewText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
+        context.runCommands.firstOrNull()?.let { "Run after apply with: $it" }
+            ?: "Run after apply: Blueprint could not infer a command yet, so open the project entrypoint manually to verify the feature."
+
+    private fun commandReviewBlock(
+        validationCommand: String?,
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ): String = listOf(
+        "Before apply, Blueprint expects:",
+        "- ${validationCommandReviewText(validationCommand)}",
+        "- ${runCommandReviewText(context)}",
+    ).joinToString("\n")
 
     private fun inferredRunNote(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
         context.runCommands.firstOrNull()?.let { "Run the changed app with: $it, or click Run In Blueprint to stream it here." }

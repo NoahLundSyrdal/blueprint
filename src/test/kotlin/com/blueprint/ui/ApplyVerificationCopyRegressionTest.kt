@@ -22,7 +22,8 @@ class ApplyVerificationCopyRegressionTest {
         assertTrue(source.contains("append(\"\\n\\nOutput excerpt:\\n\")"))
         assertTrue(source.contains("Messages.showWarningDialog("))
         assertTrue(source.contains("validationReportText(result),"))
-        assertTrue(source.contains("val runNote = inferredRunNote()"))
-        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
+        assertTrue(source.contains("val runNote = inferredRunNote(pythonContext)"))
+        assertTrue(source.contains("val commandBlock = commandReviewBlock(validationCommand, pythonContext)"))
+        assertTrue(source.contains("listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)"))
     }
 }
