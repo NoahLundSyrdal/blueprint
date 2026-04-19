@@ -3294,7 +3294,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             }
                         )
                     }
-                    val refreshNote = "Refresh UML From Code to verify."
+                    val refreshNote = "Refresh UML From Code to verify the updated code-backed UML."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3362,7 +3362,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                         guideLabel.text = listOf(
                             "Apply complete. Review the refreshed code-backed UML now.",
-                            "Refresh UML From Code to verify, or refresh again anytime after more edits.",
+                            "Refresh UML From Code to verify the updated code-backed UML, or refresh again anytime after more edits.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
