@@ -47,6 +47,6 @@ class FirstRunChecklistScopeNoteTest {
 
         assertTrue(text.contains("Run readiness: Blueprint has not inferred a project run command yet."))
         assertTrue(text.contains("Run decision: Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
-        assertTrue(text.contains("- Scope note: 1 Python path was skipped during Refresh UML From Code (unsupported or non-importable Python file). Inspect Skipped paths like scripts/bootstrap.py if the UML looks incomplete."))
+        assertTrue(text.contains("- Scope note: 1 Python path was skipped during Refresh UML From Code (unsupported or non-importable Python file). The current UML still reflects the Python files Blueprint could read. Inspect Skipped paths like scripts/bootstrap.py if the UML looks incomplete or you need higher confidence."))
     }
 }

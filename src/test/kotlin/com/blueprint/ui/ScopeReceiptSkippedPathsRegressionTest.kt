@@ -11,7 +11,8 @@ class ScopeReceiptSkippedPathsRegressionTest {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
         assertTrue(source.contains("- Scope note: Some Python paths were skipped during Refresh UML From Code."))
-        assertTrue(source.contains("- If the UML looks incomplete, inspect the skipped paths below."))
-        assertTrue(source.contains("Some Python paths were skipped during Refresh UML From Code. If the UML looks incomplete, inspect these skipped paths:"))
+        assertTrue(source.contains("- Confidence: the current UML still reflects the Python files Blueprint could read."))
+        assertTrue(source.contains("- If the UML looks incomplete or you need higher confidence, inspect the skipped paths below."))
+        assertTrue(source.contains("Some Python paths were skipped during Refresh UML From Code. The current UML still reflects the Python files Blueprint could read. If the UML looks incomplete or you need higher confidence, inspect these skipped paths:"))
     }
 }

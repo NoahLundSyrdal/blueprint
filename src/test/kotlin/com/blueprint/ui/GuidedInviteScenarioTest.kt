@@ -278,7 +278,7 @@ class GuidedInviteScenarioTest {
         assertTrue(patchReady.contains("Run readiness: Blueprint inferred python main.py for this project."))
         assertTrue(patchReady.contains("Run decision: Blueprint inferred this command because the current Python folder looks runnable and includes likely entry files such as app/main.py, app.py, manage.py. Run command: python main.py"))
         assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
-        assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). Inspect Skipped paths like generated/schema.py, build/tmp.py if the UML looks incomplete."))
+        assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). The current UML still reflects the Python files Blueprint could read. Inspect Skipped paths like generated/schema.py, build/tmp.py if the UML looks incomplete or you need higher confidence."))
         assertTrue(patchReady.contains("[next] Review approved -> confirm Blueprint says the reviewed code patch is safe to apply."))
         assertTrue(patchReady.contains("Blueprint will validate after apply with: pytest"))
 

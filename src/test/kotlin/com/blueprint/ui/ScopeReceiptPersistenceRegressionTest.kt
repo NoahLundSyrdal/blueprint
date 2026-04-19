@@ -17,6 +17,7 @@ class ScopeReceiptPersistenceRegressionTest {
         assertTrue(source.contains("Current Scope Receipt"))
         assertTrue(source.contains("- Included files: "))
         assertTrue(source.contains("- Skipped files: "))
+        assertTrue(source.contains("- Confidence: the current UML still reflects the Python files Blueprint could read."))
         assertTrue(source.contains("- Top skipped reasons: "))
         assertTrue(source.contains("border = BorderFactory.createTitledBorder(\"Current Scope Receipt\")"))
     }
