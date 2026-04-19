@@ -279,21 +279,21 @@ internal data class FirstRunChecklistState(
         }
         val validationLine = when {
             !appliedReady && validationCommand.isNullOrBlank() ->
-                "No validation command was inferred. Blueprint will validate after apply if it can infer a command; otherwise verify manually after Apply Approved Changes."
+                "Validation readiness: not inferred yet. Blueprint will validate after apply if it can infer a command; otherwise verify manually after Apply Approved Changes."
             !appliedReady ->
-                "Blueprint will validate after apply with: $validationCommand"
+                "Validation readiness: ready. Blueprint will validate after apply with: $validationCommand"
             validationPassed && validationCommand.isNullOrBlank() ->
-                "Validation passed after apply. Blueprint did not need a separate validation command."
+                "Validation readiness: passed after apply. Blueprint did not need a separate validation command."
             validationPassed ->
-                "Validation passed after apply with: $validationCommand"
+                "Validation readiness: passed after apply with: $validationCommand"
             validationReady && validationCommand.isNullOrBlank() ->
-                "Validation ran after apply. Review the result before you continue."
+                "Validation readiness: ran after apply. Review the result before you continue."
             validationReady ->
-                "Validation ran after apply with: $validationCommand. Review the result before you continue."
+                "Validation readiness: ran after apply with: $validationCommand. Review the result before you continue."
             validationCommand.isNullOrBlank() ->
-                "No validation command was inferred. After Apply Approved Changes, verify manually or run your preferred checks."
+                "Validation readiness: not inferred. After Apply Approved Changes, verify manually or run your preferred checks."
             else ->
-                "Validation is ready to run after apply with: $validationCommand"
+                "Validation readiness: ready to run after apply with: $validationCommand"
         }
         val runLine = when {
             runCommand.isNullOrBlank() ->
@@ -313,9 +313,11 @@ internal data class FirstRunChecklistState(
         }
         val runReadinessLine = runReadinessSummary(runCommand, runEntryCandidates, runVerified)
         val runDecisionLine = runDecisionSummary(runCommand, runEntryCandidates, runVerified)
+        val readinessLine = readinessSummary(runCommand, runEntryCandidates, validationCommand, validationReady, validationPassed, runVerified)
         return buildList {
             add("First-run checklist:")
             resetAdviceLine?.let { add(it) }
+            add(readinessLine)
             add(runReadinessLine)
             add(runDecisionLine)
             add("${markerForStep(1, currentStep, codeMapReady)} Refresh UML From Code -> load the current Python project into a code-backed UML diagram.")
@@ -389,6 +391,37 @@ private fun runReadinessSummary(runCommand: String?, runEntryCandidates: List<St
     !runCommand.isNullOrBlank() -> "Run readiness: ready. Blueprint inferred $runCommand for this project."
     runEntryCandidates.isEmpty() -> "Run readiness: no runnable Python entrypoint inferred yet."
     else -> "Run readiness: likely entry files found, but no single safe default command yet."
+}
+
+private fun validationReadinessLabel(
+    validationCommand: String?,
+    validationReady: Boolean,
+    validationPassed: Boolean,
+): String = when {
+    validationPassed && validationCommand.isNullOrBlank() -> "passed after apply"
+    validationPassed -> "passed after apply"
+    validationReady && validationCommand.isNullOrBlank() -> "ran after apply"
+    validationReady -> "ran after apply"
+    validationCommand.isNullOrBlank() -> "not inferred"
+    else -> "ready"
+}
+
+private fun readinessSummary(
+    runCommand: String?,
+    runEntryCandidates: List<String>,
+    validationCommand: String?,
+    validationReady: Boolean,
+    validationPassed: Boolean,
+    runVerified: Boolean = false,
+): String {
+    val runStatus = when {
+        !runCommand.isNullOrBlank() && runVerified -> "verified"
+        !runCommand.isNullOrBlank() -> "ready"
+        runEntryCandidates.isEmpty() -> "not inferred"
+        else -> "partial"
+    }
+    val validationStatus = validationReadinessLabel(validationCommand, validationReady, validationPassed)
+    return "Blueprint readiness: run $runStatus; validation $validationStatus."
 }
 
 private fun runDecisionSummary(runCommand: String?, runEntryCandidates: List<String>, runVerified: Boolean = false): String = when {

@@ -23,6 +23,7 @@ class FirstRunChecklistScopeNoteTest {
         ).checklistText()
 
         assertFalse(text.contains("Scope note:"))
+        assertTrue(text.contains("Blueprint readiness: run not inferred; validation not inferred."))
         assertTrue(text.contains("Run readiness: no runnable Python entrypoint inferred yet."))
         assertTrue(text.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
         assertTrue(text.contains("Try this fallback:"))
@@ -46,6 +47,7 @@ class FirstRunChecklistScopeNoteTest {
             ),
         ).checklistText()
 
+        assertTrue(text.contains("Blueprint readiness: run not inferred; validation not inferred."))
         assertTrue(text.contains("Run readiness: no runnable Python entrypoint inferred yet."))
         assertTrue(text.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
         assertTrue(text.contains("Try this fallback:"))

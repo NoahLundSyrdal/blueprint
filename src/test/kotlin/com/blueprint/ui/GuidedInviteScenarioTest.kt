@@ -251,6 +251,7 @@ class GuidedInviteScenarioTest {
             runVerified = false,
         ).checklistText()
         assertTrue(fresh.contains("First-run checklist:"))
+        assertTrue(fresh.contains("Blueprint readiness: run not inferred; validation not inferred."))
         assertTrue(fresh.contains("Run readiness: no runnable Python entrypoint inferred yet."))
         assertTrue(fresh.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
         assertTrue(fresh.contains("[next] Refresh UML From Code -> load the current Python project into a code-backed UML diagram."))
@@ -258,7 +259,7 @@ class GuidedInviteScenarioTest {
         assertTrue(fresh.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
         assertTrue(fresh.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))
         assertTrue(fresh.contains("4. Confirm the changed feature exists."))
-        assertTrue(fresh.contains("No validation command was inferred."))
+        assertTrue(fresh.contains("Validation readiness: not inferred yet."))
 
         val patchReady = FirstRunChecklistState(
             codeMapReady = true,
@@ -278,12 +279,13 @@ class GuidedInviteScenarioTest {
                 PythonProjectAnalyzer.SkippedFile("notes.txt.py", "unsupported or non-importable Python file"),
             ),
         ).checklistText()
+        assertTrue(patchReady.contains("Blueprint readiness: run ready; validation ready."))
         assertTrue(patchReady.contains("Run readiness: ready. Blueprint inferred python main.py for this project."))
         assertTrue(patchReady.contains("Run decision: Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as app/main.py, app.py, manage.py. Recommended command: python main.py. Other likely entry files: app.py, manage.py."))
         assertTrue(patchReady.contains("[done] Generate Code Diff -> create a reviewed code patch from your UML edits."))
         assertTrue(patchReady.contains("- Scope note: 3 Python paths were skipped during Refresh UML From Code (2 generated or cache file, unsupported or non-importable Python file). Blueprint still built the current UML from the Python files it could read, so inspect skipped paths like generated/schema.py, build/tmp.py if anything looks incomplete. Fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."))
         assertTrue(patchReady.contains("[next] Review approved -> confirm Blueprint says the reviewed code patch is safe to apply."))
-        assertTrue(patchReady.contains("Blueprint will validate after apply with: pytest"))
+        assertTrue(patchReady.contains("Validation readiness: ready. Blueprint will validate after apply with: pytest"))
 
         val applied = FirstRunChecklistState(
             codeMapReady = true,
@@ -298,11 +300,12 @@ class GuidedInviteScenarioTest {
             runVerified = true,
         ).checklistText()
         assertTrue(applied.contains("Freshness: the code-backed UML is refreshed from the current files on disk."))
+        assertTrue(applied.contains("Blueprint readiness: run verified; validation passed after apply."))
         assertTrue(applied.contains("Run readiness: verified. Blueprint verified python main.py for this project."))
         assertTrue(applied.contains("[done] Apply Approved Changes -> write the approved code patch to disk."))
         assertTrue(applied.contains("[done] Refresh UML From Code -> verify the code-backed UML after apply."))
         assertTrue(applied.contains("[done] Run the changed app -> Run verified with: python main.py"))
-        assertTrue(applied.contains("Validation passed after apply with: pytest"))
+        assertTrue(applied.contains("Validation readiness: passed after apply with: pytest"))
 
         val noRunCommand = FirstRunChecklistState(
             codeMapReady = true,
@@ -322,7 +325,7 @@ class GuidedInviteScenarioTest {
         assertTrue(noRunCommand.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
         assertTrue(noRunCommand.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))
         assertTrue(noRunCommand.contains("4. Confirm the changed feature exists."))
-        assertTrue(noRunCommand.contains("Validation ran after apply. Review the result before you continue."))
+        assertTrue(noRunCommand.contains("Validation readiness: ran after apply. Review the result before you continue."))
     }
 
     @Test
