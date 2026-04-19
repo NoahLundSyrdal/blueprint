@@ -5016,7 +5016,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val whatToLookForChecklist = manualDemoWhatToLookForChecklist(state)
         Messages.showInfoMessage(
             project,
-            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in Blueprint, the launched app, a browser, or terminal output.\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
+            "Manual demo runner\n\n1. Refresh UML From Code\n2. Use Try This Change or edit the UML\n3. Generate Code Diff\n4. Apply Approved Changes\n5. Refresh UML From Code to verify the updated code-backed UML\n6. Run the changed app with: $runCommand\n7. Confirm the expected visible result in Blueprint, the launched app, a browser, or terminal output.\n\nWhat to look for:\n$whatToLookForChecklist\n\nExpected visible result:\n$expectedVisibleResult\n\nBlueprint records the run command and the visible result in Activity so the full demo path reads like a receipt.",
             "Blueprint - Run Demo Step"
         )
         logActivity("Demo e2e step passed: Run the changed app with $runCommand. Confirmed visible result: $expectedVisibleResult")
