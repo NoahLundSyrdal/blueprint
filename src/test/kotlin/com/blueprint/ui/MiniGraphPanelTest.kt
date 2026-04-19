@@ -98,8 +98,8 @@ class MiniGraphPanelTest {
         val cardTooltip = panel.getToolTipText(mouseEvent(panel, 40, 70)).orEmpty()
         val badgeTooltip = panel.getToolTipText(mouseEvent(panel, 42, 157)).orEmpty()
 
-        assertTrue(cardTooltip.contains("Use the open file badge or double-click to open the source file."))
-        assertTrue(badgeTooltip.contains("Open the source file for this code-backed card."))
+        assertTrue(cardTooltip.contains("Use the source file badge or double-click to open the source file. This does not run Generate Code Diff."))
+        assertTrue(badgeTooltip.contains("Open source file for this code-backed card. This does not run Generate Code Diff."))
     }
 
     @Test
