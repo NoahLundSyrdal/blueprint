@@ -1055,6 +1055,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
+    private val verifyInUmlButton = JButton("Verify In UML").apply {
+        isEnabled = false
+        toolTipText = "Refresh UML From Code to reread the changed files from disk and verify the updated code-backed UML after apply."
+        addActionListener { refreshUmlAfterApplyVerification() }
+    }
     private val openAppliedFilesButton = JButton("Open Changed Files").apply {
         isEnabled = false
         toolTipText = "Open the file(s) Blueprint last wrote to disk. This stays separate from Apply Approved Changes."
@@ -1701,6 +1706,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(previewDiffButton)
                 add(applyApprovedButton)
+                add(verifyInUmlButton)
                 add(openAppliedFilesButton)
                 add(undoLastApplyButton)
             },
@@ -3342,7 +3348,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             }
                         )
                     }
-                    val refreshNote = "Refresh UML From Code to verify."
+                    val refreshNote = "Verify In UML rereads the changed code from disk, or use Refresh UML From Code to verify again later."
                     val pythonContext = project.service<PythonProjectAnalyzer>().analyze()
                     val validationCommand = project.service<ProjectValidationService>().selectedCommand()
                     val runNote = inferredRunNote(pythonContext)
@@ -3365,6 +3371,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     }.trim()
                     val verifyChecklist = buildString {
                         appendLine("Verify in UML tab:")
+                        appendLine("- Verify In UML rereads the changed code from disk.")
                         appendLine("- $summaryLine")
                         appendLine("- ${result.summaryLine()}")
                         if (changedPaths.isEmpty()) {
@@ -3386,6 +3393,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     )
                     openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
                     openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
+                    verifyInUmlButton.isEnabled = true
                     val openChangedFilesNote = when (changedPaths.size) {
                         0 -> ""
                         1 -> "Next: Open Changed File to inspect what Blueprint wrote before you rerun the app."
@@ -3410,7 +3418,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         )
                         guideLabel.text = listOf(
                             "Apply complete. Review the refreshed code-backed UML now.",
-                            "Refresh UML From Code to verify the updated code-backed UML, or refresh again anytime after more edits.",
+                            "Verify In UML rereads the changed code from disk. Refresh UML From Code stays available anytime after more edits.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
@@ -3488,7 +3496,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             appendLine(summary.summaryLine)
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
-            append("\nOpen Changed Files to inspect what Blueprint wrote before you rerun the app.")
+            append("\nVerify In UML rereads the changed code from disk. Open Changed Files to inspect what Blueprint wrote before you rerun the app.")
         }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
@@ -3835,6 +3843,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val openAppliedFilesEnabled = n.executionStatus == ExecutionStatus.APPLIED && postApplyInlineSummary?.changedPaths.orEmpty().isNotEmpty()
         openAppliedFilesButton.isEnabled = openAppliedFilesEnabled
         openAppliedFilesButton.text = if (postApplyInlineSummary?.changedPaths?.size == 1) "Open Changed File" else "Open Changed Files"
+        verifyInUmlButton.isEnabled = n.executionStatus == ExecutionStatus.APPLIED
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | ${reviewFreshness.reviewedAtLine.lowercase(Locale.US)} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
         val inlineSummary = postApplyInlineSummary
         reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
@@ -4486,8 +4495,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     ): String {
         val summary = PatchChangeSummary.reviewSummary(exec)
         val scopeSentence = reviewScopeSentence(exec)
+        val changedFilesHeader = reviewChangedFilesHeader(exec)
         val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
+            appendLine(changedFilesHeader)
             appendLine("Diff status: ${freshness.badge}")
             appendLine(freshness.reviewedAtLine)
             appendLine(freshness.warning)
@@ -4528,6 +4539,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         return "Why review approved this patch: $changePhrase $scopeReason, and no blocking safety issues were reported.$evidenceReason"
     }
 
+    private fun reviewChangedFilesHeader(exec: ExecutionArtifact?): String {
+        val count = exec?.patches.orEmpty().map { it.path }.distinct().size
+        return when (count) {
+            0 -> "Changed files: 0 files"
+            1 -> "Changed files: 1 file"
+            else -> "Changed files: $count files"
+        }
+    }
+
     private fun reviewScopeSentence(exec: ExecutionArtifact?): String {
         val paths = exec?.patches.orEmpty().map { it.path }.distinct()
         return when (paths.size) {
@@ -4561,6 +4581,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             hours < 24 -> "reviewed $hours hr ago"
             else -> "reviewed $days day${if (days == 1L) "" else "s"} ago"
         }
+    }
+
+    private fun refreshUmlAfterApplyVerification() {
+        verifyInUmlButton.isEnabled = false
+        logActivity("Verify In UML rereads the changed code from disk after apply.")
+        status("Verifying applied changes in UML")
+        generateProjectUml()
     }
 
     private fun focusChangedEntityAfterRefresh() {

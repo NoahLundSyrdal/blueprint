@@ -21,6 +21,6 @@ class PostApplyInlineSummaryRegressionTest {
         assertTrue(source.contains("reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {"))
         assertTrue(source.contains("postApplyReviewSummary(exec, inlineSummary)"))
         assertTrue(source.contains("appendLine(summary.verifyChecklist)"))
-        assertTrue(source.contains("append(\"\\nOpen Changed Files to inspect what Blueprint wrote before you rerun the app.\")"))
+        assertTrue(source.contains("append(\"\\nVerify In UML rereads the changed code from disk. Open Changed Files to inspect what Blueprint wrote before you rerun the app.\")"))
     }
 }
