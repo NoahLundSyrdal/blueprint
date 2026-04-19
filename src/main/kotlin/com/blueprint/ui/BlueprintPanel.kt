@@ -323,6 +323,7 @@ internal object GuidedInviteScenario {
                 "[next] Abstract Code to UML -> load the current code map first so Blueprint can choose a fresh demo change.",
                 "[wait] Try This Change -> available after the current code map loads.",
                 "[wait] Generate Code Diff -> available after the UML draft is updated.",
+                "[wait] Review Approved Changes -> wait for Blueprint to approve the reviewed code patch before apply.",
                 "[wait] Apply Approved Changes -> available after review approves the patch.",
                 "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
                 "",
@@ -359,7 +360,8 @@ internal object GuidedInviteScenario {
                 "${stepMarker(2, currentStep, false)} Try This Change -> use the button to load the fresh prompt into chat first."
             },
             "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
-            "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk.",
+            "${stepMarker(3, currentStep, state.reviewedDiffReady)} Review Approved Changes -> expect Blueprint to approve the reviewed code patch before apply.",
+            "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval.",
             "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
             "",
             "Your own change:",
