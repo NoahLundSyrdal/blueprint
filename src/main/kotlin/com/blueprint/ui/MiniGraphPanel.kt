@@ -172,18 +172,13 @@ class MiniGraphPanel : JPanel() {
             }
         })
         addMouseWheelListener { e ->
-            if (e.isMetaDown || e.isControlDown) {
-                // Pinch-to-zoom (macOS translates trackpad pinch to Ctrl+scroll)
-                // Use preciseWheelRotation for smooth trackpad response
-                val delta = -e.preciseWheelRotation * zoomStep
-                applyZoom(zoom + delta, pivotX = e.x.toDouble(), pivotY = e.y.toDouble())
-                e.consume()
-            } else {
-                // Two-finger trackpad pan: forward to the parent JScrollPane.
-                // Adding a MouseWheelListener stops AWT's automatic parent propagation,
-                // so we dispatch manually so panning still works.
-                parent?.dispatchEvent(e)
-            }
+            // All vertical scroll events zoom (matches IntelliJ diagram viewer convention).
+            // On macOS, two-finger scroll and pinch both arrive as plain MouseWheelEvent
+            // without Ctrl unless the user has enabled Accessibility → Zoom scroll gesture.
+            // Panning is handled by click-and-drag instead.
+            val delta = -e.preciseWheelRotation * zoomStep
+            applyZoom(zoom + delta, pivotX = e.x.toDouble(), pivotY = e.y.toDouble())
+            e.consume()
         }
     }
 
