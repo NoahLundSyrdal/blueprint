@@ -97,7 +97,7 @@ class GuidedInviteScenarioTest {
         assertTrue(middle.contains("Try This Change: \"add an InviteReminder entity\""))
         assertTrue(middle.contains("InviteReminder linked from Invite"))
         assertTrue(middle.contains("Review Approved Changes -> expect Blueprint to approve the reviewed code patch before apply."))
-        assertTrue(middle.indexOf("Generate Code Diff -> expect a reviewed diff") < middle.indexOf("Review Approved Changes -> expect Blueprint to approve the reviewed code patch before apply."))
+        assertTrue(middle.indexOf("Generate Code Diff -> expect a reviewed code patch") < middle.indexOf("Review Approved Changes -> expect Blueprint to approve the reviewed code patch before apply."))
         assertTrue(middle.indexOf("Review Approved Changes -> expect Blueprint to approve the reviewed code patch before apply.") < middle.indexOf("Apply Approved Changes -> expect the imported invite patch to be written to disk after review approval."))
 
         val loadedPrompt = GuidedInviteScenario.checklistText(
