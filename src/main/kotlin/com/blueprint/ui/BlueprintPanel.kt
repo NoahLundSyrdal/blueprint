@@ -397,7 +397,8 @@ internal object PatchChangeSummary {
 
     fun semanticChangeLines(exec: ExecutionArtifact?, changedPaths: Collection<String>? = null): List<String> {
         if (exec == null) return emptyList()
-        val filtered = if (changedPaths == null) exec.patches else exec.patches.filter { it.path in changedPaths.toSet() }
+        val changedPathSet = changedPaths?.toSet()
+        val filtered = if (changedPathSet == null) exec.patches else exec.patches.filter { it.path in changedPathSet }
         return semanticChanges(filtered, exec.summary)
     }
 
