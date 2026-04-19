@@ -32,8 +32,24 @@ class PythonProjectAnalyzer(private val project: Project) {
         fun isPythonLikely(): Boolean =
             configFiles.isNotEmpty() || sourceRoots.isNotEmpty() || testRoots.isNotEmpty()
 
+        /**
+         * Returns a short plain-English checklist for the Python context panel.
+         */
+        fun summaryChecklist(): String =
+            buildString {
+                appendLine("Python quick checklist")
+                appendLine("- Source roots: ${sourceRoots.joinToString(", ").ifBlank { "No Python source roots detected yet." }}")
+                appendLine("- Validation command: ${testCommands.firstOrNull() ?: "No validation command inferred yet."}")
+                appendLine("- Run command: ${runCommands.firstOrNull() ?: "No run command inferred yet."}")
+            }.trim()
+
+        /**
+         * Returns the structured Python project context used in the context panel and prompts.
+         */
         fun promptContext(): String =
             buildString {
+                appendLine(summaryChecklist())
+                appendLine()
                 appendLine("PYTHON_PROJECT_CONTEXT")
                 appendLine("isPythonLikely: ${isPythonLikely()}")
                 appendLine("packageManager: $packageManager")

@@ -19,6 +19,10 @@ class PythonProjectAnalyzerDetectionTest {
             notes = emptyList(),
         ).promptContext()
 
+        assertTrue(prompt.contains("Python quick checklist"))
+        assertTrue(prompt.contains("- Source roots: app, src, src/domain"))
+        assertTrue(prompt.contains("- Validation command: python -m pytest"))
+        assertTrue(prompt.contains("- Run command: python app.py"))
         assertTrue(prompt.contains("sourceRoots: app, src, src/domain"))
         assertTrue(prompt.contains("suggestedRunCommands: python app.py"))
         assertTrue(prompt.contains("Prefer Python modules under the detected source roots."))
