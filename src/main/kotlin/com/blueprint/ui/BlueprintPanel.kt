@@ -457,7 +457,8 @@ internal object GuidedInviteScenario {
                 "[done] Refresh UML From Code -> current code map is loaded.",
                 if (state.promptReady) "[done] Guided demo prompt loaded: \"${state.prompt}\"." else "[wait] Guided demo prompt will load after the current code map is ready.",
                 "[done] Guided demo changes already exist in this sandbox.",
-                "[next] Reset the invite demo sandbox with Reset Demo Sandbox for ${state.resetPath}, then use Try This Change to load a fresh prompt for the clean sandbox.",
+                "[next] Click Reset Demo Sandbox to restore ${state.resetPath} to the baseline invite demo file.",
+                "[next] Then click Try This Change to load a fresh prompt for the clean sandbox.",
                 "[wait] Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change.",
                 "[wait] Blueprint reviews the fresh code patch before apply.",
                 "[wait] Apply Approved Changes -> blocked until review approves the fresh reviewed code patch.",
@@ -1020,7 +1021,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 if (GuidedInviteScenario.resetImportedInviteFile(project.basePath)) {
                     appendChat(
                         "Blueprint",
-                        "Reset the invite demo sandbox at ${state.resetPath}. Refresh UML From Code, then use Try This Change to load a fresh prompt for the clean sandbox."
+                        "Reset Demo Sandbox restored ${state.resetPath} to the baseline invite demo file. Refresh UML From Code, then click Try This Change for a fresh prompt."
                     )
                     logActivity("Demo e2e step passed: Reset invite demo sandbox at ${state.resetPath}.")
                     status("Invite demo sandbox reset")
@@ -1028,7 +1029,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 } else {
                     Messages.showWarningDialog(
                         project,
-                        "Blueprint could not reset ${state.resetPath}. Restore it manually, then click Refresh UML From Code.",
+                        "Blueprint could not reset ${state.resetPath} to the baseline invite demo file. Restore it manually, then click Refresh UML From Code.",
                         "Blueprint - Reset Demo Path"
                     )
                 }
@@ -4177,7 +4178,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Sandbox" else "Try This Change"
             firstRunPromptButton.isEnabled = state.codeMapReady
             firstRunPromptButton.toolTipText = if (state.resetSuggested) {
-                "All guided demo changes already exist. Reset ${state.resetPath} to the baseline demo sandbox, or pick your own change."
+                "All guided demo changes already exist. Click Reset Demo Sandbox to restore ${state.resetPath} to the baseline invite demo file, or pick your own change."
             } else if (state.promptReady) {
                 "Fresh prompt already loaded for the current sandbox: \"${state.prompt}\""
             } else {
@@ -4402,7 +4403,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun manualDemoExpectedVisibleResult(state: GuidedInviteScenarioState): String =
         when {
             state.resetSuggested ->
-                "Reset the invite demo sandbox, refresh UML from code, then use Try This Change again so Blueprint can load a fresh prompt for the current sandbox state."
+                "Click Reset Demo Sandbox to restore the invite demo file, refresh UML from code, then click Try This Change again so Blueprint can load a fresh prompt for the clean sandbox state."
             state.expectedEntity == "Invite" && state.prompt.contains("expires_at") ->
                 "Expect Invite to show expires_at in the refreshed UML and in the running feature path."
             state.expectedRelationSource != null && state.expectedRelationTarget != null ->
