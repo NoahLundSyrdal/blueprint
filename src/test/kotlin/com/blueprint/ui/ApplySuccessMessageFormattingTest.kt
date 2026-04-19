@@ -19,4 +19,15 @@ class ApplySuccessMessageFormattingTest {
         assertTrue(source.contains("appendLine(validationReportText(result))"))
         assertFalse(source.contains("append(validationReportText(result))"))
     }
+
+    @Test
+    fun `apply completion copy points to refresh and avoids fake semantic counts`() {
+        val source = Files.readString(sourcePath)
+
+        assertTrue(source.contains("val refreshNote = \"Refresh UML From Code to verify.\""))
+        assertTrue(source.contains("appendLine(\"Code-backed UML was refreshed from disk after apply.\")"))
+        assertTrue(source.contains("val whatChanged = PatchChangeSummary.applySummary(registry.getExecution(node.id), changedPaths)"))
+        assertFalse(source.contains("Applied semantic changes:"))
+        assertFalse(source.contains("fields changed"))
+    }
 }
