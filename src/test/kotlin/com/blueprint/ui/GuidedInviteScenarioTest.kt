@@ -177,7 +177,7 @@ class GuidedInviteScenarioTest {
                 runCommand = null,
             ),
         )
-        assertTrue(loadedPrompt.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change."))
+        assertTrue(loadedPrompt.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change because Blueprint will choose it from the latest Refresh UML From Code result."))
         assertTrue(loadedPrompt.contains("Try This Change -> use the button to load the fresh prompt into chat first."))
         assertTrue(loadedPrompt.contains("Generate Code Diff -> expect a reviewed code patch for blueprint_demo/imported_invite/models.py."))
 
@@ -392,9 +392,9 @@ class GuidedInviteScenarioTest {
         assertTrue(source.contains("Reset Demo Sandbox restored \${state.resetPath} to the baseline invite demo file. Refresh UML From Code next, then click Try This Change to load a fresh prompt. If you skip reset later, make your own UML-backed change instead."))
         assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(source.contains("Freshness: this guided prompt likely matches code already in \${state.resetPath}, so reset is recommended for a predictable fresh demo run."))
-        assertTrue(source.contains("Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state."))
-        assertTrue(source.contains("Prompt state: the suggested guided prompt is fresh for the current code map."))
-        assertTrue(source.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change."))
+        assertTrue(source.contains("Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state. That keeps the suggested change aligned with what Refresh UML From Code just found, not an older canned demo step."))
+        assertTrue(source.contains("Prompt state: the suggested guided prompt is fresh for the current code map because it was chosen from the latest Refresh UML From Code result."))
+        assertTrue(source.contains("Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change because Blueprint will choose it from the latest Refresh UML From Code result."))
         assertTrue(source.contains("Fresh prompt for the current sandbox:"))
         assertTrue(source.contains("Fresh prompt already loaded for the current sandbox:"))
         assertTrue(source.contains("Fresh prompt loaded for the current sandbox:"))

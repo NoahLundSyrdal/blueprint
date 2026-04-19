@@ -609,12 +609,12 @@ internal object GuidedInviteScenario {
         val freshnessLine = if (state.resetSuggested) {
             "Freshness: this guided prompt likely matches code already in ${state.resetPath}, so reset is recommended for a predictable fresh demo run."
         } else {
-            "Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state."
+            "Freshness: Try This Change will load a prompt chosen from the current code map so the guided demo starts from the current sandbox state. That keeps the suggested change aligned with what Refresh UML From Code just found, not an older canned demo step."
         }
         val promptStateLine = when {
             !state.codeMapReady -> "Prompt state: Refresh UML From Code first so Blueprint can choose a fresh demo prompt for the current sandbox."
-            state.promptReady || state.umlDraftReady -> "Prompt state: the suggested guided prompt is fresh for the current code map."
-            else -> "Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change."
+            state.promptReady || state.umlDraftReady -> "Prompt state: the suggested guided prompt is fresh for the current code map because it was chosen from the latest Refresh UML From Code result."
+            else -> "Prompt state: the next guided prompt will be fresh for the current code map when you click Try This Change because Blueprint will choose it from the latest Refresh UML From Code result."
         }
         if (state.resetSuggested) {
             return listOf(
