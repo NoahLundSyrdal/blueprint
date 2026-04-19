@@ -1,8 +1,10 @@
 package com.blueprint.ir
 
+import com.blueprint.model.NodeContract
 import com.blueprint.model.Patch
 import com.blueprint.service.DiskSnapshot
 import com.blueprint.service.PatchFreshness
+import com.blueprint.service.PythonModelModuleRenderer
 import com.blueprint.service.UmlImportService
 import com.intellij.openapi.project.Project
 import org.junit.Assert.assertEquals
@@ -141,13 +143,15 @@ class GoldenCodebaseFlowTest {
             class InvitePolicy {
               max_invites: int
               domain: str
+              expires_on: date
             }
             InviteAuditLog --> Invite : references
             Invite --> InvitePolicy : references
         """.trimIndent()
         val parsedUml = UmlImportService(fakeProject("golden-invite")).parse(uml)
         val umlIr = UmlToIR.toIR(parsedUml, "golden-invite")
-        val generatedModels = renderDataclasses(umlIr)
+        val generatedModels = renderDataclasses(umlIr, existingContent = Files.readString(models))
+        assertTrue(generatedModels.contains("from datetime import date, datetime"))
         val patch = Patch(
             path = "blueprint_demo/imported_invite/models.py",
             action = "update",
@@ -169,6 +173,7 @@ class GoldenCodebaseFlowTest {
         assertTrue(audit.fields.any { it.name == "reason" && it.type == "str" })
         assertTrue(audit.fields.any { it.name == "invite" && it.type == "Invite" })
         assertTrue(policy.fields.any { it.name == "max_invites" && it.type == "int" })
+        assertTrue(policy.fields.any { it.name == "expires_on" && it.type == "date" })
 
         val refreshedIr = fixtureIrFromSymbols("golden-invite", refreshed.symbols)
         assertTrue(refreshedIr.edges.any { edge ->
@@ -331,27 +336,20 @@ class GoldenCodebaseFlowTest {
             sourceRef = SourceRef("", line),
         )
 
-    private fun renderDataclasses(ir: ArchitectureIR): String {
-        val models = ir.components.filter { it.kind == ComponentKind.MODEL }.sortedBy { it.name }
-        val usesDatetime = models.any { component -> component.fields.any { it.type.id == "datetime" } }
-        return buildString {
-            appendLine("from dataclasses import dataclass")
-            if (usesDatetime) appendLine("from datetime import datetime")
-            appendLine()
-            models.forEach { component ->
-                appendLine()
-                appendLine("@dataclass")
-                appendLine("class ${component.name}:")
-                if (component.fields.isEmpty()) {
-                    appendLine("    pass")
-                } else {
-                    component.fields.forEach { field ->
-                        appendLine("    ${field.name}: ${field.type.id}")
-                    }
-                }
-            }
-        }.trim() + "\n"
-    }
+    private fun renderDataclasses(ir: ArchitectureIR, existingContent: String): String =
+        PythonModelModuleRenderer.render(
+            ir.components
+                .filter { it.kind == ComponentKind.MODEL }
+                .map { component ->
+                    NodeContract(
+                        name = component.name,
+                        kind = "schema",
+                        description = "Data model ${component.name}",
+                        schema = component.fields.joinToString("\n") { field -> "${field.name}: ${field.type.id}" },
+                    )
+                },
+            existingContent = existingContent,
+        )
 
     private fun componentId(name: String, relPath: String): String =
         relPath.removeSuffix(".py").replace('/', '.').trim('.').let { module ->

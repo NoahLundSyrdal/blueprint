@@ -102,10 +102,17 @@ class ReviewService(private val project: Project) {
         }
 
         val approved = issues.isEmpty()
+        val changes = exec.patches
+            .flatMap { patch ->
+                val existing = project.service<ApplyChangesService>().readCurrentContent(patch.path)
+                PythonModelModuleRenderer.describeChanges(existing, patch.content)
+            }
+            .distinct()
+            .ifEmpty { listOf("no model changes") }
         return ReviewArtifact(
             reviewStatus = if (approved) "APPROVE" else "REQUEST_CHANGES",
             summary = if (approved) {
-                "Approved by deterministic UML model review. The patch is in scope and contains all declared UML model classes and fields."
+                "Approved by deterministic UML model review. Changes: ${changes.joinToString("; ")}."
             } else {
                 "Model patch needs revision before apply."
             },
@@ -122,7 +129,11 @@ class ReviewService(private val project: Project) {
                 )
             },
             issues = issues,
-            positiveSignals = if (approved) listOf("Deterministic schema review avoided LLM false negatives.") else emptyList(),
+            positiveSignals = if (approved) {
+                listOf("Deterministic schema review avoided LLM false negatives.", "Changed symbols: ${changes.joinToString("; ")}.")
+            } else {
+                emptyList()
+            },
             recommendedNextAction = if (approved) "apply" else "revise",
             followUpChecks = listOf("Preview the diff before applying."),
         )

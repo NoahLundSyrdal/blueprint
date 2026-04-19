@@ -66,28 +66,32 @@ class NodeExecutionService(private val project: Project) {
     private fun executeAggregateModels(node: BlueprintNode, plan: PlanArtifact?): ExecutionArtifact {
         val path = node.fileScope.paths.firstOrNull() ?: "blueprint_demo/imported_models/models.py"
         val modelOutputs = freshestModelOutputs(node).ifEmpty { node.outputs }
-        val content = renderModelsModule(modelOutputs)
+        val existingContent = project.service<ApplyChangesService>().readCurrentContent(path)
+        val action = if (existingContent.isBlank()) "create" else "update"
+        val rendered = PythonModelModuleRenderer.renderWithReport(modelOutputs, existingContent)
+        val content = rendered.content
+        val changeSummary = rendered.changes.ifEmpty { listOf("no model changes") }.joinToString("; ")
         return ExecutionArtifact(
             status = "SUCCESS",
-            summary = "Generated a deterministic Python dataclass models module from the current UML.",
+            summary = "Generated deterministic Python dataclass model changes from the current UML: $changeSummary.",
             assumptions = listOf("UML schema fields are the source of truth for the shared models file."),
             touchedFiles = listOf(TouchedFile(
                 path = path,
-                action = if (project.service<ApplyChangesService>().readCurrentContent(path).isBlank()) "create" else "update",
+                action = action,
                 reason = "Synchronize shared model classes with UML.",
             )),
             plan = plan?.implementationSteps?.map { it.title.ifBlank { it.details } }?.filter { it.isNotBlank() }
-                ?: listOf("Render all UML model classes into the shared models module."),
+                ?: listOf("Merge UML model fields into the shared models module."),
             patches = listOf(Patch(
                 path = path,
-                action = if (project.service<ApplyChangesService>().readCurrentContent(path).isBlank()) "create" else "update",
+                action = action,
                 content = content,
             )),
             acceptanceCheck = node.acceptanceCriteria.map {
                 AcceptanceCheckItem(
                     criterion = it.id.ifBlank { it.description },
                     result = "PASS",
-                    notes = "Deterministic model generator emitted all declared UML schema fields.",
+                    notes = "Deterministic model generator emitted all declared UML schema fields and required imports.",
                 )
             },
             validation = ExecutionValidation(
@@ -115,66 +119,6 @@ class NodeExecutionService(private val project: Project) {
                 )
             }
             .sortedBy { it.name }
-    }
-
-    private fun renderModelsModule(outputs: List<NodeContract>): String {
-        val classes = orderedModelOutputs(outputs)
-        val needsDatetime = classes.any { (_, fields) -> fields.any { it.second == "datetime" } }
-        return buildString {
-            appendLine("from dataclasses import dataclass")
-            if (needsDatetime) appendLine("from datetime import datetime")
-            appendLine()
-            classes.forEachIndexed { index, (name, fields) ->
-                if (index > 0) appendLine()
-                appendLine("@dataclass")
-                appendLine("class $name:")
-                if (fields.isEmpty()) {
-                    appendLine("    pass")
-                } else {
-                    fields.forEach { (field, type) -> appendLine("    $field: $type") }
-                }
-            }
-        }.trimEnd() + "\n"
-    }
-
-    private fun orderedModelOutputs(outputs: List<NodeContract>): List<Pair<String, List<Pair<String, String>>>> {
-        val parsed = outputs
-            .filter { it.name.matches(Regex("""[A-Za-z_][A-Za-z0-9_]*""")) }
-            .associate { output ->
-                output.name to output.schema.lines().mapNotNull(::parseFieldLine)
-            }
-        val names = parsed.keys
-        val visited = mutableSetOf<String>()
-        val visiting = mutableSetOf<String>()
-        val ordered = mutableListOf<String>()
-
-        fun visit(name: String) {
-            if (name in visited || name in visiting) return
-            visiting += name
-            parsed[name].orEmpty()
-                .map { (_, type) -> type.substringBefore("[").substringBefore("?").trim() }
-                .filter { it in names }
-                .sorted()
-                .forEach(::visit)
-            visiting -= name
-            visited += name
-            ordered += name
-        }
-
-        names.sorted().forEach(::visit)
-        return ordered.map { it to parsed.getValue(it) }
-    }
-
-    private fun parseFieldLine(line: String): Pair<String, String>? {
-        val cleaned = line
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .trim()
-        val name = cleaned.substringBefore(":", "").trim()
-        val type = cleaned.substringAfter(":", "").trim()
-        if (!name.matches(Regex("""[A-Za-z_][A-Za-z0-9_]*"""))) return null
-        if (type.isBlank()) return null
-        return name to type
     }
 
     private fun enforceScope(node: BlueprintNode, exec: ExecutionArtifact): ExecutionArtifact {
