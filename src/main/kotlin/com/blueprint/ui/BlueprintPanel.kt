@@ -2013,23 +2013,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             } else {
                 "Refine the UML, or click Refresh UML From Code to verify the current code before trying a different change."
             }
-            reviewSummaryArea.text = if (checked == 0) {
-                "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
+            val noOpMessage = if (checked == 0) {
+                "No code changes needed. The UML already appears to match the current code. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
             } else {
                 "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
             }
+            reviewSummaryArea.text = noOpMessage
             safetyArea.text = "No reviewed code patch to apply."
             showArtifactTab("Review")
             status("No code changes needed")
-            appendChat(
-                "Blueprint",
-                if (checked == 0) {
-                    "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
-                } else {
-                    "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
-                }
-            )
-            logActivity("Generate Code Diff completed with no-op result across $checked node(s).")
+            appendChat("Blueprint", noOpMessage)
+            logActivity("Generate Code Diff completed with no code changes because the UML already matched the current code across $checked node(s).")
             endPrimaryAction()
             return
         }

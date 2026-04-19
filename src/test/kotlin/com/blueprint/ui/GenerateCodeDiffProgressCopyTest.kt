@@ -18,7 +18,16 @@ class GenerateCodeDiffProgressCopyTest {
     fun `no op review summary says no code changes needed`() {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
-        assertTrue(source.contains("No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."))
+        assertTrue(source.contains("No code changes needed. The UML already appears to match the current code. Refresh UML From Code to load the current code map, or refine the UML and try a different change."))
         assertTrue(source.contains("No code changes needed. The UML already appears to match the current code for"))
+    }
+
+    @Test
+    fun `no op activity and chat make the reason explicit`() {
+        val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
+
+        assertTrue(source.contains("val noOpMessage = if (checked == 0)"))
+        assertTrue(source.contains("appendChat(\"Blueprint\", noOpMessage)"))
+        assertTrue(source.contains("Generate Code Diff completed with no code changes because the UML already matched the current code across"))
     }
 }
