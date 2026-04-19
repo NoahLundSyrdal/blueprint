@@ -829,6 +829,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val reviewArea = JBTextArea().apply { isEditable = false }
     private val secondaryTabs = JTabbedPane()
     private val validationResults = mutableMapOf<String, ProjectValidationService.ValidationResult>()
+    private val lastReviewedUmlByNodeId = mutableMapOf<String, String>()
+    private var refreshedAfterApply = false
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -2098,6 +2100,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 logActivity("Patch generated for ${n.title.ifBlank { n.id.take(8) }}: ${changedExec.patches.size} file(s). Reviewing safety.")
                 project.service<ReviewService>().reviewAsync(n, changedExec) { review ->
                     registry.setReview(n.id, review)
+                    lastReviewedUmlByNodeId[n.id] = normalizedUmlText()
+                    refreshedAfterApply = false
                     reviewArea.text = review.rawJson.ifBlank { JsonExtractor.toJson(review) }
                     refreshArtifactSummary()
                     showArtifactTab("Review")
@@ -2995,6 +2999,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun refreshUmlAfterSuccessfulApply() {
         umlHasPendingEdits = false
+        refreshedAfterApply = true
         val generated = project.service<PythonUmlGenerator>().generate()
         loadGeneratedUml(generated)
         showArtifactTab("UML")
@@ -3207,6 +3212,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             suppressUmlDocumentEvents = false
         }
         clearRestoredFlag()
+        refreshReviewFreshnessState()
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
         updateGuide()
         persistWorkspace()
@@ -3216,6 +3222,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!suppressUmlDocumentEvents) {
             umlHasPendingEdits = true
             clearRestoredFlag()
+            refreshReviewFreshnessState()
             persistWorkspace()
         }
         refreshCanvasFromUml()
@@ -3283,6 +3290,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val report = graph.analyze()
         val readiness = graph.readinessFor(n)
         updateOverviewSummary(report)
+        val reviewFreshness = reviewFreshnessFor(n, exec)
         val canApply = n.executionStatus != ExecutionStatus.APPLIED &&
             n.executionStatus != ExecutionStatus.FAILED &&
             !exec?.patches.isNullOrEmpty() &&
@@ -3293,8 +3301,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             n.executionStatus == ExecutionStatus.FAILED -> "Validation Failed"
             else -> "Apply Blocked By Review"
         }
-        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
-        reviewSummaryArea.text = PatchChangeSummary.reviewSummary(exec)
+        artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
+        reviewSummaryArea.text = buildReviewSummary(exec, reviewFreshness)
 
         val issues = buildList {
             if (plan != null) addAll(JsonExtractor.planIssues(plan))
@@ -3622,6 +3630,54 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
         currentPrompt.equals(expectedPrompt, ignoreCase = true)
+
+    private data class ReviewFreshnessState(
+        val badge: String,
+        val warning: String,
+    )
+
+    private fun reviewFreshnessFor(node: BlueprintNode, exec: ExecutionArtifact?): ReviewFreshnessState {
+        if (exec?.patches.isNullOrEmpty()) {
+            return ReviewFreshnessState(
+                badge = "NONE",
+                warning = "No reviewed code patch yet. Generate Code Diff after you refine the UML.",
+            )
+        }
+        if (node.executionStatus == ExecutionStatus.APPLIED && refreshedAfterApply && !umlHasPendingEdits) {
+            return ReviewFreshnessState(
+                badge = "FRESH",
+                warning = "This reviewed code patch matches the refreshed code-backed UML. Refresh UML From Code again anytime to verify after more edits.",
+            )
+        }
+        if (normalizedUmlText() != lastReviewedUmlByNodeId[node.id].orEmpty()) {
+            return ReviewFreshnessState(
+                badge = "STALE",
+                warning = "This reviewed code patch is stale because the UML changed after review. Generate Code Diff again before Apply Approved Changes.",
+            )
+        }
+        return ReviewFreshnessState(
+            badge = "FRESH",
+            warning = "This reviewed code patch matches the current UML. Apply Approved Changes, or keep editing and then Generate Code Diff again.",
+        )
+    }
+
+    private fun buildReviewSummary(exec: ExecutionArtifact?, freshness: ReviewFreshnessState): String {
+        val summary = PatchChangeSummary.reviewSummary(exec)
+        return buildString {
+            appendLine("Diff status: ${freshness.badge}")
+            appendLine(freshness.warning)
+            appendLine()
+            append(summary)
+        }.trim()
+    }
+
+    private fun refreshReviewFreshnessState() {
+        if (nodeList.selectedValue != null) {
+            refreshArtifactSummary()
+        }
+    }
+
+    private fun normalizedUmlText(): String = PatchFreshness.normalize(umlEditor.text)
 
     private fun guidedNextState(): Pair<String, String> {
         val entityCount = currentUmlEntityCount()

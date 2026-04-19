@@ -12,8 +12,9 @@ class ReviewTabCopyRegressionTest {
     fun `review tab keeps what changed separate from safety explanation`() {
         val source = Files.readString(sourcePath)
 
-        assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(exec)"))
+        assertTrue(source.contains("reviewSummaryArea.text = buildReviewSummary(exec, reviewFreshness)"))
         assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(changedExec)"))
+        assertTrue(source.contains("appendLine(\"Diff status: "))
         assertTrue(source.contains("Plain-English summary before apply:"))
         assertTrue(source.contains("ReviewExplanation.details("))
         assertTrue(source.contains("reviewDetails.joinToString(\"\\n\")"))
