@@ -36,11 +36,12 @@ class ReviewExplanationTest {
             validation = null,
         )
 
-        assertTrue(text.contains("Approved because Invite + accepted_at: datetime stays aligned with Invite update"))
-        assertTrue(text.contains("Scope: stays within the selected files."))
-        assertTrue(text.contains("Safety: Only the selected model file changes. Fields match the UML request."))
-        assertTrue(text.contains("Dependency status: ready."))
-        assertTrue(text.contains("Validation status: will run after apply"))
+        assertTrue(text.contains("Why is it safe to apply?"))
+        assertTrue(text.contains("- Approved because Invite + accepted_at: datetime stays aligned with Invite update"))
+        assertTrue(text.contains("- Scope: stays within the selected files."))
+        assertTrue(text.contains("- Safety: Only the selected model file changes. Fields match the UML request."))
+        assertTrue(text.contains("- Dependency status: ready."))
+        assertTrue(text.contains("- Validation status: will run after apply"))
     }
 
     @Test
@@ -71,10 +72,11 @@ class ReviewExplanationTest {
             ),
         )
 
-        assertTrue(text.contains("Not approved because The patch also modifies app/routes.py."))
-        assertTrue(text.contains("Fix: Regenerate the patch so only app/models.py changes."))
-        assertTrue(text.contains("Scope: review found out-of-scope changes."))
-        assertTrue(text.contains("Dependency status: blocked by parent node not applied."))
-        assertTrue(text.contains("Validation status: skipped after apply."))
+        assertTrue(text.contains("Why is it blocked?"))
+        assertTrue(text.contains("- Not approved because The patch also modifies app/routes.py."))
+        assertTrue(text.contains("- Fix: Regenerate the patch so only app/models.py changes."))
+        assertTrue(text.contains("- Scope: review found out-of-scope changes."))
+        assertTrue(text.contains("- Dependency status: blocked by parent node not applied."))
+        assertTrue(text.contains("- Validation status: skipped after apply."))
     }
 }

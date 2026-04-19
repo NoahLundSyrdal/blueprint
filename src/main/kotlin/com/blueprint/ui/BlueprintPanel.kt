@@ -461,6 +461,16 @@ internal object ReviewExplanation {
         validation: ProjectValidationService.ValidationResult?,
     ): String {
         if (review == null) return "Review not run yet. Generate Code Diff first so Blueprint can review the patch before apply."
+        return details(nodeTitle, exec, review, readiness, validation).joinToString("\n")
+    }
+
+    fun details(
+        nodeTitle: String,
+        exec: ExecutionArtifact?,
+        review: ReviewArtifact,
+        readiness: DependencyGraphService.NodeReadiness?,
+        validation: ProjectValidationService.ValidationResult?,
+    ): List<String> {
         val shortTitle = nodeTitle.ifBlank { "this change" }
         val semanticChanges = PatchChangeSummary.semanticChangeLines(exec).take(2)
         val changePhrase = if (semanticChanges.isEmpty()) {
@@ -484,28 +494,25 @@ internal object ReviewExplanation {
             ProjectValidationService.ValidationResult.Status.FAIL -> "Validation status: failed after apply."
             null -> "Validation status: will run after apply if Blueprint can infer a command."
         }
-        return when (review.reviewStatus.uppercase()) {
-            "APPROVE" -> buildString {
-                append("Approved because $changePhrase stays aligned with $shortTitle and review found no blocking scope or safety issues.")
-                append("\n")
-                append(scopeLine)
-                append("\nSafety: ${safetyLine(review)}")
-                append("\n")
-                append(dependencyLine)
-                append("\n")
-                append(validationLine)
-            }
-            else -> buildString {
-                append("Not approved because ${blockerLine(review)}")
-                append("\nFix: ${fixLine(review)}")
-                append("\n")
-                append(scopeLine)
-                append("\nSafety: ${safetyLine(review)}")
-                append("\n")
-                append(dependencyLine)
-                append("\n")
-                append(validationLine)
-            }
+        return if (review.reviewStatus.uppercase() == "APPROVE") {
+            listOf(
+                "Why is it safe to apply?",
+                "- Approved because $changePhrase stays aligned with $shortTitle and review found no blocking scope or safety issues.",
+                "- ${safetyLine(review)}",
+                "- $scopeLine",
+                "- $dependencyLine",
+                "- $validationLine",
+            )
+        } else {
+            listOf(
+                "Why is it blocked?",
+                "- Not approved because ${blockerLine(review)}",
+                "- Fix: ${fixLine(review)}",
+                "- ${safetyLine(review)}",
+                "- $scopeLine",
+                "- $dependencyLine",
+                "- $validationLine",
+            )
         }
     }
 
@@ -520,9 +527,9 @@ internal object ReviewExplanation {
 
     private fun safetyLine(review: ReviewArtifact): String =
         when {
-            review.positiveSignals.isNotEmpty() -> review.positiveSignals.take(2).joinToString(" ")
-            review.issues.isEmpty() -> "No concrete safety issues were reported."
-            else -> review.issues.take(2).joinToString(" ") { it.title.ifBlank { it.category } }
+            review.positiveSignals.isNotEmpty() -> "Safety: ${review.positiveSignals.take(2).joinToString(" ")}"
+            review.issues.isEmpty() -> "Safety: No concrete safety issues were reported."
+            else -> "Safety: ${review.issues.take(2).joinToString(" ") { it.title.ifBlank { it.category } }}"
         }
 }
 
@@ -3194,27 +3201,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "Apply Blocked By Review"
         }
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
-        reviewSummaryArea.text = buildString {
-            append(PatchChangeSummary.reviewSummary(exec))
-            append("\n\n")
-            append(
-                ReviewExplanation.summary(
-                    nodeTitle = n.title.ifBlank { n.id.take(8) },
-                    exec = exec,
-                    review = review,
-                    readiness = readiness,
-                    validation = validation,
-                )
-            )
-            if (review?.summary?.isNotBlank() == true) {
-                append("\n\nReview summary:\n")
-                append(review.summary)
-            }
-            if (validation != null) {
-                append("\n\nValidation:\n")
-                append(validation.summaryLine())
-            }
-        }
+        reviewSummaryArea.text = PatchChangeSummary.reviewSummary(exec)
 
         val issues = buildList {
             if (plan != null) addAll(JsonExtractor.planIssues(plan))
@@ -3222,17 +3209,25 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (review != null) addAll(JsonExtractor.reviewIssues(review))
         }
         val scopeDrops = exec?.validation?.risks.orEmpty().filter { it.contains("out-of-scope", ignoreCase = true) }
+        val reviewDetails = review?.let {
+            ReviewExplanation.details(
+                nodeTitle = n.title.ifBlank { n.id.take(8) },
+                exec = exec,
+                review = it,
+                readiness = readiness,
+                validation = validation,
+            )
+        }
         safetyArea.text = when {
             validation?.status == ProjectValidationService.ValidationResult.Status.FAIL -> validationReportText(validation)
             validation?.status == ProjectValidationService.ValidationResult.Status.PASS -> validationReportText(validation)
             validation?.status == ProjectValidationService.ValidationResult.Status.SKIPPED -> validationReportText(validation)
             issues.isNotEmpty() || scopeDrops.isNotEmpty() ->
                 (issues + scopeDrops).distinct().joinToString("\n") { "- $it" }
+            reviewDetails != null -> reviewDetails.joinToString("\n")
             n.executionStatus == ExecutionStatus.FAILED -> "Validation failed after apply. Regenerate a code diff or inspect the related file before continuing."
             exec?.status == "PARTIAL" -> "Execution is PARTIAL. Inspect the diff and validation notes before applying."
             exec?.status == "BLOCKED" -> "Execution is BLOCKED. Do not apply until the node is revised."
-            review?.reviewStatus == "APPROVE" -> "Review approved. Scope compliance: ${review.scopeCompliance.result}."
-            review != null -> reviewBlockMessage(review)
             else -> "No safety issues reported yet."
         }
         dependencyBlockArea.text = if (readiness.reasons.isEmpty()) {
