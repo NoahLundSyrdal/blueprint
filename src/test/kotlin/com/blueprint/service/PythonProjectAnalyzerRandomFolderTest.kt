@@ -108,7 +108,8 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.scopeReceipt().contains("Files analyzed: 3"))
         assertTrue(context.scopeReceipt().contains("Scope note: Some Python paths were skipped during Refresh UML From Code"))
         assertTrue(context.scopeReceipt().contains("fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff"))
-        assertTrue(context.scopeReceipt().contains("Inspect the skipped paths below, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff if the UML looks incomplete."))
+        assertTrue(context.scopeReceipt().contains("Blueprint still built the current UML from the Python files it could read."))
+        assertTrue(context.scopeReceipt().contains("Inspect the skipped paths below if anything looks incomplete, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."))
         assertTrue(context.scopeReceipt().contains("generated/client_pb2.py"))
         assertTrue(context.promptContext().contains("skippedFiles:"))
     }

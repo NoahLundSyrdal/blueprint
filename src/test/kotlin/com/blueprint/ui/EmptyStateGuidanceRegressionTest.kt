@@ -25,7 +25,7 @@ class EmptyStateGuidanceRegressionTest {
         assertTrue(source.contains("private fun skippedPathInlineSummary("))
         assertTrue(source.contains("skippedPathInlineSummary(context, prefix = \"Partial refresh note:\")"))
         assertTrue(source.contains("return \"\$prefix \${context.skippedFiles.size} Python path\${if (context.skippedFiles.size == 1) \" was\" else \"s were\"} skipped during Refresh UML From Code (\$topReasons)."))
-        assertTrue(source.contains("The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like \$examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."))
+        assertTrue(source.contains("Blueprint still built the current code-backed UML from the Python files it could read, so inspect skipped paths like \$examplePaths if anything looks incomplete. Fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."))
         assertTrue(source.contains("Blueprint found Python files, but no classes were extracted into the code-backed UML yet."))
         assertTrue(source.contains("No Python files were found in the opened folder, so Blueprint cannot build a code-backed UML diagram yet."))
         assertTrue(source.contains("Open the Python app folder or a Python subfolder you want to map, then click Refresh UML From Code again."))

@@ -86,7 +86,7 @@ class PythonProjectAnalyzer(private val project: Project) {
                         .entries.sortedByDescending { it.value }
                         .take(2)
                         .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
-                    appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code ($topReasons). Inspect the skipped paths below, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff if the UML looks incomplete.")
+                    appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code ($topReasons). Blueprint still built the current UML from the Python files it could read. Inspect the skipped paths below if anything looks incomplete, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff.")
                 }
                 if (filesAnalyzed.isNotEmpty()) {
                     appendLine("- Included paths:")

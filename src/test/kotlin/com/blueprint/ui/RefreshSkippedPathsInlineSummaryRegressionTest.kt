@@ -16,7 +16,7 @@ class RefreshSkippedPathsInlineSummaryRegressionTest {
         assertTrue(source.contains("prefix: String,"))
         assertTrue(source.contains("topReasonLimit: Int = 2"))
         assertTrue(source.contains("examplePathLimit: Int = 2"))
-        assertTrue(source.contains("return \"\$prefix \${context.skippedFiles.size} Python path\${if (context.skippedFiles.size == 1) \" was\" else \"s were\"} skipped during Refresh UML From Code (\$topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like \$examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff.\""))
+        assertTrue(source.contains("return \"\$prefix \${context.skippedFiles.size} Python path\${if (context.skippedFiles.size == 1) \" was\" else \"s were\"} skipped during Refresh UML From Code (\$topReasons). Blueprint still built the current code-backed UML from the Python files it could read, so inspect skipped paths like \$examplePaths if anything looks incomplete. Fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff.\""))
         assertTrue(source.contains("skippedPathInlineSummary(context, prefix = \"Refresh scope:\")"))
         assertTrue(source.contains("if (refreshedAfterApply) {"))
         assertTrue(source.contains("postApplyVerifyState = listOfNotNull(postApplyVerifyState, summary).joinToString(\" \")"))
