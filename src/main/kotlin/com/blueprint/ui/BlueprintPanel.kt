@@ -517,6 +517,13 @@ internal object GuidedInviteScenario {
         }
 }
 
+internal data class PostApplyInlineSummary(
+    val changedPaths: List<String>,
+    val summaryLine: String,
+    val validationLine: String,
+    val nextStepLine: String,
+)
+
 internal object PatchChangeSummary {
     /**
      * Builds the review-tab summary shown before apply from the reviewed patch content.
@@ -1074,6 +1081,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private var refreshedAfterApply = false
     private var postApplyChangedPaths: List<String> = emptyList()
     private var postApplyHighlightMessage: String? = null
+    private var postApplyInlineSummary: PostApplyInlineSummary? = null
     private val mockMode = JBCheckBox("Offline mock demo").apply {
         isSelected = codex.providerMode() == "mock"
         addActionListener {
@@ -3254,6 +3262,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         appendLine("Validation:")
                         appendLine(validationReportText(result))
                     }.trim()
+                    postApplyInlineSummary = PostApplyInlineSummary(
+                        changedPaths = changedPaths,
+                        summaryLine = summaryLine,
+                        validationLine = result.summaryLine(),
+                        nextStepLine = refreshNote,
+                    )
                     Messages.showInfoMessage(
                         project,
                         listOf(summaryLine, whatChanged, changedPathsBlock, commandBlock, refreshNote, runNote, undoNote, umlRefreshLine, highlightLine, validationBlock)
@@ -3344,6 +3358,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
+
+    private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String =
+        buildString {
+            appendLine(summary.summaryLine)
+            appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
+            appendLine("Changed paths:")
+            summary.changedPaths.forEach { appendLine("- $it") }
+            appendLine(summary.validationLine)
+            append(summary.nextStepLine)
+        }.trim()
 
     private fun validationReportText(result: ProjectValidationService.ValidationResult): String =
         buildString {
@@ -3653,7 +3677,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             else -> "Apply Blocked By Review"
         }
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
-        reviewSummaryArea.text = buildReviewSummary(exec, review, reviewFreshness)
+        val inlineSummary = postApplyInlineSummary
+        reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
+            postApplyReviewSummary(exec, inlineSummary)
+        } else {
+            buildReviewSummary(exec, review, reviewFreshness)
+        }
         refreshChangedFilesPanel(exec)
         refreshGroundingSummary()
 
