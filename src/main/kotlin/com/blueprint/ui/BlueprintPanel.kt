@@ -686,7 +686,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             if (state.resetSuggested) {
                 Messages.showInfoMessage(
                     project,
-                    "To get a fresh invite demo path, restore ${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code.\n\nYou can also ignore the demo path and ask for your own architecture change.",
+                    "To get a fresh invite demo path, restore ${state.resetPath} from git or rerun the example sandbox setup, then click Refresh UML From Code.\n\nBlueprint keeps this Try This Change prompt fresh by checking the current UML and imported invite code before suggesting the next demo change.\n\nYou can also ignore the demo path and ask for your own architecture change.",
                     "Blueprint - Reset Demo Path"
                 )
             } else {
@@ -1512,7 +1512,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "uml" in lower || "diagram" in lower -> {
                 if (shouldShowInviteFirstRunScenario()) {
-                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"}', then click Generate Code Diff."
+                    "The main canvas is editable Mermaid UML. For the guided invite demo, use Try This Change for a fresh prompt based on the current sandbox state, or try '${currentInvitePrompt() ?: "restore examples/invite_project/blueprint_demo/imported_invite/models.py from git"}', then click Generate Code Diff."
                 } else {
                     "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
                 }
@@ -3440,7 +3440,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         firstRunPromptButton.toolTipText = if (state.resetSuggested) {
             "All guided demo changes already exist. Restore ${state.resetPath} from git, or pick your own change."
         } else {
-            state.prompt
+            "Fresh demo prompt: ${state.prompt}"
         }
     }
 

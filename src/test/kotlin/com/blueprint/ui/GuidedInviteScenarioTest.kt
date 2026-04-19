@@ -130,4 +130,13 @@ class GuidedInviteScenarioTest {
         assertTrue(reset.contains("restoring blueprint_demo/imported_invite/models.py"))
         assertTrue(reset.contains("Your own change:"))
     }
+
+    @Test
+    fun `fresh guided prompt copy stays discoverable in ui source`() {
+        val source = java.nio.file.Files.readString(java.nio.file.Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
+
+        assertTrue(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
+        assertTrue(source.contains("Blueprint keeps this Try This Change prompt fresh by checking the current UML and imported invite code before suggesting the next demo change."))
+        assertTrue(source.contains("Fresh demo prompt: "))
+    }
 }
