@@ -708,7 +708,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val summaryLabel = JLabel("Total 0 | Ready 0 | Blocked 0 | Applied 0")
     private val providerLabel = JLabel(providerText())
     private val actionProviderLabel = JLabel(providerText())
-    private val guideLabel = JLabel("Generate UML, change it with chat, then generate a code diff.")
+    private val guideLabel = JLabel("Start by reading the current project into an editable UML diagram.")
     private val firstRunScenarioArea = JBTextArea(5, 40).apply {
         isEditable = false
         isFocusable = false
@@ -3473,7 +3473,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
-                guideLabel.text = "Review approved the generated code patch. Apply it to disk; Blueprint will validate the project after apply."
+                guideLabel.text = "Review approved the reviewed code patch. Apply Approved Changes to write it to disk, then Blueprint will validate the project."
             }
             currentUmlEntityCount() == 0 -> {
             primaryActionButton.text = "Refresh UML From Code"
