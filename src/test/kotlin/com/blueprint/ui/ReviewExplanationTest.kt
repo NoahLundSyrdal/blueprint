@@ -35,8 +35,9 @@ class ReviewExplanationTest {
             ),
         )
 
-        assertTrue(text.contains("Review approved Invite update because Invite + accepted_at: datetime stays in scope."))
+        assertTrue(text.contains("Review approved Invite update because Invite + accepted_at: datetime stays within the selected files"))
         assertTrue(text.contains("Only the selected model file changes."))
+        assertTrue(text.contains("That is why Apply Approved Changes is unlocked now."))
     }
 
     @Test

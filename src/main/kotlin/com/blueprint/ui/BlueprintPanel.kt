@@ -739,7 +739,15 @@ internal object ReviewExplanation {
         val shortTitle = nodeTitle.ifBlank { "this change" }
         val changePhrase = changePhrase(exec)
         return if (review.reviewStatus.uppercase() == "APPROVE") {
-            "Review approved $shortTitle because $changePhrase stays in scope. ${compactApprovalReason(review)}"
+            val scopeReason = when (review.scopeCompliance.result.uppercase()) {
+                "PASS" -> "stays within the selected files"
+                "PARTIAL" -> "mostly stays within the selected files"
+                else -> "was reviewed for scope"
+            }
+            val acceptanceReason = review.acceptanceReviewLine()?.removePrefix("Acceptance: ")
+                ?.let { " It also matches the requested UML because $it." }
+                .orEmpty()
+            "Review approved $shortTitle because $changePhrase $scopeReason and ${compactApprovalReason(review)} That is why Apply Approved Changes is unlocked now.$acceptanceReason"
         } else {
             "Review blocked $shortTitle because ${blockerLine(review)} Fix: ${fixLine(review)}"
         }
