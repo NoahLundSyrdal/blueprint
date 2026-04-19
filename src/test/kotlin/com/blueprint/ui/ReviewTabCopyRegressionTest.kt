@@ -16,6 +16,7 @@ class ReviewTabCopyRegressionTest {
         assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(changedExec)"))
         assertTrue(source.contains("val scopeSentence = reviewScopeSentence(exec)"))
         assertTrue(source.contains("appendLine(scopeSentence)"))
+        assertTrue(source.contains("Next: open Preview Diff to inspect the raw diff before apply."))
         assertTrue(source.contains("Only 1 file will change:"))
         assertTrue(source.contains("No files will change in this reviewed code patch."))
         assertTrue(source.contains("files will change:"))

@@ -3720,6 +3720,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 appendLine()
                 appendLine(it)
             }
+            if (exec?.patches.orEmpty().isNotEmpty()) {
+                appendLine()
+                appendLine("Next: open Preview Diff to inspect the raw diff before apply.")
+            }
             appendLine()
             appendLine(scopeSentence)
             appendLine()
