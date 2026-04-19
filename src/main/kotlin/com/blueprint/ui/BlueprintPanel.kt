@@ -3429,8 +3429,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     verifyInUmlButton.isEnabled = true
                     val openChangedFilesNote = when (changedPaths.size) {
                         0 -> ""
-                        1 -> "Optional: Open Changed File to inspect what Blueprint wrote after you verify the refreshed UML and rerun the app."
-                        else -> "Optional: Open Changed Files to inspect what Blueprint wrote after you verify the refreshed UML and rerun the app."
+                        1 -> "Optional next step: Use Open Changed File after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote."
+                        else -> "Optional next step: Use Open Changed Files after you verify the refreshed UML and rerun the app if you want to inspect exactly what Blueprint wrote."
                     }
                     Messages.showInfoMessage(
                         project,
