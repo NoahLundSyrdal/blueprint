@@ -60,6 +60,18 @@ class PatchChangeSummaryTest {
     }
 
     @Test
+    fun `apply summary ignores paths that are not part of the reviewed diff`() {
+        val exec = ExecutionArtifact(
+            summary = "Reviewed patch only touched app/models.py.",
+            patches = listOf(
+                Patch(path = "app/models.py", action = PatchAction.update.name, content = "class Invite:\n    accepted_at: datetime"),
+            ),
+        )
+
+        assertEquals("No code changes needed", PatchChangeSummary.applySummary(exec, listOf("app/other.py")))
+    }
+
+    @Test
     fun `review summary handles empty and missing execution states`() {
         assertEquals("What changed?\n- No reviewed code patch yet.", PatchChangeSummary.reviewSummary(null))
         assertEquals(

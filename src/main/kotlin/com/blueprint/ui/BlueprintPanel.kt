@@ -377,7 +377,9 @@ internal object PatchChangeSummary {
 
     fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
         if (exec == null || appliedPaths.isEmpty()) return "No code changes needed"
-        val changedFiles = exec.patches.filter { it.path in appliedPaths.toSet() }
+        val appliedPathSet = appliedPaths.toSet()
+        val changedFiles = exec.patches.filter { it.path in appliedPathSet }
+        if (changedFiles.isEmpty()) return "No code changes needed"
         val semanticChanges = semanticChanges(changedFiles, exec.summary)
         return buildString {
             appendLine("What changed:")
