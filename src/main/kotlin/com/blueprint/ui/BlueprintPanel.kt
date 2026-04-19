@@ -22,6 +22,9 @@ import com.blueprint.service.PythonProjectAnalyzer
 import com.blueprint.service.PythonUmlGenerator
 import com.blueprint.service.ReviewService
 import com.blueprint.service.UmlImportService
+import com.blueprint.service.WorkspaceChatEntry
+import com.blueprint.service.WorkspaceState
+import com.blueprint.service.WorkspaceStateStore
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.OpenFileDescriptor
 import com.intellij.openapi.project.Project
@@ -336,6 +339,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private val registry = project.service<NodeRegistry>()
     private val codex = service<CodexClient>()
+    private val workspaceStore = project.service<WorkspaceStateStore>()
+    private val chatHistory = mutableListOf<WorkspaceChatEntry>()
+    private var restoringWorkspace = false
+    private var restoredFromSession = false
+    private var restoredAt: Long = 0L
     private var refreshingList = false
 
     private val listModel = DefaultListModel<BlueprintNode>()
@@ -432,6 +440,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         addActionListener { runPrimaryProductAction() }
     }
     private val applyApprovedButton = JButton("Apply Approved Changes").apply { addActionListener { applyChanges(null) } }
+    private val undoLastApplyButton = JButton("Undo Last Apply").apply {
+        isEnabled = false
+        addActionListener { undoChanges() }
+    }
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
     private val advancedMode = JBCheckBox("Advanced")
     private val filterCombo = JComboBox(NodeFilter.values())
@@ -505,6 +517,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             override fun changedUpdate(e: DocumentEvent) = umlDocumentChanged()
         })
         buildUi()
+        // Suppress persistence while we lay down the seeded defaults.
+        // restoreWorkspaceState() then either replaces those defaults with the
+        // saved session OR persists the seeded baseline if nothing was saved.
+        restoringWorkspace = true
         seedInitialChat()
         chatScrollPane.viewport.addComponentListener(object : ComponentAdapter() {
             override fun componentResized(e: ComponentEvent) {
@@ -515,12 +531,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             override fun changed() = SwingUtilities.invokeLater { refreshList() }
         })
         refreshList()
+        restoreWorkspaceState()
         SwingUtilities.invokeLater { relayoutChatTranscript() }
         logActivity(
-            if (shouldShowInviteFirstRunScenario()) {
-                "Blueprint ready. Use the first-run invite demo checklist, keep mock mode on, and follow the guided flow."
-            } else {
-                "Blueprint ready. Seed UML Car Company Flow, keep mock mode on, then run the first ready node."
+            when {
+                restoredFromSession -> "Workspace restored from previous session${restoredAtSuffix()}. Use Reset if it looks stale."
+                shouldShowInviteFirstRunScenario() ->
+                    "Blueprint ready. Use the first-run invite demo checklist, keep mock mode on, and follow the guided flow."
+                else ->
+                    "Blueprint ready. Seed UML Car Company Flow, keep mock mode on, then run the first ready node."
             },
         )
     }
@@ -725,10 +744,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         filterCombo.addActionListener {
             refreshList()
             logActivity("Node filter: ${filterCombo.selectedItem}")
+            persistWorkspace()
         }
         val refreshCodeMapLayout: () -> Unit = {
             updateMiniGraph(project.service<DependencyGraphService>().analyze())
             logActivity("Code map layout: ${codeMapGroupCombo.selectedItem}")
+            persistWorkspace()
         }
         codeMapGroupCombo.addActionListener { refreshCodeMapLayout() }
         hideCodeMapTests.addActionListener { refreshCodeMapLayout() }
@@ -825,6 +846,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             refreshSecondaryTabs()
             revalidate()
             repaint()
+            persistWorkspace()
         }
 
         val lowerWorkspace = JPanel(BorderLayout()).apply {
@@ -848,6 +870,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(JButton("\u2212").apply { addActionListener { miniGraph.zoomOut() } })
                     add(JButton("+").apply { addActionListener { miniGraph.zoomIn() } })
                     add(JButton("\u27f3").apply { addActionListener { miniGraph.zoomReset() } })
+                    add(JButton("Reset").apply {
+                        toolTipText = "Forget restored chat, UML draft, and filters. Generated nodes are kept."
+                        addActionListener { resetWorkspace() }
+                    })
                 }, BorderLayout.EAST)
                 add(codeMapControls(), BorderLayout.SOUTH)
             }, BorderLayout.NORTH)
@@ -1005,6 +1031,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(previewDiffButton)
                 add(applyApprovedButton)
+                add(undoLastApplyButton)
             },
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Save").apply { addActionListener { saveCurrent() } })
@@ -1139,6 +1166,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun appendChat(author: String, message: String) {
+        chatHistory += WorkspaceChatEntry(author = author, message = message)
+        renderChatBubble(author, message)
+        persistWorkspace()
+    }
+
+    private fun renderChatBubble(author: String, message: String) {
         val isUser = author.equals("You", ignoreCase = true)
         val bubbleColor = if (isUser) Color(0x2D323A) else Color(0x202225)
         val borderColor = if (isUser) null else BlueprintTheme.Border
@@ -2194,6 +2227,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         registry.update(n)
         project.service<NodeExecutionService>().executeNodeAsync(n, plan) { exec ->
             registry.setExecution(n.id, exec)
+            undoLastApplyButton.isEnabled = false
             execArea.text = exec.rawJson.ifBlank { JsonExtractor.toJson(exec) }
             showArtifactTab("Execution JSON")
             n.executionStatus = when (exec.status) {
@@ -2420,6 +2454,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } else {
             project.service<ApplyChangesService>().applySingle(n, exec, singlePath, review)
         }
+        undoLastApplyButton.isEnabled = result.applied.isNotEmpty()
         logActivity("Apply finished for ${n.title.ifBlank { n.id.take(8) }}: ${result.applied.size} applied, ${result.skipped.size} skipped.")
         if (result.skipped.isNotEmpty()) {
             n.executionStatus = ExecutionStatus.REVIEW
@@ -2526,6 +2561,38 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         )
     }
 
+    private fun undoChanges() {
+        val svc = project.service<ApplyChangesService>()
+        val record = svc.lastUndo ?: return status("Nothing to undo")
+        val fileList = record.entries.joinToString("\n") { it.path }
+        val confirm = Messages.showYesNoDialog(
+            project,
+            "Restore ${record.entries.size} file(s) from before the last apply of '${record.nodeTitle}'?\n\n" +
+                "$fileList\n\n" +
+                "Files edited since apply will be skipped to avoid data loss.",
+            "Blueprint - Undo Last Apply",
+            Messages.getWarningIcon()
+        )
+        if (confirm != Messages.YES) return
+        val result = svc.undoLast()
+        undoLastApplyButton.isEnabled = false
+        logActivity("Undo apply for '${record.nodeTitle}': ${result.restored.size} restored, ${result.skipped.size} skipped.")
+        status("Undo complete: ${result.restored.size} restored, ${result.skipped.size} skipped")
+        if (result.skipped.isNotEmpty()) {
+            Messages.showWarningDialog(
+                project,
+                "Skipped (restore manually):\n" + result.skipped.joinToString("\n") { "${it.first} — ${it.second}" },
+                "Blueprint - Undo Partially Complete"
+            )
+        } else {
+            Messages.showInfoMessage(
+                project,
+                "Restored ${result.restored.size} file(s):\n$fileList",
+                "Blueprint - Undo Complete"
+            )
+        }
+    }
+
     private fun reviewAllowsApply(review: ReviewArtifact?): Boolean =
         review?.reviewStatus == "APPROVE" && review.recommendedNextAction == "apply"
 
@@ -2621,6 +2688,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             selectedCanvasId = id
             updateMiniGraph(project.service<DependencyGraphService>().analyze())
             status("Selected canvas entity: $id")
+            persistWorkspace()
             return
         }
         selectedCanvasId = id
@@ -2632,6 +2700,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         loadSelectedIntoForm()
         status("Selected from graph: ${node.title.ifBlank { node.id.take(8) }}")
         logActivity("Graph selected ${node.title.ifBlank { node.id.take(8) }} (${node.id.take(8)}).")
+        persistWorkspace()
     }
 
     private fun openGraphSource(node: MiniGraphPanel.NodeView) {
@@ -2694,13 +2763,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         } finally {
             suppressUmlDocumentEvents = false
         }
+        clearRestoredFlag()
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
         updateGuide()
+        persistWorkspace()
     }
 
     private fun umlDocumentChanged() {
         if (!suppressUmlDocumentEvents) {
             umlHasPendingEdits = true
+            clearRestoredFlag()
+            persistWorkspace()
         }
         refreshCanvasFromUml()
     }
@@ -2715,6 +2788,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = nodeList.selectedValue ?: run {
             applyApprovedButton.isEnabled = false
             applyApprovedButton.text = "Apply Approved Changes"
+            undoLastApplyButton.isEnabled = false
             updateOverviewSummary()
             selectedLabel.text = "Selected: none"
             artifactLabel.text = "Artifacts: not planned"
@@ -2842,16 +2916,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val proposalViews = if (umlHasPendingEdits) umlCanvasViews(selectedId) else emptyList()
         if (proposalViews.isNotEmpty()) {
             miniGraph.setGraph(proposalViews)
-            modeBannerLabel.text = "Viewing: UML draft \u2014 pending edits"
+            modeBannerLabel.text = decorateBanner("Viewing: UML draft \u2014 pending edits")
             return
         }
         val codeViews = codeMapViews(selectedId, report)
         if (codeViews.isNotEmpty()) {
             miniGraph.setGraph(codeViews)
-            modeBannerLabel.text = "Viewing: current code map"
+            modeBannerLabel.text = decorateBanner("Viewing: current code map")
             return
         }
-        modeBannerLabel.text = "Viewing: workflow nodes"
+        modeBannerLabel.text = decorateBanner("Viewing: workflow nodes")
         val views = registry.all().map { node ->
             val readiness = report.readiness[node.id]
             MiniGraphPanel.NodeView(
@@ -3232,5 +3306,136 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val at = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
         activityLog.append("[$at] $msg\n")
         activityLog.caretPosition = activityLog.document.length
+    }
+
+    private fun decorateBanner(text: String): String =
+        if (restoredFromSession) "Restored \u00B7 $text" else text
+
+    private fun clearRestoredFlag() {
+        if (restoredFromSession) {
+            restoredFromSession = false
+        }
+    }
+
+    private fun restoredAtSuffix(): String {
+        if (restoredAt <= 0L) return ""
+        val ts = java.time.Instant.ofEpochMilli(restoredAt)
+            .atZone(java.time.ZoneId.systemDefault())
+            .toLocalDateTime()
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
+        return " (saved $ts)"
+    }
+
+    private fun captureWorkspaceState(): WorkspaceState =
+        WorkspaceState(
+            version = WorkspaceState.VERSION,
+            savedAt = System.currentTimeMillis(),
+            umlText = umlEditor.text,
+            umlHasPendingEdits = umlHasPendingEdits,
+            selectedCanvasId = selectedCanvasId,
+            selectedNodeId = registry.selectedNodeId(),
+            chatTranscript = chatHistory.toList(),
+            codeMapGroupMode = (codeMapGroupCombo.selectedItem as? CodeMapProjection.GroupMode)?.name,
+            hideTests = hideCodeMapTests.isSelected,
+            hideGenerated = hideGeneratedCodeMap.isSelected,
+            hideExternalEdges = hideExternalCodeMapEdges.isSelected,
+            hideLowConfidenceEdges = hideLowConfidenceCodeMapEdges.isSelected,
+            nodeFilter = (filterCombo.selectedItem as? NodeFilter)?.name,
+            advancedMode = advancedMode.isSelected,
+            modeBanner = modeBannerLabel.text,
+        )
+
+    private fun persistWorkspace() {
+        if (restoringWorkspace) return
+        workspaceStore.save(captureWorkspaceState())
+    }
+
+    private fun restoreWorkspaceState() {
+        val state = workspaceStore.load()
+        if (state == null) {
+            restoringWorkspace = false
+            persistWorkspace()
+            return
+        }
+        restoringWorkspace = true
+        try {
+            state.codeMapGroupMode
+                ?.let { runCatching { CodeMapProjection.GroupMode.valueOf(it) }.getOrNull() }
+                ?.let { codeMapGroupCombo.selectedItem = it }
+            hideCodeMapTests.isSelected = state.hideTests
+            hideGeneratedCodeMap.isSelected = state.hideGenerated
+            hideExternalCodeMapEdges.isSelected = state.hideExternalEdges
+            hideLowConfidenceCodeMapEdges.isSelected = state.hideLowConfidenceEdges
+            state.nodeFilter
+                ?.let { runCatching { NodeFilter.valueOf(it) }.getOrNull() }
+                ?.let { filterCombo.selectedItem = it }
+            advancedMode.isSelected = state.advancedMode
+            selectedCanvasId = state.selectedCanvasId
+
+            if (!state.umlText.isNullOrBlank()) {
+                suppressUmlDocumentEvents = true
+                try {
+                    umlEditor.text = state.umlText
+                    umlEditor.caretPosition = 0
+                    umlHasPendingEdits = state.umlHasPendingEdits
+                } finally {
+                    suppressUmlDocumentEvents = false
+                }
+            }
+
+            if (state.chatTranscript.isNotEmpty()) {
+                chatHistory.clear()
+                chatMessages.removeAll()
+                state.chatTranscript.forEach { entry ->
+                    chatHistory += entry
+                    renderChatBubble(entry.author, entry.message)
+                }
+            }
+
+            state.selectedNodeId?.let { id ->
+                if (registry.find(id) != null) registry.setSelectedNode(id)
+            }
+        } finally {
+            restoringWorkspace = false
+        }
+        restoredFromSession = true
+        restoredAt = state.savedAt
+        refreshList()
+        updateMiniGraph(project.service<DependencyGraphService>().analyze())
+        updateGuide()
+    }
+
+    private fun resetWorkspace() {
+        val confirm = Messages.showYesNoDialog(
+            project,
+            "Forget restored chat, UML draft, and filter state?\n\nGenerated nodes and the IR snapshot are kept.",
+            "Reset Blueprint Workspace",
+            Messages.getQuestionIcon(),
+        )
+        if (confirm != Messages.YES) return
+        workspaceStore.clear()
+        restoringWorkspace = true
+        try {
+            chatHistory.clear()
+            chatMessages.removeAll()
+            seedInitialChat()
+            codeMapGroupCombo.selectedItem = CodeMapProjection.GroupMode.PACKAGE
+            hideCodeMapTests.isSelected = false
+            hideGeneratedCodeMap.isSelected = false
+            hideExternalCodeMapEdges.isSelected = true
+            hideLowConfidenceCodeMapEdges.isSelected = false
+            filterCombo.selectedItem = NodeFilter.ALL
+            advancedMode.isSelected = false
+            selectedCanvasId = null
+        } finally {
+            restoringWorkspace = false
+        }
+        restoredFromSession = false
+        restoredAt = 0L
+        refreshList()
+        updateMiniGraph(project.service<DependencyGraphService>().analyze())
+        relayoutChatTranscript(scrollToBottom = true)
+        logActivity("Workspace reset to defaults")
+        persistWorkspace()
     }
 }

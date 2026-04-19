@@ -31,6 +31,10 @@ class ApplyChangesService(private val project: Project) {
         val skipped: List<Pair<String, String>>, // path -> reason
     )
 
+    /** The most recent successful apply — available for one-level undo. Cleared on undo. */
+    var lastUndo: UndoRecord? = null
+        private set
+
     fun apply(
         node: BlueprintNode,
         execution: ExecutionArtifact,
@@ -51,6 +55,7 @@ class ApplyChangesService(private val project: Project) {
         val basePath = project.basePath
             ?: return ApplyResult(emptyList(), execution.patches.map { it.path to "No project base path" })
         val base = Paths.get(basePath).normalize()
+        val undoEntries = mutableListOf<UndoEntry>()
 
         WriteCommandAction.runWriteCommandAction(project) {
             for (patch in execution.patches) {
@@ -80,6 +85,12 @@ class ApplyChangesService(private val project: Project) {
                     val verification = PatchFreshness.verify(patch, before, after)
                     if (verification.matchesPatch && verification.changedDisk) {
                         applied += rel
+                        undoEntries += UndoEntry(
+                            path = rel,
+                            before = before,
+                            patchAction = patch.action,
+                            patchContent = patch.content,
+                        )
                     } else {
                         skipped += rel to verification.reason.ifBlank { "patch did not change disk" }
                     }
@@ -88,6 +99,9 @@ class ApplyChangesService(private val project: Project) {
                     skipped += rel to (t.message ?: t.javaClass.simpleName)
                 }
             }
+        }
+        if (undoEntries.isNotEmpty()) {
+            lastUndo = UndoRecord(nodeTitle = node.title.ifBlank { node.id }, entries = undoEntries)
         }
         return ApplyResult(applied, skipped)
     }
@@ -139,6 +153,54 @@ class ApplyChangesService(private val project: Project) {
             }
             else -> error("Unknown patch action: ${patch.action}")
         }
+    }
+
+    /**
+     * Restore the files touched by the last successful apply to their pre-apply state.
+     * Clears [lastUndo] regardless of outcome so the record is never applied twice.
+     * Files that were edited after apply are skipped to avoid silent data loss.
+     */
+    fun undoLast(): UndoResult {
+        val record = lastUndo ?: return UndoResult(emptyList(), emptyList())
+        lastUndo = null
+        val basePath = project.basePath
+            ?: return UndoResult(emptyList(), record.entries.map { it.path to "no project base path" })
+        val base = Paths.get(basePath).normalize()
+        val restored = mutableListOf<String>()
+        val skipped = mutableListOf<Pair<String, String>>()
+
+        WriteCommandAction.runWriteCommandAction(project) {
+            for (entry in record.entries) {
+                val current = snapshot(base, entry.path)
+                when (val decision = UndoFreshness.decide(entry, current)) {
+                    is UndoDecision.RestoreContent -> {
+                        val undoAction = if (entry.patchAction.lowercase() == "delete") "create" else "update"
+                        try {
+                            applyOne(basePath, entry.path, Patch(
+                                path = entry.path,
+                                action = undoAction,
+                                content = decision.content,
+                            ))
+                            restored += entry.path
+                        } catch (t: Throwable) {
+                            log.warn("Failed to restore ${entry.path}", t)
+                            skipped += entry.path to (t.message ?: t.javaClass.simpleName)
+                        }
+                    }
+                    is UndoDecision.DeleteFile -> {
+                        try {
+                            applyOne(basePath, entry.path, Patch(path = entry.path, action = "delete"))
+                            restored += entry.path
+                        } catch (t: Throwable) {
+                            log.warn("Failed to delete ${entry.path} during undo", t)
+                            skipped += entry.path to (t.message ?: t.javaClass.simpleName)
+                        }
+                    }
+                    is UndoDecision.Skip -> skipped += entry.path to decision.reason
+                }
+            }
+        }
+        return UndoResult(restored, skipped)
     }
 
     /** Read current on-disk content for a relative path, or empty if missing. */
