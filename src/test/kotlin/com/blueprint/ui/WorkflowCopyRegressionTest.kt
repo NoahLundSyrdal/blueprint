@@ -28,6 +28,8 @@ class WorkflowCopyRegressionTest {
         assertFalse(source.contains("reviewed code diff when users may type code nodes"))
         assertFalse(source.contains("Create Code Nodes when ready."))
         assertFalse(source.contains("click Create Code Nodes"))
+        assertFalse(source.contains("create reviewable nodes"))
+        assertFalse(source.contains("create nodes"))
         assertFalse(source.contains("code patchs"))
     }
 }

@@ -2175,7 +2175,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         val panel = JPanel(BorderLayout(6, 6)).apply {
             add(
-                JLabel("Paste PlantUML, Mermaid classDiagram, or simple entity bullets. Blueprint will create reviewable nodes."),
+                JLabel("Paste PlantUML, Mermaid classDiagram, or simple entity bullets. Blueprint will turn them into a reviewed code patch flow."),
                 BorderLayout.NORTH
             )
             add(JBScrollPane(input).apply { preferredSize = Dimension(760, 420) }, BorderLayout.CENTER)
@@ -3618,7 +3618,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             refreshChangedFilesPanel(null)
             safetyArea.text = "Select or seed a node to begin."
             dependencyBlockArea.text = "No dependency status yet."
-            graphArea.text = "No graph yet. Seed a sample or create nodes."
+            graphArea.text = "No graph yet. Seed a sample or load a UML change."
             updateMiniGraph(project.service<DependencyGraphService>().analyze())
             titleField.text = ""
             summaryField.text = ""
