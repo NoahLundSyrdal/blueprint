@@ -3321,7 +3321,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                                 .joinToString("\n"),
                         )
                         guideLabel.text = listOf(
-                            "Apply complete. Refresh UML From Code to verify.",
+                            "Apply complete. The code-backed UML was refreshed after apply.",
+                            "Refresh UML From Code again anytime to verify after more edits.",
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
