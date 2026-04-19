@@ -2855,6 +2855,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine()
                             appendLine(whatChanged)
                             appendLine()
+                            appendLine("Changed paths:")
+                            changedPaths.forEach { appendLine("- $it") }
+                            appendLine()
                             appendLine(refreshNote)
                             appendLine(refreshedNote)
                             appendLine()

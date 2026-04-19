@@ -13,6 +13,8 @@ class ApplySuccessMessageFormattingTest {
     fun `apply completion dialog uses appendLine for validation block`() {
         val source = Files.readString(sourcePath)
 
+        assertTrue(source.contains("appendLine(\"Changed paths:\")"))
+        assertTrue(source.contains("changedPaths.forEach { appendLine(\"- \$it\") }"))
         assertTrue(source.contains("appendLine(\"Validation:\")"))
         assertTrue(source.contains("appendLine(validationReportText(result))"))
         assertFalse(source.contains("append(validationReportText(result))"))
