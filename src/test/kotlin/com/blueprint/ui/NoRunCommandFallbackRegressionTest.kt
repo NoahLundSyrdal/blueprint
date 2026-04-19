@@ -11,7 +11,7 @@ class NoRunCommandFallbackRegressionTest {
     @Test
     fun `manual fallback checklist gives ordered likely-entry guidance`() {
         assertTrue(source.contains("Blueprint could not infer a run command yet because none of the likely entry files mapped to a single safe default command. Try this fallback:"))
-        assertTrue(source.contains("1. Open Likely Entry File to jump into the best candidate."))
+        assertTrue(source.contains("1. Open Likely Entry File to inspect the best candidate."))
         assertTrue(source.contains("2. If that is not the right launcher, try one of these likely entry files: \$candidateList"))
         assertTrue(source.contains("3. Run the best candidate from the IDE or terminal."))
         assertTrue(source.contains("4. Confirm the changed feature exists in the running app or CLI output."))

@@ -21,7 +21,7 @@ class RunCommandGuidanceRegressionTest {
         assertTrue(source.contains("Try this fallback:"))
         assertTrue(source.contains("1. Refresh UML From Code after you pick the Python folder you want to verify."))
         assertTrue(source.contains("2. Look for likely entry files such as __main__.py, app.py, main.py, or a package root."))
-        assertTrue(source.contains("1. Open Likely Entry File to jump into the best candidate."))
+        assertTrue(source.contains("1. Open Likely Entry File to inspect the best candidate."))
         assertTrue(source.contains("val candidateList = candidates.joinToString(\", \")"))
         assertTrue(source.contains("2. If that is not the right launcher, try one of these likely entry files: ${'$'}candidateList"))
         assertTrue(source.contains("6. Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \\\"__main__\\\"."))
