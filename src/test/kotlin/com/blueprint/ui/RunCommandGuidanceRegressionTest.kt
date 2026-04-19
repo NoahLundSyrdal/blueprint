@@ -15,8 +15,11 @@ class RunCommandGuidanceRegressionTest {
         assertTrue(source.contains("private fun missingRunCommandGuidance("))
         assertTrue(source.contains("private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String"))
         assertTrue(source.contains("Verify manually with this checklist:"))
-        assertTrue(source.contains("- Open one of these likely entry files: "))
+        assertTrue(source.contains("Open Likely Entry File to jump into one of these likely entry files:"))
         assertTrue(source.contains("- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \\\"__main__\\\"."))
         assertTrue(source.contains("Run after apply is unavailable. "+"${'$'}{missingRunCommandGuidance(context)}"))
+        assertTrue(source.contains("private fun updateLikelyEntryFileAction("))
+        assertTrue(source.contains("private fun openLikelyEntryFile() {"))
+        assertTrue(source.contains("Open likely entry file: ${'$'}it. This does not run or apply anything."))
     }
 }

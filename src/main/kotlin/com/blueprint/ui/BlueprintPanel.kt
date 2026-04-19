@@ -342,7 +342,7 @@ private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String
     return if (candidates.isEmpty()) {
         "Blueprint could not infer a run command yet. Verify manually with this checklist:\n- Open the likely entrypoint manually.\n- Confirm the changed feature exists.\n- Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \"__main__\"."
     } else {
-        "Blueprint could not infer a run command yet. Verify manually with this checklist:\n- Open one of these likely entry files: ${candidates.joinToString(", ")}.\n- Confirm the changed feature exists."
+        "Blueprint could not infer a run command yet. Open Likely Entry File to jump into one of these likely entry files: ${candidates.joinToString(", ")}. Then confirm the changed feature exists."
     }
 }
 
@@ -1070,6 +1070,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         toolTipText = "Refresh UML From Code to reread the changed files from disk and verify the updated code-backed UML after apply."
         addActionListener { refreshUmlAfterApplyVerification() }
     }
+    private val openLikelyEntryFileButton = JButton("Open Likely Entry File").apply {
+        isEnabled = false
+        toolTipText = "Open a likely app entry file when Blueprint cannot infer a run command. This does not run or apply anything."
+        addActionListener { openLikelyEntryFile() }
+    }
     private val openAppliedFilesButton = JButton("Open Changed Files").apply {
         isEnabled = false
         toolTipText = "Open the file(s) Blueprint last wrote to disk. This stays separate from Apply Approved Changes."
@@ -1706,6 +1711,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
                 add(runAppButton)
+                add(openLikelyEntryFileButton)
             })
             add(JPanel(BorderLayout()).apply {
                 border = BorderFactory.createTitledBorder("Run Output")
@@ -4246,7 +4252,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             runDemoButton.text = if (genericState.runVerified) "Run Verified" else "Verify Run Step"
             runDemoButton.isEnabled = genericState.codeMapReady
             runDemoButton.toolTipText = when {
-                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use this checklist to verify one of the likely entry files manually."
+                genericState.runCommand.isNullOrBlank() -> "No run command was inferred. Use Open Likely Entry File to inspect the best candidate, or use the checklist to verify one of the likely entry files manually."
                 genericState.runVerified -> "Blueprint already recorded a passed run step for: ${genericState.runCommand}"
                 else -> "Record how you verified the changed app with: ${genericState.runCommand}"
             }
@@ -4256,17 +4262,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
     private fun refreshRunControls() {
         val runner = project.service<ProjectRunService>()
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        updateLikelyEntryFileAction(context)
         if (runner.isRunning()) {
             runAppButton.text = "Stop Run"
             runAppButton.isEnabled = true
             runAppButton.toolTipText = "Stop the inferred project command running inside Blueprint."
             return
         }
-        val runCommand = runner.inferredRunCommand()
+        val runCommand = runner.inferredRunCommand(context)
         runAppButton.text = "Run In Blueprint"
         runAppButton.isEnabled = !runCommand.isNullOrBlank()
         runAppButton.toolTipText = runCommand?.let { "Run and stream output for: $it" }
-            ?: runner.noCommandSummary()
+            ?: runner.noCommandSummary(context)
         if (runOutputArea.text.isBlank() || runOutputArea.text == "Preparing inferred run command...") {
             runOutputArea.text = runOutputIdleHint()
         }
@@ -4333,6 +4341,44 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun missingRunCommandGuidance(
         context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
     ): String = missingRunCommandChecklist(context.runEntryCandidates)
+
+    private fun updateLikelyEntryFileAction(
+        context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze(),
+    ) {
+        val firstCandidate = context.runEntryCandidates.firstOrNull()
+        val hasRunCommand = !project.service<ProjectRunService>().inferredRunCommand(context).isNullOrBlank()
+        openLikelyEntryFileButton.isEnabled = !hasRunCommand && firstCandidate != null
+        openLikelyEntryFileButton.toolTipText = firstCandidate?.let {
+            "Open likely entry file: $it. This does not run or apply anything."
+        } ?: "Open a likely app entry file when Blueprint cannot infer a run command. This does not run or apply anything."
+        openLikelyEntryFileButton.text = if (firstCandidate == null) {
+            "Open Likely Entry File"
+        } else {
+            "Open Likely Entry File (${firstCandidate.substringAfterLast('/')})"
+        }
+    }
+
+    private fun openLikelyEntryFile() {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val candidate = context.runEntryCandidates.firstOrNull()
+        if (candidate == null) {
+            status("No likely entry file found")
+            Messages.showInfoMessage(
+                project,
+                missingRunCommandChecklist(emptyList()),
+                "Blueprint - No Likely Entry File"
+            )
+            return
+        }
+        val sourceFile = resolveProjectFile(candidate)
+        if (!openProjectFile(sourceFile, candidate)) return
+        status("Opened likely entry file: $candidate")
+        appendChat(
+            "Blueprint",
+            "Opened likely entry file: $candidate. This helps you inspect the app entrypoint when no run command is inferred. It does not run the app or apply changes."
+        )
+        logActivity("Opened likely entry file for manual verification: $candidate")
+    }
 
     private fun currentInvitePrompt(): String? =
         currentInvitePromptPlan()?.prompt
