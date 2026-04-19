@@ -44,7 +44,10 @@ import java.awt.Graphics2D
 import java.awt.GridLayout
 import java.awt.Insets
 import java.awt.LayoutManager
+import java.awt.Rectangle
 import java.awt.RenderingHints
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.awt.event.FocusAdapter
 import java.awt.event.FocusEvent
 import java.time.LocalTime
@@ -65,7 +68,9 @@ import javax.swing.JOptionPane
 import javax.swing.JPanel
 import javax.swing.JPasswordField
 import javax.swing.JScrollPane
+import javax.swing.Scrollable
 import javax.swing.JSplitPane
+import javax.swing.SwingConstants
 import javax.swing.JTabbedPane
 import javax.swing.JTable
 import javax.swing.JTextArea
@@ -148,7 +153,7 @@ private class RoundedLineBorder(
         Insets(padding.top, padding.left, padding.bottom, padding.right)
 }
 
-private class RoundedSurfacePanel(
+private open class RoundedSurfacePanel(
     layout: LayoutManager,
     private val fill: Color,
     private val outline: Color? = null,
@@ -172,6 +177,65 @@ private class RoundedSurfacePanel(
             g2.dispose()
         }
         super.paintComponent(g)
+    }
+}
+
+private class VerticalScrollablePanel : JPanel(), Scrollable {
+    override fun getPreferredScrollableViewportSize(): Dimension = preferredSize
+
+    override fun getScrollableUnitIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int = 24
+
+    override fun getScrollableBlockIncrement(visibleRect: Rectangle, orientation: Int, direction: Int): Int =
+        when (orientation) {
+            SwingConstants.VERTICAL -> (visibleRect.height - 24).coerceAtLeast(24)
+            else -> (visibleRect.width - 24).coerceAtLeast(24)
+        }
+
+    override fun getScrollableTracksViewportWidth(): Boolean = true
+
+    override fun getScrollableTracksViewportHeight(): Boolean = false
+}
+
+private class ChatBubblePanel(
+    displayName: String,
+    message: String,
+    fill: Color,
+    outline: Color?,
+    labelColor: Color,
+) : RoundedSurfacePanel(BorderLayout(0, 8), fill, outline, radius = 24) {
+    private val messageArea = JBTextArea().apply {
+        text = message
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        isOpaque = false
+        foreground = BlueprintTheme.Text
+        border = BorderFactory.createEmptyBorder()
+        font = BlueprintTheme.font(13f)
+    }
+
+    init {
+        border = BorderFactory.createEmptyBorder(12, 16, 12, 16)
+        add(JLabel(displayName).apply {
+            isOpaque = false
+            foreground = labelColor
+            font = BlueprintTheme.font(11f, Font.BOLD)
+        }, BorderLayout.NORTH)
+        add(messageArea, BorderLayout.CENTER)
+    }
+
+    fun relayoutForViewport(viewportWidth: Int) {
+        val bubbleWidth = (viewportWidth * 0.82f).toInt().coerceIn(240, 520)
+        val contentWidth = (bubbleWidth - 32).coerceAtLeast(180)
+        messageArea.setSize(contentWidth, Int.MAX_VALUE)
+        val textSize = messageArea.preferredSize
+        messageArea.preferredSize = Dimension(contentWidth, textSize.height)
+        setSize(bubbleWidth, Int.MAX_VALUE)
+        val bubbleSize = super.getPreferredSize()
+        preferredSize = Dimension(bubbleWidth, bubbleSize.height)
+        maximumSize = Dimension(bubbleWidth, bubbleSize.height)
+        revalidate()
     }
 }
 
@@ -324,7 +388,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         lineWrap = true
         wrapStyleWord = true
     }
-    private val chatMessages = JPanel().apply {
+    private val chatMessages = VerticalScrollablePanel().apply {
         layout = BoxLayout(this, BoxLayout.Y_AXIS)
         background = BlueprintTheme.Background
         border = BorderFactory.createEmptyBorder(12, 12, 12, 12)
@@ -333,6 +397,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         border = RoundedLineBorder(BlueprintTheme.Border)
         viewport.background = BlueprintTheme.Background
         verticalScrollBar.unitIncrement = 16
+        horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
     }
     private val chatInput = JBTextArea(3, 46).apply {
         lineWrap = true
@@ -378,10 +443,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         })
         buildUi()
         seedInitialChat()
+        chatScrollPane.viewport.addComponentListener(object : ComponentAdapter() {
+            override fun componentResized(e: ComponentEvent) {
+                relayoutChatTranscript()
+            }
+        })
         registry.addListener(object : NodeRegistry.Listener {
             override fun changed() = SwingUtilities.invokeLater { refreshList() }
         })
         refreshList()
+        SwingUtilities.invokeLater { relayoutChatTranscript() }
         logActivity("Blueprint ready. Seed UML Car Company Flow, keep mock mode on, then run the first ready node.")
     }
 
@@ -693,7 +764,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(JButton("Generate Code Diff").apply { addActionListener { generateCodeDiffFromCurrentUml() } })
                 }, BorderLayout.EAST)
             }, BorderLayout.NORTH)
-            add(JBScrollPane(miniGraph), BorderLayout.CENTER)
+            add(JBScrollPane(miniGraph).apply {
+                viewport.background = BlueprintTheme.Background
+                verticalScrollBar.unitIncrement = 16
+                horizontalScrollBar.unitIncrement = 16
+            }, BorderLayout.CENTER)
         }
 
         val mainCanvas = JSplitPane(JSplitPane.VERTICAL_SPLIT, diagramPanel, lowerWorkspace).apply {
@@ -956,38 +1031,39 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val labelColor = if (isUser) BlueprintTheme.Accent else BlueprintTheme.Muted
         val displayName = if (isUser) "You" else "Blueprint"
 
-        val bubble = RoundedSurfacePanel(BorderLayout(0, 8), bubbleColor, borderColor, radius = 24).apply {
-            border = BorderFactory.createEmptyBorder(12, 16, 12, 16)
-            add(JLabel(displayName).apply {
-                isOpaque = false
-                foreground = labelColor
-                font = BlueprintTheme.font(11f, Font.BOLD)
-            }, BorderLayout.NORTH)
-            add(JBTextArea().apply {
-                text = message
-                columns = 34
-                isEditable = false
-                isFocusable = false
-                lineWrap = true
-                wrapStyleWord = true
-                isOpaque = false
-                foreground = BlueprintTheme.Text
-                border = BorderFactory.createEmptyBorder()
-                font = BlueprintTheme.font(13f)
-            }, BorderLayout.CENTER)
-        }
+        val bubble = ChatBubblePanel(displayName, message, bubbleColor, borderColor, labelColor)
+        bubble.relayoutForViewport(chatViewportWidth())
 
         val row = JPanel(BorderLayout()).apply {
             isOpaque = false
             border = BorderFactory.createEmptyBorder(8, 0, 8, 0)
             add(bubble, if (isUser) BorderLayout.EAST else BorderLayout.WEST)
+            putClientProperty("blueprint.chatBubble", bubble)
         }
         row.maximumSize = Dimension(Int.MAX_VALUE, row.preferredSize.height)
         chatMessages.add(row)
+        relayoutChatTranscript(scrollToBottom = true)
+    }
+
+    private fun chatViewportWidth(): Int =
+        ((chatScrollPane.viewport.extentSize.width.takeIf { it > 0 }
+            ?: chatScrollPane.width.takeIf { it > 0 }
+            ?: 460) - 24).coerceAtLeast(280)
+
+    private fun relayoutChatTranscript(scrollToBottom: Boolean = false) {
+        val viewportWidth = chatViewportWidth()
+        for (index in 0 until chatMessages.componentCount) {
+            val row = chatMessages.getComponent(index) as? JPanel ?: continue
+            val bubble = row.getClientProperty("blueprint.chatBubble") as? ChatBubblePanel ?: continue
+            bubble.relayoutForViewport(viewportWidth)
+            row.maximumSize = Dimension(Int.MAX_VALUE, row.preferredSize.height)
+        }
         chatMessages.revalidate()
         chatMessages.repaint()
-        SwingUtilities.invokeLater {
-            chatScrollPane.verticalScrollBar.value = chatScrollPane.verticalScrollBar.maximum
+        if (scrollToBottom) {
+            SwingUtilities.invokeLater {
+                chatScrollPane.verticalScrollBar.value = chatScrollPane.verticalScrollBar.maximum
+            }
         }
     }
 

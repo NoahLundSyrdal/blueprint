@@ -110,6 +110,8 @@ class MiniGraphPanel : JPanel() {
 
     fun setGraph(newNodes: List<NodeView>) {
         nodes = newNodes
+        updateCanvasSize()
+        revalidate()
         repaint()
     }
 
@@ -273,6 +275,25 @@ class MiniGraphPanel : JPanel() {
             }
             y += step
         }
+    }
+
+    private fun updateCanvasSize() {
+        val richCards = nodes.any { it.hasRichFacts() }
+        val cardW = if (richCards) 292 else 230
+        val cardH = if (richCards) 132 else 76
+        val gapX = 70
+        val gapY = 24
+        val startX = 24
+        val startY = 46
+        val waves = nodes.groupBy { it.wave }.toSortedMap()
+        val columns = waves.size.coerceAtLeast(1)
+        val maxRows = (waves.values.maxOfOrNull { it.size } ?: 1).coerceAtLeast(1)
+        val contentWidth = startX + columns * cardW + (columns - 1) * gapX + 24
+        val contentHeight = startY + maxRows * cardH + (maxRows - 1) * gapY + 28
+        preferredSize = Dimension(
+            contentWidth.toInt().coerceAtLeast(minimumSize.width),
+            contentHeight.toInt().coerceAtLeast(minimumSize.height),
+        )
     }
 
     private fun nodeAt(point: Point): NodeView? {

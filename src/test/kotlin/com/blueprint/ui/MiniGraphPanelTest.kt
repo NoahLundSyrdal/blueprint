@@ -5,6 +5,7 @@ import java.awt.event.MouseEvent
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MiniGraphPanelTest {
@@ -101,6 +102,24 @@ class MiniGraphPanelTest {
         assertNull(opened.get())
     }
 
+    @Test
+    fun `preferred size expands to fit wide and tall graphs`() {
+        val panel = MiniGraphPanel().apply {
+            setGraph(
+                listOf(
+                    node(id = "one", wave = 1, rowDetail = "one"),
+                    node(id = "two", wave = 2, rowDetail = "two"),
+                    node(id = "three", wave = 3, rowDetail = "three"),
+                    node(id = "four", wave = 1, rowDetail = "four"),
+                    node(id = "five", wave = 1, rowDetail = "five"),
+                ),
+            )
+        }
+
+        assertTrue(panel.preferredSize.width > 900)
+        assertTrue(panel.preferredSize.height > 420)
+    }
+
     private fun graphPanel(node: MiniGraphPanel.NodeView): MiniGraphPanel =
         MiniGraphPanel().apply {
             setSize(900, 420)
@@ -123,4 +142,25 @@ class MiniGraphPanelTest {
             ),
         )
     }
+
+    private fun node(id: String, wave: Int, rowDetail: String): MiniGraphPanel.NodeView =
+        MiniGraphPanel.NodeView(
+            id = id,
+            title = id,
+            status = "CODE",
+            wave = wave,
+            dependencies = emptyList(),
+            selected = false,
+            ready = true,
+            blocked = false,
+            detail = rowDetail,
+            origin = MiniGraphPanel.NodeOrigin.CODE,
+            kind = "model",
+            source = "app/models.py:12",
+            sourcePath = "app/models.py",
+            sourceLine = 12,
+            fields = listOf("id: str", "name: str", "city: str", "company: CarCompany"),
+            fieldOverflowCount = 1,
+            relationshipHint = "edges: 2 in / 2 out",
+        )
 }
