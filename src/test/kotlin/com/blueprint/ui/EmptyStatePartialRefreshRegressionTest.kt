@@ -14,8 +14,7 @@ class EmptyStatePartialRefreshRegressionTest {
         assertTrue(source.contains("partialRefreshNote,"))
         assertTrue(source.contains("Partial refresh note: "))
         assertTrue(source.contains("skipped during Refresh UML From Code"))
-        assertTrue(source.contains("before Generate Code Diff if the UML looks incomplete"))
-        assertTrue(source.contains("Refresh UML From Code to verify after you adjust the folder or files"))
+        assertTrue(source.contains("fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff"))
     }
 
     @Test

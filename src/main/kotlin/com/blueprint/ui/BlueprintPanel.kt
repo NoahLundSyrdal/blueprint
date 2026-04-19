@@ -352,7 +352,7 @@ internal data class FirstRunChecklistState(
                 if (count == 1) reason else "$count $reason"
             }
         val examplePaths = skippedFiles.take(2).joinToString(", ") { it.path }
-        return "- Scope note: ${skippedFiles.size} Python path${if (skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($reasonSummary). The current UML still reflects the Python files Blueprint could read. Inspect Skipped paths like $examplePaths if the UML looks incomplete or you need higher confidence."
+        return "- Scope note: ${skippedFiles.size} Python path${if (skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($reasonSummary). The current UML still reflects the Python files Blueprint could read. Inspect skipped paths like $examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
     }
 
     private fun markerForStep(step: Int, currentStep: Int, done: Boolean): String =
@@ -2383,7 +2383,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 appendLine("- Scope note: Some Python paths were skipped during Refresh UML From Code.")
                 appendLine("- Confidence: the current UML still reflects the Python files Blueprint could read.")
                 appendLine("- Top skipped reasons: $topReasons")
-                appendLine("- If the UML looks incomplete or you need higher confidence, inspect the skipped paths below.")
+                appendLine("- Next action: inspect the skipped paths below, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff.")
             }
             if (context.filesAnalyzed.isNotEmpty()) {
                 appendLine("- Included paths:")
@@ -2409,7 +2409,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val refreshMessage = buildString {
             append("I abstracted the current Python code into UML. ${context.scopeSummaryLine().replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }}. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
             if (context.skippedFiles.isNotEmpty()) {
-                append("\n\nSome Python paths were skipped during Refresh UML From Code. The current UML still reflects the Python files Blueprint could read. If the UML looks incomplete or you need higher confidence, inspect these skipped paths:\n")
+                append("\n\nSome Python paths were skipped during Refresh UML From Code. The current UML still reflects the Python files Blueprint could read. If the UML looks incomplete or you need higher confidence, inspect these skipped paths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff:\n")
                 context.skippedFiles.take(3).forEach { append("- ${it.path}: ${it.reason}\n") }
             }
             if (generated.warnings.isNotEmpty()) {
@@ -4384,7 +4384,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             .take(2)
             .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
         val examplePaths = context.skippedFiles.take(2).joinToString(", ") { it.path }
-        return "Partial refresh note: ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths before Generate Code Diff if the UML looks incomplete, or Refresh UML From Code to verify after you adjust the folder or files."
+        return "Partial refresh note: ${context.skippedFiles.size} Python path${if (context.skippedFiles.size == 1) " was" else "s were"} skipped during Refresh UML From Code ($topReasons). The current code-backed UML still reflects the Python files Blueprint could read, so inspect skipped paths like $examplePaths, fix the folder or files if needed, then Refresh UML From Code again before Generate Code Diff."
     }
 
     private fun inferredRunGuideText(context: PythonProjectAnalyzer.PythonProjectContext = project.service<PythonProjectAnalyzer>().analyze()): String =
