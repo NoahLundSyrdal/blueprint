@@ -1938,11 +1938,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "Refine the UML, or click Refresh UML From Code to verify the current code before trying a different change."
             }
             reviewSummaryArea.text = if (checked == 0) {
-                "No code changes needed. $nextStep"
+                "No code changes: UML already matches code. $nextStep"
             } else {
-                "No code changes needed. The current UML already appears to match the code for $checked checked node(s). $nextStep"
+                "No code changes: UML already matches code for $checked checked node(s). $nextStep"
             }
             safetyArea.text = "No diff to apply."
+            showArtifactTab("Review")
+            status("No code changes needed")
+            appendChat(
+                "Blueprint",
+                if (checked == 0) {
+                    "No code changes: UML already matches code. $nextStep"
+                } else {
+                    "No code changes: UML already matches code for $checked checked node(s). $nextStep"
+                }
+            )
             showArtifactTab("Review")
             status("No code changes needed")
             appendChat(
@@ -1977,7 +1987,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val n = registry.find(node.id) ?: node
         status("Generating code diff for ${n.title.ifBlank { n.id.take(8) }}...")
         showArtifactTab("Review")
-        reviewSummaryArea.text = "Generating a code diff from the current UML. Blueprint will plan, write a scoped patch, review it, and open the diff."
+        reviewSummaryArea.text = "Generating Code Diff for ${n.title.ifBlank { n.id.take(8) }}... Blueprint will plan, write a scoped patch, review it, and open the diff."
         safetyArea.text = "Review gate is on. Apply stays blocked unless review approves the patch."
         n.executionStatus = ExecutionStatus.EXECUTING
         registry.update(n)
