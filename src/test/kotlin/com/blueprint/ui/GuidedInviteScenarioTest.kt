@@ -155,6 +155,8 @@ class GuidedInviteScenarioTest {
         )
         assertTrue(reset.contains("Guided demo prompt loaded: \"restore blueprint_demo/imported_invite/models.py from git\"."))
         assertTrue(reset.contains("restoring blueprint_demo/imported_invite/models.py"))
+        assertTrue(reset.contains("Generate Code Diff -> wait until the sandbox is reset or you choose your own new UML change."))
+        assertTrue(reset.contains("Apply Approved Changes -> available after a fresh reviewed code patch is approved."))
         assertTrue(reset.contains("Your own change:"))
     }
 
