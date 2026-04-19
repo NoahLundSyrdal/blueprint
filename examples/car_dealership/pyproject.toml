@@ -1,0 +1,14 @@
+[project]
+name = "blueprint-car-dealership-demo"
+version = "0.1.0"
+description = "Multi-layer car dealership demo used to showcase Blueprint features."
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+cli = ["click>=8.0"]
+api = ["fastapi>=0.100"]
+dev = ["pytest>=7.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
