@@ -46,4 +46,16 @@ class PrimaryActionCopyRegressionTest {
 
         assertTrue(source.contains("updateNextStepBanner(\"Next: Generate Code Diff\", \"Validation failed after apply, so the reviewed code patch needs another pass.\")"))
     }
+
+    @Test
+    fun `stale reviewed patch shows an explicit banner near next steps`() {
+        val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
+
+        assertTrue(source.contains("private val staleDiffBannerLabel = JLabel().apply {"))
+        assertTrue(source.contains("private fun updateStaleDiffBanner() {"))
+        assertTrue(source.contains("\"Stale reviewed code patch.\""))
+        assertTrue(source.contains("it.warning"))
+        assertTrue(source.contains("staleDiffBannerLabel.isVisible = bannerText.isNotBlank()"))
+        assertFalse(source.contains("nextStepFreshnessHint()"))
+    }
 }

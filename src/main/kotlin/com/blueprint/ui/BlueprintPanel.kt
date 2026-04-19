@@ -1147,6 +1147,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private val guideLabel = JLabel("Start by reading the current project into an editable UML diagram.")
     private val nextStepTitleLabel = JLabel("Next: Refresh UML From Code")
     private val nextStepDetailLabel = JLabel("Read the current Python project and draw the first UML diagram.")
+    private val staleDiffBannerLabel = JLabel().apply {
+        isVisible = false
+    }
     private val firstRunScenarioArea = JBTextArea(5, 40).apply {
         isEditable = false
         isFocusable = false
@@ -1849,6 +1852,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                         add(nextStepDetailLabel.apply {
                             foreground = BlueprintTheme.Muted
                             font = BlueprintTheme.font(12f)
+                        })
+                        add(staleDiffBannerLabel.apply {
+                            foreground = BlueprintTheme.Warning
+                            font = BlueprintTheme.font(12f, Font.BOLD)
+                            border = BorderFactory.createEmptyBorder(4, 0, 0, 0)
                         })
                         add(guideLabel.apply {
                             foreground = Color(0x444444)
@@ -4073,6 +4081,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         openAppliedFilesButton.text = if (postApplyInlineSummary?.changedPaths?.size == 1) "Open Changed File" else "Open Changed Files"
         verifyInUmlButton.isEnabled = n.executionStatus == ExecutionStatus.APPLIED
         artifactLabel.text = "Artifacts: plan=${plan?.status ?: "not planned"} | exec=${exec?.status ?: "not executed"} | review=${review?.reviewStatus ?: "not reviewed"} | diff=${reviewFreshness.badge} | ${reviewFreshness.reviewedAtLine.lowercase(Locale.US)} | validation=${validation?.status ?: "not run"} | node=${badgeFor(n)} | ready=${readiness.ready}"
+        updateStaleDiffBanner()
         val inlineSummary = postApplyInlineSummary
         reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {
             postApplyReviewSummary(exec, inlineSummary)
@@ -5156,21 +5165,24 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun normalizedUmlText(): String = PatchFreshness.normalize(umlEditor.text)
 
     private fun updateNextStepBanner(title: String, detail: String) {
-        val freshnessHint = nextStepFreshnessHint()
         nextStepTitleLabel.text = title
-        nextStepDetailLabel.text = listOf(detail, freshnessHint).filter { it.isNotBlank() }.joinToString(" ")
+        nextStepDetailLabel.text = detail
+        updateStaleDiffBanner()
     }
 
-    private fun nextStepFreshnessHint(): String {
-        val selected = nodeList.selectedValue ?: return ""
-        val exec = registry.getExecution(selected.id)
-        if (exec?.patches.isNullOrEmpty()) return reviewFreshnessFor(selected, exec).bannerHint
-        val freshness = reviewFreshnessFor(selected, exec)
-        val reviewedAtHint = freshness.reviewedAtLine
-            .takeUnless { it.equals("Reviewed at not available yet.", ignoreCase = true) }
-            ?.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.US) else it.toString() }
-            .orEmpty()
-        return listOf(freshness.bannerHint, reviewedAtHint).filter { it.isNotBlank() }.joinToString(" ")
+    private fun updateStaleDiffBanner() {
+        val selected = nodeList.selectedValue
+        val exec = selected?.let { registry.getExecution(it.id) }
+        val freshness = selected?.let { reviewFreshnessFor(it, exec) }
+        val bannerText = freshness?.takeIf { it.badge == "STALE" }?.let {
+            listOf(
+                "Stale reviewed code patch.",
+                it.warning,
+                it.reviewedAtLine.takeUnless { line -> line.equals("Reviewed at not available yet.", ignoreCase = true) },
+            ).filter { line -> !line.isNullOrBlank() }.joinToString(" ")
+        }.orEmpty()
+        staleDiffBannerLabel.text = bannerText
+        staleDiffBannerLabel.isVisible = bannerText.isNotBlank()
     }
 
     private fun guidedNextState(): Pair<String, String> {
