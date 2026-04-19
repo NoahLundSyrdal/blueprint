@@ -120,12 +120,7 @@ class MiniGraphPanel : JPanel() {
 
             override fun mouseReleased(e: MouseEvent) {
                 dragOrigin = null
-                // Restore cursor based on what's under the pointer
-                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
-                    Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-                } else {
-                    Cursor.getDefaultCursor()
-                }
+                updateCursor(e.point)
             }
 
             override fun mouseClicked(e: MouseEvent) {
@@ -146,11 +141,7 @@ class MiniGraphPanel : JPanel() {
         })
         addMouseMotionListener(object : MouseMotionAdapter() {
             override fun mouseMoved(e: MouseEvent) {
-                cursor = if (nodeAt(e.point) != null || sourceBadgeAt(e.point) != null) {
-                    Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-                } else {
-                    Cursor.getDefaultCursor()
-                }
+                updateCursor(e.point)
             }
 
             override fun mouseDragged(e: MouseEvent) {
@@ -189,15 +180,27 @@ class MiniGraphPanel : JPanel() {
         repaint()
     }
 
-    override fun getToolTipText(event: MouseEvent): String? =
-        nodeAt(event.point)?.let { node ->
+    private fun updateCursor(point: Point) {
+        cursor = when {
+            sourceBadgeAt(point) != null -> Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+            nodeAt(point) != null -> Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR)
+            else -> Cursor.getDefaultCursor()
+        }
+    }
+
+    override fun getToolTipText(event: MouseEvent): String? {
+        val sourceNode = sourceBadgeAt(event.point)
+        if (sourceNode != null) {
+            return "<html><b>${escape(sourceNode.title)}</b><br/>Open source for this code-backed card.</html>"
+        }
+        return nodeAt(event.point)?.let { node ->
             "<html><b>${escape(node.title)}</b><br/>" +
                 "ID: ${node.id.take(8)}<br/>" +
                 "Origin: ${node.origin.label()}<br/>" +
                 "Status: ${node.status}<br/>" +
                 node.kind.takeIf { it.isNotBlank() }?.let { "Kind: ${escape(it)}<br/>" }.orEmpty() +
                 "Source: ${escape(node.sourceDescription())}<br/>" +
-                node.hasSourceTarget().takeIf { it }?.let { "Double-click to open source.<br/>" }.orEmpty() +
+                node.hasSourceTarget().takeIf { it }?.let { "Use the open badge or double-click to open source.<br/>" }.orEmpty() +
                 "Wave: ${node.wave}<br/>" +
                 node.summaryLine("Fields", node.fields, node.fieldOverflowCount).takeIf { it.isNotBlank() }
                     ?.let { "${escape(it)}<br/>" }.orEmpty() +
@@ -207,6 +210,7 @@ class MiniGraphPanel : JPanel() {
                 escape(node.detail).replace("\n", "<br/>") +
                 "</html>"
         }
+    }
 
     override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
@@ -327,11 +331,9 @@ class MiniGraphPanel : JPanel() {
 
             paintStatusBadge(g, node, card)
 
-            g.color = if (node.selected) Theme.Accent else Theme.Muted
-            g.drawOval((card.x + card.width - 28).toInt(), (card.y + 10).toInt(), 16, 16)
-            val px = (card.x + card.width - 22).toInt()
-            val py = (card.y + 14).toInt()
-            g.fillPolygon(intArrayOf(px, px, px + 7), intArrayOf(py, py + 8, py + 4), 3)
+            if (node.hasSourceTarget()) {
+                paintOpenGlyph(g, card)
+            }
         }
 
         cards = localCards
@@ -402,8 +404,8 @@ class MiniGraphPanel : JPanel() {
     }
 
     private fun paintSourceBadge(g: Graphics2D, card: RoundRectangle2D.Float, textLeft: Int): RoundRectangle2D.Float {
-        val label = "src"
-        val width = 36
+        val label = "open"
+        val width = 44
         val x = textLeft
         val y = (card.y + card.height - 22).toInt()
         val badge = RoundRectangle2D.Float(x.toFloat(), y.toFloat(), width.toFloat(), 16f, 8f, 8f)
@@ -411,8 +413,19 @@ class MiniGraphPanel : JPanel() {
         g.fill(badge)
         g.color = Theme.Accent
         g.font = font.deriveFont(Font.PLAIN, 10f)
-        g.drawString(label, x + 9, y + 12)
+        g.drawString(label, x + 8, y + 12)
         return badge
+    }
+
+    private fun paintOpenGlyph(g: Graphics2D, card: RoundRectangle2D.Float) {
+        val x = (card.x + card.width - 28).toInt()
+        val y = (card.y + 10).toInt()
+        g.color = Theme.Accent
+        g.drawRect(x, y + 4, 10, 10)
+        g.drawLine(x + 6, y, x + 16, y)
+        g.drawLine(x + 16, y, x + 16, y + 10)
+        g.drawLine(x + 10, y + 2, x + 16, y)
+        g.drawLine(x + 16, y, x + 14, y + 6)
     }
 
     private fun paintStatusBadge(g: Graphics2D, node: NodeView, card: RoundRectangle2D.Float) {

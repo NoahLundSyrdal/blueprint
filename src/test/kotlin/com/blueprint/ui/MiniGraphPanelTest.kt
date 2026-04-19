@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.event.MouseEvent
 import java.util.concurrent.atomic.AtomicReference
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -74,6 +75,58 @@ class MiniGraphPanelTest {
     }
 
     @Test
+    fun `source badge tooltip explains open action while cards stay selectable`() {
+        val panel = graphPanel(
+            MiniGraphPanel.NodeView(
+                id = "models.invite",
+                title = "Invite",
+                status = "CODE",
+                wave = 1,
+                dependencies = emptyList(),
+                selected = false,
+                ready = true,
+                blocked = false,
+                detail = "Current code entity",
+                origin = MiniGraphPanel.NodeOrigin.CODE,
+                kind = "model",
+                source = "app/models.py:12",
+                sourcePath = "app/models.py",
+                sourceLine = 12,
+            ),
+        )
+
+        val cardTooltip = panel.getToolTipText(mouseEvent(panel, 40, 70)).orEmpty()
+        val badgeTooltip = panel.getToolTipText(mouseEvent(panel, 42, 157)).orEmpty()
+
+        assertTrue(cardTooltip.contains("Use the open badge or double-click to open source."))
+        assertTrue(badgeTooltip.contains("Open source for this code-backed card."))
+    }
+
+    @Test
+    fun `proposed uml cards do not advertise an open-source action`() {
+        val panel = graphPanel(
+            MiniGraphPanel.NodeView(
+                id = "InvitePolicy",
+                title = "InvitePolicy",
+                status = "UML",
+                wave = 1,
+                dependencies = emptyList(),
+                selected = false,
+                ready = true,
+                blocked = false,
+                detail = "Proposed UML entity",
+                origin = MiniGraphPanel.NodeOrigin.PROPOSED_UML,
+                kind = "UML entity",
+            ),
+        )
+
+        val tooltip = panel.getToolTipText(mouseEvent(panel, 40, 70)).orEmpty()
+
+        assertFalse(tooltip.contains("open source"))
+        assertFalse(tooltip.contains("open badge"))
+    }
+
+    @Test
     fun `double clicking unmapped proposed card selects instead of opening source`() {
         val opened = AtomicReference<MiniGraphPanel.NodeView?>()
         val selected = AtomicReference<String?>()
@@ -128,20 +181,27 @@ class MiniGraphPanelTest {
         }
 
     private fun MiniGraphPanel.dispatchClick(x: Int, y: Int, clickCount: Int) {
-        dispatchEvent(
-            MouseEvent(
-                this,
-                MouseEvent.MOUSE_CLICKED,
-                System.currentTimeMillis(),
-                0,
-                x,
-                y,
-                clickCount,
-                false,
-                MouseEvent.BUTTON1,
-            ),
-        )
+        dispatchEvent(mouseEvent(this, x, y, MouseEvent.MOUSE_CLICKED, clickCount))
     }
+
+    private fun mouseEvent(
+        panel: MiniGraphPanel,
+        x: Int,
+        y: Int,
+        id: Int = MouseEvent.MOUSE_MOVED,
+        clickCount: Int = 0,
+    ): MouseEvent =
+        MouseEvent(
+            panel,
+            id,
+            System.currentTimeMillis(),
+            0,
+            x,
+            y,
+            clickCount,
+            false,
+            MouseEvent.BUTTON1,
+        )
 
     @Test
     fun `hit-testing works correctly at 2x zoom`() {
