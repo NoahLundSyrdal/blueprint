@@ -3476,23 +3476,37 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
                     val changedPaths = applyResult.applied.distinct().sorted()
                     postApplyChangedPaths = changedPaths
-                    val summaryLine = buildString {
-                        append("Applied ")
-                        append(if (changedPaths.size == 1) "1 file." else "${changedPaths.size} files.")
-                        append(' ')
-                        append(
+                    val summaryLine = when {
+                        changedPaths.isEmpty() ->
                             when (result.status) {
-                                ProjectValidationService.ValidationResult.Status.PASS -> "Validation passed."
+                                ProjectValidationService.ValidationResult.Status.PASS -> "No code changes needed. Validation passed."
                                 ProjectValidationService.ValidationResult.Status.SKIPPED -> {
                                     if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
-                                        "Validation skipped because no command was inferred."
+                                        "No code changes needed. Validation skipped because no command was inferred."
                                     } else {
-                                        "Validation skipped."
+                                        "No code changes needed. Validation skipped."
                                     }
                                 }
-                                ProjectValidationService.ValidationResult.Status.FAIL -> "Validation failed."
+                                ProjectValidationService.ValidationResult.Status.FAIL -> "No code changes needed. Validation failed."
                             }
-                        )
+                        else -> buildString {
+                            append("Applied ")
+                            append(if (changedPaths.size == 1) "1 file." else "${changedPaths.size} files.")
+                            append(' ')
+                            append(
+                                when (result.status) {
+                                    ProjectValidationService.ValidationResult.Status.PASS -> "Validation passed."
+                                    ProjectValidationService.ValidationResult.Status.SKIPPED -> {
+                                        if (result.reason.contains("No Python validation command was inferred", ignoreCase = true)) {
+                                            "Validation skipped because no command was inferred."
+                                        } else {
+                                            "Validation skipped."
+                                        }
+                                    }
+                                    ProjectValidationService.ValidationResult.Status.FAIL -> "Validation failed."
+                                }
+                            )
+                        }
                     }
                     status(summaryLine)
                     val nextActionLine = "Next: Refresh UML From Code to verify the updated code-backed UML."

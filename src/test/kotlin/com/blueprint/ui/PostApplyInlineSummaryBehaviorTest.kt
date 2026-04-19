@@ -68,4 +68,32 @@ class PostApplyInlineSummaryBehaviorTest {
         assertTrue(reviewPanelText.contains("Invite + expires_at: datetime"))
         assertFalse(reviewPanelText.contains("Noise + ignored: str"))
     }
+
+    @Test
+    fun `no-op apply summary stays honest when no files were written`() {
+        val summary = PostApplyInlineSummary(
+            changedPaths = emptyList(),
+            summaryLine = "No code changes needed. Validation passed.",
+            receiptSummary = "Apply receipt:\n- No code changes needed. Validation passed.\n- Changed paths: none.\n- Validation outcome: passed.\n- Next: Refresh UML From Code to verify the updated code-backed UML.",
+            validationAndPathsLine = "Apply receipt:\n- No code changes needed. Validation passed.",
+            nextStepLine = "Next: Refresh UML From Code to manually verify the updated code-backed UML.",
+            verifyChecklist = "Refresh UML From Code verification:\n- No changed paths were written.",
+            copyableResultSummary = "Result summary\n- No code changes needed. Validation passed.",
+        )
+        val exec = ExecutionArtifact(
+            status = "SUCCESS",
+            summary = "Nothing to apply.",
+            touchedFiles = emptyList(),
+            rawJson = "",
+            patches = listOf(
+                Patch(path = "app/models.py", action = "update", content = "class Invite:\n    accepted_at: datetime"),
+            ),
+        )
+
+        val reviewPanelText = summary.reviewPanelText(exec)
+
+        assertTrue(reviewPanelText.lines().first() == "No code changes needed. Validation passed.")
+        assertTrue(reviewPanelText.contains("Changed files: none."))
+        assertFalse(reviewPanelText.contains("Applied 0 files."))
+    }
 }

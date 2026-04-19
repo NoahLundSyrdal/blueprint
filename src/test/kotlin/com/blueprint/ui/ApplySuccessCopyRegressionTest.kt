@@ -12,6 +12,13 @@ class ApplySuccessCopyRegressionTest {
     fun `apply success message keeps verification steps clear and compile safe`() {
         val source = Files.readString(sourcePath)
 
+        assertTrue(source.contains("val summaryLine = when {"))
+        assertTrue(source.contains("changedPaths.isEmpty() ->"))
+        assertTrue(source.contains("\"No code changes needed. Validation passed.\""))
+        assertTrue(source.contains("\"No code changes needed. Validation skipped because no command was inferred.\""))
+        assertTrue(source.contains("\"No code changes needed. Validation skipped.\""))
+        assertTrue(source.contains("\"No code changes needed. Validation failed.\""))
+        assertTrue(source.contains("else -> buildString {"))
         assertTrue(source.contains("val changedPathsBlock = buildString {"))
         assertTrue(source.contains("appendLine(\"Changed paths:\")"))
         assertTrue(source.contains("changedPaths.forEach { appendLine(\"- \$it\") }"))
