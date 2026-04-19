@@ -5213,29 +5213,33 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val approvalSentence = reviewApprovalSentence(exec, review)
         return buildString {
             appendLine("Review this patch in one place:")
+            approvalSentence?.let {
+                appendLine("- Start with the approval reason and safety proof below.")
+            }
             appendLine("- Read What changed? for the plain-English summary.")
             appendLine("- Open Preview Diff to inspect the exact file edits.")
             appendLine("- Confirm the diff scope summary, changed files, and approval reason before apply.")
+            approvalSentence?.let {
+                appendLine()
+                appendLine("Approval reason:")
+                appendLine(it)
+            }
             appendLine()
             appendLine("Validation before apply:")
             appendLine("- ${validationCommandReviewText(validationCommand)}")
             appendLine()
-            appendLine(changedFilesHeader)
+            appendLine("Proof and scope:")
+            appendLine("- Diff status: ${freshness.badge}")
+            appendLine("- ${freshness.reviewedAtLine}")
+            appendLine("- ${freshness.warning}")
+            appendLine("- $scopeSentence")
             appendLine(scopeSummaryLine)
+            appendLine(changedFilesHeader)
             appendLine(changedFilesInline)
-            appendLine("Diff status: ${freshness.badge}")
-            appendLine(freshness.reviewedAtLine)
-            appendLine(freshness.warning)
-            approvalSentence?.let {
-                appendLine()
-                appendLine(it)
-            }
             if (exec?.patches.orEmpty().isNotEmpty()) {
                 appendLine()
                 appendLine("What changed? explains the intent. Preview Diff confirms the exact file edits before apply.")
             }
-            appendLine()
-            appendLine(scopeSentence)
             appendLine()
             append(summary)
         }.trim()

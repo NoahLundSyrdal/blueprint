@@ -12,7 +12,7 @@ class ReviewTabFreshnessRegressionTest {
 
         assertTrue(source.contains("private data class ReviewFreshnessState("))
         assertTrue(source.contains("artifactLabel.text = \"Artifacts: plan=") && source.contains("| diff=") && source.contains("reviewFreshness.badge"))
-        assertTrue(source.contains("appendLine(\"Diff status: ") && source.contains("freshness.badge"))
+        assertTrue(source.contains("appendLine(\"- Diff status: \${freshness.badge}\")"))
         assertTrue(source.contains("private val staleDiffBannerLabel = JLabel().apply {"))
         assertTrue(source.contains("add(staleDiffBannerLabel.apply {"))
         assertTrue(source.contains("private fun updateStaleDiffBanner() {"))

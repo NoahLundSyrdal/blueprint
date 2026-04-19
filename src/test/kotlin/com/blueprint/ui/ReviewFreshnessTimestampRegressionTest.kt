@@ -16,7 +16,7 @@ class ReviewFreshnessTimestampRegressionTest {
         assertTrue(source.contains("reviewedAtByNodeId[n.id] = Instant.now()"))
         assertTrue(source.contains("val reviewedAt = reviewedAtByNodeId[node.id]"))
         assertTrue(source.contains("val reviewedAtLine = reviewedAtLine(reviewedAt)"))
-        assertTrue(source.contains("appendLine(freshness.reviewedAtLine)"))
+        assertTrue(source.contains("appendLine(\"- \${freshness.reviewedAtLine}\")"))
         assertTrue(source.contains("reviewFreshness.reviewedAtLine.lowercase(Locale.US)"))
         assertTrue(source.contains("Reviewed at not available yet"))
         assertTrue(source.contains("Reviewed at "))
