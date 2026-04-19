@@ -3535,6 +3535,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
                         }.trim(),
                     )
+                    copyRunSummaryButton.isEnabled = true
+                    copyRunSummaryButton.toolTipText = if (pythonContext.runCommands.firstOrNull().isNullOrBlank()) {
+                        "Copy a manual verification receipt when Blueprint cannot infer a run command yet."
+                    } else {
+                        "Copy a plain-English result summary after successful run verification."
+                    }
                     openAppliedFilesButton.isEnabled = changedPaths.isNotEmpty()
                     openAppliedFilesButton.text = if (changedPaths.size == 1) "Open Changed File" else "Open Changed Files"
                     verifyInUmlButton.isEnabled = true
@@ -4779,6 +4785,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             append(copyableSummary)
         }.trim()
         copyRunSummaryButton.isEnabled = true
+        copyRunSummaryButton.toolTipText = "Copy a plain-English result summary after successful run verification."
         completedRunReceiptCycle = true
         guideLabel.text = banner
         appendChat("Blueprint", banner)
@@ -4802,17 +4809,40 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }.trim()
     }
 
-    private fun copyRunResultSummary() {
-        val runCommand = project.service<ProjectRunService>().inferredRunCommand()
-        if (runCommand.isNullOrBlank()) {
-            status("No run result summary to copy yet")
-            return
+    private fun manualVerificationReceipt(context: PythonProjectAnalyzer.PythonProjectContext, demoFlow: Boolean): String {
+        val flowLabel = if (demoFlow) "Demo flow" else "Blueprint flow"
+        val changedPaths = postApplyInlineSummary?.changedPaths.orEmpty().distinct()
+        val validationSummary = postApplyInlineSummary?.copyableResultSummary
+            ?: "Result summary\n- Validation: not recorded yet\n- Run after apply: not recorded yet\n- Changed paths: none"
+        val likelyEntryFiles = context.runEntryCandidates.take(3)
+        val likelyEntryLine = if (likelyEntryFiles.isEmpty()) {
+            "- Likely entry files: none identified yet."
+        } else {
+            "- Likely entry files: ${likelyEntryFiles.joinToString(", ")}."
         }
-        val summary = runResultSummary(runCommand, manualDemoExpectedVisibleResult(guidedInviteScenarioState()), false)
+        return buildString {
+            appendLine("Copyable manual verification receipt")
+            appendLine("- $flowLabel is ready for manual verification because Blueprint could not infer a project run command yet.")
+            appendLine("- Refresh UML From Code to verify the current code-backed UML before you inspect the app manually.")
+            appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
+            appendLine(likelyEntryLine)
+            appendLine("- Next action: inspect the changed paths and likely entry files side by side until you confirm the feature exists.")
+            append(validationSummary.removePrefix("Result summary\n"))
+        }.trim()
+    }
+
+    private fun copyRunResultSummary() {
+        val context = project.service<PythonProjectAnalyzer>().analyze()
+        val runCommand = project.service<ProjectRunService>().inferredRunCommand()
+        val summary = if (runCommand.isNullOrBlank()) {
+            manualVerificationReceipt(context, false)
+        } else {
+            runResultSummary(runCommand, manualDemoExpectedVisibleResult(guidedInviteScenarioState()), false)
+        }
         val selection = java.awt.datatransfer.StringSelection(summary)
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
         appendChat("Blueprint", summary)
-        status("Copied result summary")
+        status(if (runCommand.isNullOrBlank()) "Copied manual verification receipt" else "Copied result summary")
     }
 
     private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
