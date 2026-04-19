@@ -488,10 +488,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             %% Start here:
             %% 1. Click "Abstract Code to UML" to read this Python project.
             %% 2. Edit the UML directly or ask chat to refine it.
-            %% 3. Click "Create Code Nodes" when the design is ready.
+            %% 3. Click "Generate Code Diff" when the design is ready.
             %%
             %% This loop can run anytime:
-            %% codebase -> UML -> chat refinement -> code nodes -> apply -> UML again
+            %% codebase -> UML -> chat refinement -> reviewed code diff -> apply -> UML again
         """.trimIndent()
     }
 
@@ -589,7 +589,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val text = button.text.orEmpty()
         val primary = button.getClientProperty("blueprint.primary") == true ||
             text.startsWith("Next:") ||
-            text.contains("Create Code Nodes") ||
+            text.contains("Generate Code Diff") ||
             text == "Send"
         button.setUI(BlueprintButtonUi(primary))
         button.foreground = if (primary) Color(0x061016) else BlueprintTheme.Text
@@ -777,7 +777,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             border = BorderFactory.createEmptyBorder(6, 6, 6, 6)
             add(JButton("Abstract Code to UML").apply { addActionListener { generateProjectUml() } })
             add(JButton("Paste UML").apply { addActionListener { importUml() } })
-            add(JButton("Create Code Nodes").apply { addActionListener { generateCodeFromUml() } })
+            if (advancedMode.isSelected) add(JButton("Generate Code Diff").apply { addActionListener { generateCodeFromUml() } }) // Advanced mode only
             add(JButton("+ Manual Node").apply { addActionListener { addNode() } })
             add(
                 JButton(if (shouldShowInviteFirstRunScenario()) "Sample: Invite UML" else "Sample: Car Company UML").apply {
@@ -1221,7 +1221,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val graph = project.service<DependencyGraphService>()
         val ready = graph.readyNodes()
         return when {
-            "generate code" in lower || "code nodes" in lower -> {
+            "generate code" in lower || "reviewed code diff" in lower -> {
                 "When the UML looks right, click Create Code Nodes. Blueprint will turn the current UML into scoped nodes, then you can plan, execute, review, preview the diff, and apply."
             }
             "abstract" in lower || "sync" in lower -> {
@@ -1268,7 +1268,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (codex.providerMode() == "mock") return false
         val lower = message.lowercase()
         if (!codex.hasOpenAIKey() && codex.providerMode() == "openai") return false
-        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "code nodes", "apply").any { it in lower }) {
+        if (listOf("run", "next", "why", "blocked", "diff", "changed", "generate code", "reviewed code diff", "apply").any { it in lower }) {
             return false
         }
         return listOf("explain", "what is", "what are", "current product", "product", "architecture", "summarize", "describe")
@@ -1297,7 +1297,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val lower = message.lowercase()
         return listOf("add", "remove", "change", "rename", "refactor", "relationship", "entity", "class", "field")
             .any { it in lower } &&
-            !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "code nodes", "explain").any { it in lower }
+            !listOf("what next", "what should", "why", "blocked", "diff", "changed", "generate code", "reviewed code diff", "explain").any { it in lower }
     }
 
     private fun refineUmlWithChat(message: String) {
@@ -1375,7 +1375,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         You are Blueprint, an architecture assistant inside PyCharm.
 
         Product loop:
-        codebase -> editable UML -> chat refinement -> code nodes -> plan/execute/review/apply -> UML again.
+        codebase -> editable UML -> chat refinement -> reviewed code diff -> plan/execute/review/apply -> UML again.
 
         Answer the user's question clearly and briefly. Do not claim you changed code unless the user used the execution buttons.
         When useful, refer to the selected entity's source, fields, methods, relationships, current UML, and generated nodes.
@@ -1547,7 +1547,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (text.isBlank() || !text.contains("classDiagram")) {
             Messages.showWarningDialog(
                 project,
-                "The UML editor needs Mermaid classDiagram text before Blueprint can generate code nodes.",
+                "The UML editor needs Mermaid classDiagram text before Blueprint can generate reviewed code diff.",
                 "Blueprint - Create Code Nodes"
             )
             status("No usable UML to generate code")
@@ -1578,7 +1578,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (text.isBlank() || !text.contains("classDiagram")) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
             if (existingNodes.isNotEmpty()) {
-                status("Using existing code nodes for diff")
+                status("Using existing reviewed code diff for diff")
                 logActivity("Generate Code Diff used existing nodes because the UML text was not parseable.")
                 generateFirstRealCodeDiff(existingNodes)
                 return
@@ -1591,7 +1591,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (parsed.entities.isEmpty()) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
             if (existingNodes.isNotEmpty()) {
-                status("Using existing code nodes for diff")
+                status("Using existing reviewed code diff for diff")
                 logActivity("Generate Code Diff used existing nodes because the UML editor had no parseable entities.")
                 generateFirstRealCodeDiff(existingNodes)
                 return
@@ -1606,7 +1606,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         importUmlText(text, "current UML")
         val nodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
         if (nodes.isEmpty()) {
-            status("No code nodes created")
+            status("No reviewed code diff created")
             endPrimaryAction()
             return
         }
@@ -1621,7 +1621,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (index >= nodes.size) {
             val checked = noChangeTitles.size
             reviewSummaryArea.text = if (checked == 0) {
-                "No implementation nodes were ready to run."
+                "No code patchs were ready to run."
             } else {
                 "No code changes needed. The current UML already appears to match the code for $checked checked node(s)."
             }
@@ -1707,7 +1707,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     showArtifactTab("Review")
                     val title = n.title.ifBlank { n.id.take(8) }
                     status("No changes for $title; checking next node")
-                    reviewSummaryArea.text = "No code changes for $title. Checking the next UML implementation node..."
+                    reviewSummaryArea.text = "No code changes for $title. Checking the next UML code patch..."
                     logActivity("No-op code diff for $title; generated content matched disk.")
                     onNoChange?.invoke(title)
                     return@executeNodeAsync
@@ -1760,7 +1760,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         graphArea.text = result.summary
         appendChat(
             "Blueprint",
-            "Imported $sourceLabel into ${result.nodes.size} implementation nodes. Click Generate Code Diff to preview code changes."
+            "Imported $sourceLabel into ${result.nodes.size} code patchs. Click Generate Code Diff to preview code changes."
         )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
@@ -3144,7 +3144,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val allNodes = registry.all()
         if (allNodes.isEmpty()) {
-            return "Next: Create Code Nodes" to "Turn the edited UML into reviewable implementation nodes."
+            return "Next: Create Code Nodes" to "Turn the edited UML into reviewable code patchs."
         }
 
         val graph = project.service<DependencyGraphService>()
