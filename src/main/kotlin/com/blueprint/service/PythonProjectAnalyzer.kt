@@ -211,16 +211,11 @@ class PythonProjectAnalyzer(private val project: Project) {
         val pythonFiles = walkPythonFiles(base, 4)
         val relPaths = pythonFiles.map { base.relativize(it).toString().replace('\\', '/') }
         val sourcePackages = sourceRoots.filter { it != "." }
-        val candidatePackages = sourcePackages.filterNot { it == "src" || it == "app" }
+        val candidatePackages = sourcePackages.filterNot { it == "src" || it == "app" || it == "test" || it == "tests" }
         val detectedPackage = candidatePackages.firstOrNull() ?: sourcePackages.firstOrNull { it != "src" && it != "app" }
         val appLikePath = relPaths.firstOrNull { it == "app.py" || it.endsWith("/app.py") || it == "main.py" || it.endsWith("/main.py") }
         val mainGuardPath = relPaths.firstOrNull { hasMainGuard(base.resolve(it)) }
-        val packageRunCommand = (candidatePackages.firstOrNull { isImportablePackage(base.resolve(it)) } ?: detectedPackage)
-            ?.let { pkg ->
-                val trimmed = pkg.trim('/').ifBlank { pkg.substringAfterLast('/') }
-                val moduleName = trimmed.replace('/', '.').ifBlank { trimmed }
-                "python -m $moduleName"
-            }
+        val packageRunCommand = preferredPackageRunCommand(base, candidatePackages, detectedPackage)
 
         if ("fastapi" in frameworks) {
             val fastApiPath = relPaths.firstOrNull {
@@ -250,11 +245,23 @@ class PythonProjectAnalyzer(private val project: Project) {
             mainGuardPath?.let { commands += "python $it" }
             packageRunCommand?.let { commands += it }
         }
-        if (commands.isEmpty() && detectedPackage != null) {
-            commands += "python -m ${detectedPackage.replace('/', '.')}"
+        if (commands.isEmpty()) {
+            packageRunCommand?.let { commands += it }
         }
         return commands.distinct()
     }
+
+    private fun preferredPackageRunCommand(base: Path, candidatePackages: List<String>, detectedPackage: String?): String? {
+        val preferredPackage = candidatePackages.firstOrNull { isImportablePackage(base.resolve(it)) }
+            ?: candidatePackages.firstOrNull()
+            ?: detectedPackage
+            ?: return null
+        val moduleName = packageModuleName(preferredPackage) ?: return null
+        return "python -m $moduleName"
+    }
+
+    private fun packageModuleName(packagePath: String): String? =
+        packagePath.trim('/').replace('/', '.').takeIf { it.isNotBlank() }
 
     private fun hasMainGuard(path: Path): Boolean =
         hasAnyText(path, listOf("if __name__ == '__main__':", "if __name__ == \"__main__\":"))
@@ -342,13 +349,17 @@ class PythonProjectAnalyzer(private val project: Project) {
     }
 
     private fun namespaceSourceRoot(base: Path, file: Path): String? {
-        val relative = runCatching { base.relativize(file.parent ?: return null) }.getOrNull() ?: return null
+        val parent = file.parent ?: return null
+        if (parent == base) return null
+        val relative = runCatching { base.relativize(parent) }.getOrNull() ?: return null
         val parts = relative.map { it.toString() }
         if (parts.isEmpty()) return null
-        if (parts.first() in listOf("src", "app")) {
-            return parts.first()
+        val first = parts.first()
+        return when (first) {
+            "src", "app" -> first
+            "test", "tests" -> null
+            else -> first
         }
-        return parts.first()
     }
 
     private fun baseHasTopLevelPythonFiles(base: Path): Boolean {

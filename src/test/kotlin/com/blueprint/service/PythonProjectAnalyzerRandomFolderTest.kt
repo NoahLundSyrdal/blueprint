@@ -74,7 +74,24 @@ class PythonProjectAnalyzerRandomFolderTest {
         assertTrue(context.testRoots.contains("tests"))
         assertEquals("unknown", context.packageManager)
         assertEquals(listOf("python -m unittest discover tests"), context.testCommands)
-        assertEquals(listOf("python -m "), context.runCommands)
+        assertEquals(listOf("python -m warehouse"), context.runCommands)
+    }
+
+    @Test
+    fun `run command inference never returns an empty module command`() {
+        val fixtures = listOf(
+            "src/test/resources/random_python_flat_tool" to "python main.py",
+            "src/test/resources/random_python_namespace_app" to "uvicorn app.api.server:app --reload",
+            "src/test/resources/random_python_setup_py_namespace" to "python -m warehouse",
+        )
+
+        fixtures.forEach { (fixturePath, expectedFirstCommand) ->
+            val fixture = Path.of(fixturePath).toAbsolutePath().normalize()
+            val context = PythonProjectAnalyzer(fakeProject(fixture)).analyze()
+
+            assertFalse(context.runCommands.any { it == "python -m " || it.endsWith("-m ") })
+            assertEquals(expectedFirstCommand, context.runCommands.first())
+        }
     }
 
     private fun fakeProject(basePath: Path): Project =
