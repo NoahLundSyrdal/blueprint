@@ -3340,8 +3340,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             .filter { it.from in entityNames && it.to in entityNames }
         val dependenciesByEntity = relationshipsByEntity.groupBy({ it.to }, { it.from })
         return parsed.entities.mapIndexed { index, entity ->
-            val fieldLines = entity.fields.filterNot { it.contains("(") && it.contains(")") }
-            val methodLines = entity.fields.filter { it.contains("(") && it.contains(")") }
+            val visibleFields = entity.fields.map(::sanitizeUmlPreviewField).filter { it.isNotBlank() }
+            val fieldLines = visibleFields.filterNot { it.contains("(") && it.contains(")") }
+            val methodLines = visibleFields.filter { it.contains("(") && it.contains(")") }
             val relationshipHint = relationshipsByEntity
                 .filter { it.from == entity.name || it.to == entity.name }
                 .map { rel -> rel.label.ifBlank { "relates to" } }
@@ -3361,14 +3362,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 blocked = false,
                 detail = buildString {
                     append("Proposed UML entity")
-                    if (entity.fields.isNotEmpty()) {
+                    if (visibleFields.isNotEmpty()) {
                         append("\n")
-                        append(entity.fields.take(8).joinToString("\n") { "- $it" })
+                        append(visibleFields.take(8).joinToString("\n") { "- $it" })
                     }
                 },
                 origin = MiniGraphPanel.NodeOrigin.PROPOSED_UML,
                 kind = "UML entity",
-                preview = entity.fields.take(3).joinToString(", ").ifBlank { "no fields yet" },
+                preview = fieldLines.take(3).joinToString(", ").ifBlank { "no fields yet" },
                 fields = fieldLines.take(3),
                 fieldOverflowCount = (fieldLines.size - 3).coerceAtLeast(0),
                 methods = methodLines.take(2),
@@ -3840,6 +3841,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         updateMiniGraph(project.service<DependencyGraphService>().analyze())
         updateGuide()
     }
+
+    private fun sanitizeUmlPreviewField(field: String): String =
+        field
+            .replace("&lt;&lt;", "<<")
+            .replace("&gt;&gt;", ">>")
+            .trim()
+            .takeUnless { it.matches(Regex("""<<[^>]+>>""")) }
+            .orEmpty()
 
     private fun resetWorkspace() {
         val confirm = Messages.showYesNoDialog(
