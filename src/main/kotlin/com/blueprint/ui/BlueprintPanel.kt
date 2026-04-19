@@ -406,6 +406,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         margin = Insets(8, 8, 8, 8)
     }
     private val umlStatusLabel = JLabel("UML: not generated yet")
+    private val modeBannerLabel = JLabel("Viewing: current code map")
     private val umlEditor = JBTextArea(18, 72).apply {
         lineWrap = false
         text = """
@@ -752,17 +753,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
         val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
             border = BorderFactory.createTitledBorder("UML Canvas")
-            add(JPanel(BorderLayout()).apply {
-                add(JPanel(GridLayout(0, 1, 2, 2)).apply {
-                    add(JLabel("Blueprint").apply {
-                        font = font.deriveFont(java.awt.Font.BOLD, 15f)
-                    })
-                    add(umlStatusLabel.apply { foreground = Color(0x555555) })
-                }, BorderLayout.CENTER)
-                add(JPanel(FlowLayout(FlowLayout.RIGHT, 6, 0)).apply {
-                    add(JButton("Refresh UML").apply { addActionListener { generateProjectUml() } })
-                    add(JButton("Generate Code Diff").apply { addActionListener { generateCodeDiffFromCurrentUml() } })
-                }, BorderLayout.EAST)
+            add(JPanel(GridLayout(0, 1, 2, 2)).apply {
+                add(JLabel("Blueprint").apply {
+                    font = font.deriveFont(java.awt.Font.BOLD, 15f)
+                })
+                add(umlStatusLabel.apply { foreground = Color(0x555555) })
+                add(modeBannerLabel)
             }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph).apply {
                 viewport.background = BlueprintTheme.Background
@@ -889,10 +885,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
-                add(previewDiffButton)
-                add(applyApprovedButton)
             })
             val advancedRows = listOf(
+                JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+                add(previewDiffButton)
+                add(applyApprovedButton)
+            },
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
                 add(JButton("Save").apply { addActionListener { saveCurrent() } })
                 add(JButton("Generate Plan").apply { addActionListener { generatePlan() } })
@@ -2155,6 +2153,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             umlHasPendingEdits = false
             val generated = project.service<PythonUmlGenerator>().generate()
             loadGeneratedUml(generated)
+            showArtifactTab("UML")
             logActivity(
                 "Freshness verified after apply: refreshed UML from disk with " +
                     "${generated.classCount} class(es), ${generated.relationshipCount} relationship(s)."
@@ -2459,13 +2458,16 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val proposalViews = if (umlHasPendingEdits) umlCanvasViews(selectedId) else emptyList()
         if (proposalViews.isNotEmpty()) {
             miniGraph.setGraph(proposalViews)
+            modeBannerLabel.text = "Viewing: UML draft \u2014 pending edits"
             return
         }
         val codeViews = codeMapViews(selectedId, report)
         if (codeViews.isNotEmpty()) {
             miniGraph.setGraph(codeViews)
+            modeBannerLabel.text = "Viewing: current code map"
             return
         }
+        modeBannerLabel.text = "Viewing: workflow nodes"
         val views = registry.all().map { node ->
             val readiness = report.readiness[node.id]
             MiniGraphPanel.NodeView(
