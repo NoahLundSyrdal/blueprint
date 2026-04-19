@@ -4405,7 +4405,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return listOf(
                 "No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram.",
                 folderSummary,
-                "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
+                "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and run the changed app.",
                 "Refresh UML From Code scans Python files for the code-backed UML and may skip non-Python folders, generated artifacts, and files it cannot parse yet.",
                 partialRefreshNote,
                 "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
@@ -4421,7 +4421,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             folderSummary,
             "Open the Python app folder or a Python subfolder you want to map, then click Refresh UML From Code again.",
             "If you are still choosing the folder, you can open source files manually or paste/import UML first and come back to code refresh later.",
-            "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, Generate Code Diff, Apply Approved Changes, refresh UML from code to verify, and run the changed app.",
+            "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and run the changed app.",
             nextStep,
             "Open a Python source root or add .py files, then Refresh UML From Code to start the full Blueprint loop.",
             "Next steps: open a Python source root, open a Python subfolder, add .py files, or paste/import UML while you pick the folder to map.",
