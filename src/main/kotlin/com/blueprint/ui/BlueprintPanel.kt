@@ -1303,11 +1303,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         status("Refining UML with ${providerText()}...")
         appendChat("Blueprint", "Refining the editable UML. In live mode this uses the configured OpenAI provider/API key.")
         val currentUml = umlEditor.text
+        val grounding = chatGrounding()
         Thread {
             val result = if (codex.providerMode() == "mock") {
                 CodexClient.Result(mockUmlEdit(currentUml, message), ok = true)
             } else {
-                codex.sendPromptResult(umlChatPrompt(currentUml, message))
+                codex.sendPromptResult(umlChatPrompt(currentUml, message, grounding))
             }
             SwingUtilities.invokeLater {
                 if (!result.ok) {
@@ -1324,19 +1325,27 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 }
                 setUmlEditorText(nextUml, pendingEdits = true)
                 umlStatusLabel.text = "UML: refined by chat. Create Code Nodes when ready, or keep editing."
-                appendChat("Blueprint", "Updated the UML. Review it in the main canvas, then keep refining or click Create Code Nodes.")
+                appendChat(
+                    "Blueprint",
+                    "Updated the UML using ${grounding.selectedLabel}, so the edit stays tied to the selected source facts, fields, methods, and relationships. Review it in the main canvas, then keep refining or click Create Code Nodes."
+                )
                 updateGuide()
                 status("UML refined")
             }
         }.start()
     }
 
-    private fun umlChatPrompt(currentUml: String, message: String): String =
+    private fun umlChatPrompt(
+        currentUml: String,
+        message: String,
+        grounding: ChatGroundingContext.Grounding = chatGrounding(),
+    ): String =
         """
         You are Blueprint, an architecture assistant inside PyCharm.
 
         The user edits a Mermaid UML classDiagram that will later be converted into scoped code-generation nodes.
         Update the UML according to the user's request.
+        Use the grounding context to interpret pronouns like "this", "it", "selected", or "the current class".
 
         Rules:
         - Return only Mermaid classDiagram text.
@@ -1344,9 +1353,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         - Keep names clear and Python-friendly.
         - Prefer class blocks and simple relationship lines.
         - Do not include explanations, markdown fences, or prose.
+        - Keep changes focused on the selected entity when the request is ambiguous.
+
+        Grounding context:
+        ${grounding.promptText}
 
         Current UML:
-        $currentUml
+        ${ChatGroundingContext.compactUml(currentUml)}
 
         User request:
         $message
@@ -1356,6 +1369,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val selected = nodeList.selectedValue
         val graph = project.service<DependencyGraphService>()
         val ready = graph.readyNodes()
+        val grounding = chatGrounding()
         return """
         You are Blueprint, an architecture assistant inside PyCharm.
 
@@ -1363,10 +1377,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         codebase -> editable UML -> chat refinement -> code nodes -> plan/execute/review/apply -> UML again.
 
         Answer the user's question clearly and briefly. Do not claim you changed code unless the user used the execution buttons.
-        When useful, refer to the current UML and generated nodes.
+        When useful, refer to the selected entity's source, fields, methods, relationships, current UML, and generated nodes.
+        If the user refers to "this", "it", or "selected", resolve that from Grounding context.
 
-        Current UML:
-        ${umlEditor.text}
+        Grounding context:
+        ${grounding.promptText}
+
+        Current UML excerpt:
+        ${ChatGroundingContext.compactUml(umlEditor.text)}
 
         Selected generated node:
         ${selected?.let { "${it.title} (${it.type.name.lowercase()}, ${badgeFor(it)})" } ?: "none"}
@@ -1377,6 +1395,17 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         User question:
         $message
         """.trimIndent()
+    }
+
+    private fun chatGrounding(): ChatGroundingContext.Grounding {
+        val parsed = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
+        val ir = project.service<IRStore>().load()
+        return ChatGroundingContext.build(
+            ir = ir,
+            parsedUml = parsed,
+            selectedCanvasId = selectedCanvasId,
+            viewingUmlDraft = umlHasPendingEdits,
+        )
     }
 
     private fun extractMermaid(text: String): String {
