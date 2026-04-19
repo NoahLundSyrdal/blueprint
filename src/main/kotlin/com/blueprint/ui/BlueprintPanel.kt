@@ -1222,7 +1222,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val ready = graph.readyNodes()
         return when {
             "generate code" in lower || "reviewed code diff" in lower -> {
-                "When the UML looks right, click Create Code Nodes. Blueprint will turn the current UML into scoped nodes, then you can plan, execute, review, preview the diff, and apply."
+                "When the UML looks right, click Generate Code Diff. Blueprint will prepare a reviewed code patch that you can inspect and then apply."
             }
             "abstract" in lower || "sync" in lower -> {
                 "Click Abstract Code to UML at any time. Blueprint will rescan the Python project and replace the editable UML with the current code architecture."
@@ -1252,7 +1252,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 if (shouldShowInviteFirstRunScenario()) {
                     "The main canvas is editable Mermaid UML. For the guided invite demo, try '${GuidedInviteScenario.PROMPT}', then generate a reviewed code diff."
                 } else {
-                    "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Create Code Nodes."
+                    "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
                 }
             }
             selected != null -> {
@@ -1260,7 +1260,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 "${selected.title.ifBlank { selected.id.take(8) }} is selected. Status: ${badgeFor(selected)}. " +
                     if (readiness.ready) "It is ready to run." else "It is blocked; ask 'why blocked' for details."
             }
-            else -> "Start with Abstract Code to UML. Refine the editable diagram here with chat, then click Create Code Nodes when the architecture is ready."
+            else -> "Start with Abstract Code to UML. Refine the editable diagram here with chat, then click Generate Code Diff when the architecture is ready."
         }
     }
 
@@ -1325,10 +1325,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     return@invokeLater
                 }
                 setUmlEditorText(nextUml, pendingEdits = true)
-                umlStatusLabel.text = "UML: refined by chat. Create Code Nodes when ready, or keep editing."
+                umlStatusLabel.text = "UML: refined by chat. Generate Code Diff when ready, or keep editing."
                 appendChat(
                     "Blueprint",
-                    "Updated the UML using ${grounding.selectedLabel}, so the edit stays tied to the selected source facts, fields, methods, and relationships. Review it in the main canvas, then keep refining or click Create Code Nodes."
+                    "Updated the UML using ${grounding.selectedLabel}, so the edit stays tied to the selected source facts, fields, methods, and relationships. Review it in the main canvas, then keep refining or click Generate Code Diff."
                 )
                 updateGuide()
                 status("UML refined")
@@ -1489,7 +1489,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                 generated.warnings.forEach { appendLine("- $it") }
             }
         }.trim()
-        appendChat("Blueprint", "I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Create Code Nodes when ready.")
+        appendChat("Blueprint", "I abstracted the current Python code into UML. Edit it directly or ask chat to refine the architecture. Generate Code Diff when ready.")
         logActivity("Abstracted code to UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s).")
         status("Code abstracted to UML")
     }
@@ -1538,7 +1538,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
         setUmlEditorText(text, pendingEdits = true)
         umlStatusLabel.text = "UML: pasted/loaded. Edit or ask chat to refine it."
-        appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Create Code Nodes.")
+        appendChat("Blueprint", "Loaded pasted UML into the main editor. Keep refining it, then click Generate Code Diff.")
         status("Loaded UML into editor")
     }
 
@@ -1548,7 +1548,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             Messages.showWarningDialog(
                 project,
                 "The UML editor needs Mermaid classDiagram text before Blueprint can generate reviewed code diff.",
-                "Blueprint - Create Code Nodes"
+                "Blueprint - Generate Code Diff"
             )
             status("No usable UML to generate code")
             return
@@ -1578,7 +1578,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (text.isBlank() || !text.contains("classDiagram")) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
             if (existingNodes.isNotEmpty()) {
-                status("Using existing reviewed code diff for diff")
+                status("Using existing reviewed code patch")
                 logActivity("Generate Code Diff used existing nodes because the UML text was not parseable.")
                 generateFirstRealCodeDiff(existingNodes)
                 return
@@ -1591,7 +1591,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (parsed.entities.isEmpty()) {
             val existingNodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
             if (existingNodes.isNotEmpty()) {
-                status("Using existing reviewed code diff for diff")
+                status("Using existing reviewed code patch")
                 logActivity("Generate Code Diff used existing nodes because the UML editor had no parseable entities.")
                 generateFirstRealCodeDiff(existingNodes)
                 return
@@ -1621,7 +1621,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (index >= nodes.size) {
             val checked = noChangeTitles.size
             reviewSummaryArea.text = if (checked == 0) {
-                "No code patchs were ready to run."
+                "No reviewed code patches were ready to run."
             } else {
                 "No code changes needed. The current UML already appears to match the code for $checked checked node(s)."
             }
@@ -1760,7 +1760,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         graphArea.text = result.summary
         appendChat(
             "Blueprint",
-            "Imported $sourceLabel into ${result.nodes.size} code patchs. Click Generate Code Diff to preview code changes."
+            "Imported $sourceLabel into ${result.nodes.size} reviewed code patch(es). Click Generate Code Diff to preview code changes."
         )
         logActivity(
             "Imported $sourceLabel: ${result.parsed.entities.size} entit${if (result.parsed.entities.size == 1) "y" else "ies"}, " +
@@ -2541,22 +2541,44 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     refreshArtifactSummary()
                     logActivity("${result.summaryLine()} (${result.durationMillis}ms).")
                     status(result.summaryLine())
-                    // --- UX: explicit applied-success plus next steps (#35) ---
-val addedFields = patches.sumOf { patch -> Regex("^\\s*([a-zA-Z_][a-zA-Z_0-9]*)\\s*:").findAll(patch.content).count() }
-val classes = patches.sumOf { patch -> Regex("class ([a-zA-Z_][a-zA-Z_0-9]*)").findAll(patch.content).count() }
-val summaryLine = "Applied ${applyResult.applied.size} file(s), $addedFields field(s), $classes class(es), validation: ${result.status}" + if (result.status == ProjectValidationService.ValidationResult.Status.PASS) "\n\nSee refreshed UML to verify applied changes." else ""
-Messages.showInfoMessage(
-    project,
-    summaryLine + "\n\n" +
-        (if (applyResult.applied.isNotEmpty()) "Changed files:\n" + applyResult.applied.joinToString("\n") + "\n\n" else "") +
-        validationReportText(result),
-    "Blueprint - Apply Complete"
-)
-SwingUtilities.invokeLater {
-    showArtifactTab("UML")
-    status("Refresh UML From Code to verify changes.")
-    umlStatusLabel.text = "UML: Refreshed after apply. Verify new fields/classes are present."
-}
+                    val changedPaths = applyResult.applied.distinct().sorted()
+                    val summaryLine = buildString {
+                        append("Applied ")
+                        append(if (changedPaths.size == 1) "1 file." else "${changedPaths.size} files.")
+                        append(' ')
+                        append(
+                            when (result.status) {
+                                ProjectValidationService.ValidationResult.Status.PASS -> "Validation passed."
+                                ProjectValidationService.ValidationResult.Status.SKIPPED -> "Validation skipped."
+                                ProjectValidationService.ValidationResult.Status.FAIL -> "Validation failed."
+                            }
+                        )
+                    }
+                    val refreshNote = "Refresh UML From Code to verify."
+                    val refreshedNote = "After refresh, Blueprint shows the code-backed UML updated from disk."
+                    Messages.showInfoMessage(
+                        project,
+                        buildString {
+                            appendLine(summaryLine)
+                            if (changedPaths.isNotEmpty()) {
+                                appendLine()
+                                appendLine("Changed paths:")
+                                changedPaths.forEach { appendLine("- $it") }
+                            }
+                            appendLine()
+                            appendLine(refreshNote)
+                            appendLine(refreshedNote)
+                            appendLine()
+                            append(validationReportText(result))
+                        }.trim(),
+                        "Blueprint - Apply Complete"
+                    )
+                    SwingUtilities.invokeLater {
+                        showArtifactTab("UML")
+                        status(refreshNote)
+                        umlStatusLabel.text = "UML: refreshed from code after apply. Review the updated code-backed diagram."
+                        appendChat("Blueprint", "$summaryLine $refreshNote")
+                    }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
                     node.executionStatus = ExecutionStatus.FAILED
@@ -3087,11 +3109,11 @@ SwingUtilities.invokeLater {
         when {
             nodeList.selectedValue?.executionStatus == ExecutionStatus.FAILED -> {
                 primaryActionButton.text = "Generate Code Diff"
-                guideLabel.text = "Validation failed after apply. Adjust the UML or code, then regenerate a reviewed diff."
+                guideLabel.text = "Validation failed after apply. Adjust the UML or code, then Generate Code Diff again."
             }
             selectedNodeCanApply() -> {
                 primaryActionButton.text = "Apply Approved Changes"
-                guideLabel.text = "Review approved the generated diff. Apply it to disk; Blueprint will validate the project after apply."
+                guideLabel.text = "Review approved the generated code patch. Apply it to disk; Blueprint will validate the project after apply."
             }
             currentUmlEntityCount() == 0 -> {
             primaryActionButton.text = "Refresh UML From Code"
@@ -3099,7 +3121,7 @@ SwingUtilities.invokeLater {
             }
             else -> {
             primaryActionButton.text = "Generate Code Diff"
-            guideLabel.text = "Change the UML with chat or direct edits, then generate a reviewed code diff."
+            guideLabel.text = "Change the UML with chat or direct edits, then Generate Code Diff."
             }
         }
     }
@@ -3147,7 +3169,7 @@ SwingUtilities.invokeLater {
 
         val allNodes = registry.all()
         if (allNodes.isEmpty()) {
-            return "Next: Create Code Nodes" to "Turn the edited UML into reviewable code patchs."
+            return "Next: Generate Code Diff" to "Turn the edited UML into a reviewed code patch."
         }
 
         val graph = project.service<DependencyGraphService>()
