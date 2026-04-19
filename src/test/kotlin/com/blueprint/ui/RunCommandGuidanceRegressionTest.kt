@@ -13,6 +13,7 @@ class RunCommandGuidanceRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String"))
+        assertTrue(source.contains("private fun runCommandAlternatives(runEntryCandidates: List<String>): String?"))
         assertTrue(source.contains("private fun missingRunCommandGuidance("))
         assertTrue(source.contains("private fun missingRunCommandChecklist(runEntryCandidates: List<String>): String"))
         assertTrue(source.contains("Blueprint could not infer a run command yet because it did not find a clear runnable entry file."))
@@ -24,6 +25,10 @@ class RunCommandGuidanceRegressionTest {
         assertTrue(source.contains("val candidateList = candidates.joinToString(\", \")"))
         assertTrue(source.contains("2. If that is not the right launcher, try one of these likely entry files: ${'$'}candidateList"))
         assertTrue(source.contains("6. Search for FastAPI, Flask, Streamlit, __main__.py, app.py, main.py, or __name__ == \\\"__main__\\\"."))
+        assertTrue(source.contains("Blueprint inferred this as the best default run command"))
+        assertTrue(source.contains("Recommended command: ${'$'}runCommand."))
+        assertTrue(source.contains("Other likely entry file: ${'$'}{alternatives.first()}."))
+        assertTrue(source.contains("Other likely entry files: ${'$'}{alternatives.joinToString(\", \")}."))
         assertTrue(source.contains("When you want to run the app, start with: ") && source.contains("or click Run In Blueprint. ${'$'}{inferredRunCommandReason(it, context.runEntryCandidates)}"))
         assertTrue(source.contains("Run after apply was inferred automatically: ") && source.contains(". ${'$'}{inferredRunCommandReason(it, context.runEntryCandidates)}"))
         assertTrue(source.contains("Run after apply is unavailable. "+"${'$'}{missingRunCommandGuidance(context)}"))

@@ -49,7 +49,7 @@ class FirstRunAnyPythonFolderTest {
         ).checklistText()
 
         assertTrue(checklist.contains("Run readiness: Blueprint inferred python -m app for this project."))
-        assertTrue(checklist.contains("Run decision: Blueprint inferred this command because the current Python folder looks runnable and includes likely entry files such as app/__main__.py, app/models.py. Run command: python -m app"))
+        assertTrue(checklist.contains("Run decision: Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as app/__main__.py, app/models.py. Recommended command: python -m app."))
         assertTrue(checklist.contains("[next] Generate Code Diff -> create a reviewed code patch from your UML edits."))
         assertTrue(checklist.contains("Blueprint will validate after apply with: python -m pytest"))
     }
@@ -94,5 +94,24 @@ class FirstRunAnyPythonFolderTest {
         assertTrue(checklist.contains("1. Open Likely Entry File to jump into the best candidate."))
         assertTrue(checklist.contains("2. If that is not the right launcher, try one of these likely entry files: app/models.py"))
         assertTrue(checklist.contains("No validation command was inferred. After Apply Approved Changes, verify manually or run your preferred checks."))
+    }
+
+    @Test
+    fun `checklist lists alternative likely entry files when run command is inferred`() {
+        val checklist = FirstRunChecklistState(
+            codeMapReady = true,
+            reviewedDiffReady = false,
+            reviewApprovedReady = false,
+            appliedReady = false,
+            refreshedCodeMapReady = false,
+            runCommand = "python app.py",
+            runEntryCandidates = listOf("app.py", "main.py", "manage.py"),
+            validationCommand = "python -m pytest",
+            validationReady = false,
+            validationPassed = false,
+            runVerified = false,
+        ).checklistText()
+
+        assertTrue(checklist.contains("Run decision: Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as app.py, main.py, manage.py. Recommended command: python app.py. Other likely entry files: main.py, manage.py."))
     }
 }

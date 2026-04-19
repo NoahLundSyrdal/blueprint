@@ -366,22 +366,42 @@ internal data class FirstRunChecklistState(
 private fun inferredRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(3)
     val candidateReason = if (candidates.isEmpty()) {
-        "Blueprint inferred this command from the current Python project structure."
+        "Blueprint inferred this as the best default run command from the current Python project structure."
     } else {
-        "Blueprint inferred this command because the current Python folder looks runnable and includes likely entry files such as ${candidates.joinToString(", ")}."
+        "Blueprint inferred this as the best default run command because the current Python folder looks runnable and includes likely entry files such as ${candidates.joinToString(", ")}."
     }
-    return "$candidateReason Run command: $runCommand"
+    val alternatives = runCommandAlternatives(runEntryCandidates)
+    return buildString {
+        append(candidateReason)
+        append(" Recommended command: $runCommand.")
+        alternatives?.let { append(" $it") }
+    }
 }
 
 private fun verifiedRunCommandReason(runCommand: String, runEntryCandidates: List<String>): String {
     val candidates = runEntryCandidates.take(3)
-    return when {
+    val confidence = when {
         candidates.isEmpty() ->
             "Run command confidence: Blueprint verified $runCommand and did not detect competing entry files, so it remains the recommended default."
         candidates.size == 1 ->
             "Run command confidence: Blueprint verified $runCommand against the strongest entry file signal (${candidates.first()}), so it remains the recommended default."
         else ->
-            "Run command confidence: Blueprint verified $runCommand and still sees other likely entry files (${candidates.joinToString(", ")}), so treat this as the current best default and re-check those files if you switch app targets."
+            "Run command confidence: Blueprint verified $runCommand against the strongest entry-file signals (${candidates.joinToString(", ")}), so it remains the recommended default for now."
+    }
+    val alternatives = runCommandAlternatives(runEntryCandidates)
+    return buildString {
+        append(confidence)
+        alternatives?.let { append(" $it") }
+    }
+}
+
+private fun runCommandAlternatives(runEntryCandidates: List<String>): String? {
+    val alternatives = runEntryCandidates.drop(1).take(2)
+    if (alternatives.isEmpty()) return null
+    return if (alternatives.size == 1) {
+        "Other likely entry file: ${alternatives.first()}."
+    } else {
+        "Other likely entry files: ${alternatives.joinToString(", ")}."
     }
 }
 
