@@ -4105,9 +4105,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             val runGuide = inferredRunGuideText(context)
             return listOf(
                 "No code-backed UML is loaded yet. Start with Refresh UML From Code to read the current project into an editable UML diagram.",
-                "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, generate a reviewed code diff, apply approved changes, verify in UML, and run the changed app.",
+                "Blueprint can open any Python folder, draw a code-backed UML diagram, help you refine it with chat or direct edits, generate a reviewed code diff, apply approved changes, refresh UML from code to verify, and run the changed app.",
                 "Blueprint found Python files, but no classes were extracted into the code-backed UML yet.",
-                "After that, refine the UML, Generate Code Diff, Apply Approved Changes, Verify In UML, and Run In Blueprint.",
+                "After that, refine the UML, Generate Code Diff, Apply Approved Changes, Refresh UML From Code to verify, and Run In Blueprint.",
                 "Next steps: review the inferred source roots, open a Python file to confirm the folder you want, or keep editing the project and refresh again.",
                 runGuide,
             ).filter { it.isNotBlank() }.joinToString(" ")
@@ -4117,7 +4117,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         return listOf(
             "This folder does not look like a supported Python project yet.",
             "Blueprint could not find Python files to turn into a code-backed UML diagram.",
-            "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, generate a reviewed code diff, apply approved changes, verify in UML, and run the changed app.",
+            "When this folder has Python files, Blueprint can turn them into a code-backed UML diagram, help you refine that UML, generate a reviewed code diff, apply approved changes, refresh UML from code to verify, and run the changed app.",
             nextStep,
             "Open a Python source root or add .py files, then Refresh UML From Code to start the full Blueprint loop.",
             "Next steps: open a Python source root, add .py files, or open source files manually while you pick the folder to map.",
