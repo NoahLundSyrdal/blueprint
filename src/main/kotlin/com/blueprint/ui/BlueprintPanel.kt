@@ -1815,6 +1815,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         }
 
         val actions = actionPanel()
+        val actionsScrollPane = JBScrollPane(actions).apply {
+            border = BorderFactory.createEmptyBorder()
+            minimumSize = Dimension(0, 150)
+            preferredSize = Dimension(0, 250)
+            horizontalScrollBarPolicy = JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
+            verticalScrollBar.unitIncrement = 16
+        }
 
         val summary = JPanel(BorderLayout()).apply {
             border = BorderFactory.createTitledBorder("Review / Safety")
@@ -1860,7 +1867,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val lowerWorkspace = JPanel(BorderLayout()).apply {
             minimumSize = Dimension(0, 320)
             preferredSize = Dimension(0, 380)
-            add(actions, BorderLayout.NORTH)
+            add(actionsScrollPane, BorderLayout.NORTH)
             add(secondaryTabs, BorderLayout.CENTER)
         }
 
@@ -2008,30 +2015,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         JPanel().apply {
             layout = BoxLayout(this, BoxLayout.Y_AXIS)
             border = BorderFactory.createEmptyBorder(4, 4, 4, 4)
-            if (shouldShowInviteFirstRunScenario()) {
-                add(
-                    JPanel(BorderLayout(6, 6)).apply {
-                        border = BorderFactory.createTitledBorder("First-Run Demo")
-                        add(
-                            JPanel(GridLayout(2, 1, 0, 6)).apply {
-                                add(firstRunScenarioArea)
-                                add(demoReceiptArea)
-                            },
-                            BorderLayout.CENTER,
-                        )
-                        add(
-                            JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
-                                add(firstRunPromptButton)
-                                add(runChecklistActionButton)
-                                add(runDemoButton)
-                            },
-                            BorderLayout.SOUTH,
-                        )
-                    },
-                )
-            }
             add(JPanel(BorderLayout(8, 2)).apply {
                 border = BorderFactory.createEmptyBorder(2, 4, 6, 4)
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 76)
                 add(primaryActionButton.apply {
                     preferredSize = Dimension(260, 44)
                     font = font.deriveFont(java.awt.Font.BOLD, 13f)
@@ -2059,18 +2046,53 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     BorderLayout.CENTER,
                 )
             })
+            if (shouldShowInviteFirstRunScenario()) {
+                add(
+                    JPanel(BorderLayout(6, 6)).apply {
+                        border = BorderFactory.createTitledBorder("First-Run Demo")
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, 220)
+                        preferredSize = Dimension(520, 180)
+                        add(
+                            JPanel(GridLayout(2, 1, 0, 6)).apply {
+                                add(JBScrollPane(firstRunScenarioArea).apply {
+                                    verticalScrollBar.unitIncrement = 16
+                                })
+                                add(JBScrollPane(demoReceiptArea).apply {
+                                    verticalScrollBar.unitIncrement = 16
+                                })
+                            },
+                            BorderLayout.CENTER,
+                        )
+                        add(
+                            JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                                add(firstRunPromptButton)
+                                add(runChecklistActionButton)
+                                add(runDemoButton)
+                            },
+                            BorderLayout.SOUTH,
+                        )
+                    },
+                )
+            }
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 40)
                 add(mockMode)
                 add(actionProviderLabel.apply { foreground = providerColor() })
                 add(advancedMode)
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 40)
                 add(JButton("Refresh UML From Code").apply { addActionListener { generateProjectUml() } })
                 add(runAppButton)
                 add(copyRunSummaryButton)
                 add(openLikelyEntryFileButton)
             })
             add(JPanel(FlowLayout(FlowLayout.LEFT, 6, 0)).apply {
+                alignmentX = Component.LEFT_ALIGNMENT
+                maximumSize = Dimension(Int.MAX_VALUE, 30)
                 add(runStatusNoteLabel)
             })
             add(manualRunFallbackCard.apply {
@@ -2079,8 +2101,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             })
             add(JPanel(BorderLayout()).apply {
                 border = BorderFactory.createTitledBorder("Run Output")
+                alignmentX = Component.LEFT_ALIGNMENT
                 add(JBScrollPane(runOutputArea), BorderLayout.CENTER)
-                maximumSize = Dimension(Int.MAX_VALUE, 180)
+                maximumSize = Dimension(Int.MAX_VALUE, 140)
             })
             val advancedRows = listOf(
                 JPanel(FlowLayout(FlowLayout.LEFT, 6, 2)).apply {
