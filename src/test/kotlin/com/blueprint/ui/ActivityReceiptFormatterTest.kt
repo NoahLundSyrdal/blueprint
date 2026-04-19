@@ -35,6 +35,26 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Validation skipped after apply for Invite schema: no command inferred."),
         )
         assertEquals(
+            "Generate Code Diff kept the last reviewed patch because the current UML could not be parsed.",
+            receiptTextForTest("Generate Code Diff used existing nodes because the UML text was not parseable."),
+        )
+        assertEquals(
+            "Generate Code Diff found no file changes across 2 node(s).",
+            receiptTextForTest("Generate Code Diff completed with no-op result across 2 node(s)."),
+        )
+        assertEquals(
+            "No file changes were needed for Invite schema.",
+            receiptTextForTest("No-op code diff for Invite schema; generated content matched disk."),
+        )
+        assertEquals(
+            "Generate Code Diff stopped at planning for Invite schema. Review the blocked plan before continuing.",
+            receiptTextForTest("Code diff blocked at plan for Invite schema"),
+        )
+        assertEquals(
+            "Blocked by dependencies for Invite schema: waiting on schema patch",
+            receiptTextForTest("Cannot execute Invite schema yet: waiting on schema patch"),
+        )
+        assertEquals(
             "Review approved Invite schema because Invite + accepted_at: datetime stays in scope and no blocking safety issues were reported.",
             receiptTextForTest("Review approved Invite schema because Invite + accepted_at: datetime stays in scope and no blocking safety issues were reported."),
         )
@@ -61,6 +81,10 @@ class ActivityReceiptFormatterTest {
         assertEquals(
             "Removed workflow node Invite schema",
             receiptTextForTest("Removed node Invite schema"),
+        )
+        assertEquals(
+            "Rolled back apply for 'Invite schema': 1 restored, 0 skipped.",
+            receiptTextForTest("Undo apply for 'Invite schema': 1 restored, 0 skipped."),
         )
     }
 

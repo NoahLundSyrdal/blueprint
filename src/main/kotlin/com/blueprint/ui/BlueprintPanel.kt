@@ -3985,9 +3985,22 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("plan ready for") -> msg.replaceFirst("Plan ready for", "Planned reviewed code patch for")
             lower.startsWith("patch generated for") -> msg.replaceFirst("Patch generated for", "Generated reviewed code patch for")
             lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Generated reviewed code patch for")
+            lower.startsWith("generate code diff used existing nodes because") ->
+                "Generate Code Diff kept the last reviewed patch because the current UML could not be parsed."
+            lower.startsWith("generate code diff completed with no-op result across") ->
+                msg.replaceFirst("Generate Code Diff completed with no-op result across", "Generate Code Diff found no file changes across")
+            lower.startsWith("no-op code diff for") ->
+                msg.replaceFirst("No-op code diff for", "No file changes were needed for")
+                    .replace("; generated content matched disk.", ".")
+            lower.startsWith("code diff blocked at plan for") ->
+                msg.replaceFirst("Code diff blocked at plan for", "Generate Code Diff stopped at planning for") + ". Review the blocked plan before continuing."
+            lower.startsWith("cannot execute ") ->
+                msg.replaceFirst("Cannot execute", "Blocked by dependencies for")
+                    .replace(" yet:", ":")
             lower.startsWith("running validation after apply for") -> msg.replaceFirst("Running validation after apply for", "Started validation after apply for")
             lower.startsWith("validation skipped after apply for") -> msg.replaceFirst("Validation skipped after apply for", "Skipped validation after apply for")
             lower.startsWith("apply finished for") -> msg.replaceFirst("Apply finished for", "Applied approved changes for")
+            lower.startsWith("undo apply for '") -> msg.replaceFirst("Undo apply for '", "Rolled back apply for '")
             lower.startsWith("validation passed:") -> msg.replaceFirst("Validation passed:", "Validation passed:")
             lower.startsWith("validation skipped:") -> msg.replaceFirst("Validation skipped:", "Validation skipped:")
             lower.startsWith("validation failed:") -> msg.replaceFirst("Validation failed:", "Validation failed:")
