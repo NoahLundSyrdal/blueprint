@@ -1234,9 +1234,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         isEnabled = false
         addActionListener { undoChanges() }
     }
-    private val copyRunSummaryButton = JButton("Copy Result Summary").apply {
+    private val copyRunSummaryButton = JButton("Copy Issue Comment").apply {
         isEnabled = false
-        toolTipText = "Copy a plain-English result summary after successful run verification."
+        toolTipText = "Copy an issue-comment-ready recap after run verification or manual verification prep."
         addActionListener { copyRunResultSummary() }
     }
     private val previewDiffButton = JButton("Preview Diff").apply { addActionListener { previewDiff() } }
@@ -4886,7 +4886,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val nextSteps = listOf(
             "Next steps:",
             "- $inspectAction",
-            "- Copy Result Summary if you want a reusable issue-comment or demo recap.",
+            "- Copy Issue Comment if you want a reusable issue-comment or demo recap.",
             "- $runConfidence",
             "- Refresh UML From Code again anytime to re-verify the current code-backed UML.",
             "- Refine the UML again when you are ready for another reviewed code patch.",
@@ -4909,7 +4909,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             append(copyableSummary)
         }.trim()
         copyRunSummaryButton.isEnabled = true
-        copyRunSummaryButton.toolTipText = "Copy a plain-English result summary after successful run verification."
+        copyRunSummaryButton.toolTipText = "Copy an issue-comment-ready recap after successful run verification."
         completedRunReceiptCycle = true
         guideLabel.text = banner
         appendChat("Blueprint", banner)
@@ -4923,7 +4923,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             ?: "Result summary\n- Validation: not recorded yet\n- Run after apply: not recorded yet\n- Changed paths: none"
         val runConfidence = verifiedRunCommandReason(runCommand, project.service<PythonProjectAnalyzer>().analyze().runEntryCandidates)
         return buildString {
-            appendLine("Copyable result summary")
+            appendLine("Copyable issue comment")
             appendLine("- $flowLabel completed for the current Python folder.")
             appendLine("- Run verified with: $runCommand")
             appendLine("- $runConfidence")
@@ -4945,7 +4945,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             "- Likely entry files: ${likelyEntryFiles.joinToString(", ")}."
         }
         return buildString {
-            appendLine("Copyable manual verification receipt")
+            appendLine("Copyable issue comment")
             appendLine("- $flowLabel is ready for manual verification because Blueprint could not infer a project run command yet.")
             appendLine("- Refresh UML From Code to verify the current code-backed UML before you inspect the app manually.")
             appendLine("- Changed paths: ${if (changedPaths.isEmpty()) "none" else changedPaths.joinToString(", ")}")
@@ -4966,7 +4966,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val selection = java.awt.datatransfer.StringSelection(summary)
         java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(selection, selection)
         appendChat("Blueprint", summary)
-        status(if (runCommand.isNullOrBlank()) "Copied manual verification receipt" else "Copied result summary")
+        status(if (runCommand.isNullOrBlank()) "Copied issue comment for manual verification" else "Copied issue comment")
     }
 
     private fun statefulPromptMatches(expectedPrompt: String, currentPrompt: String): Boolean =
