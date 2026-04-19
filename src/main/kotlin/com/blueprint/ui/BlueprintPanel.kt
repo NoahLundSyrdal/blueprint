@@ -777,6 +777,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     add(umlStatusLabel.apply { foreground = Color(0x555555) })
                     add(modeBannerLabel)
                 }, BorderLayout.CENTER)
+                add(JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
+                    add(JButton("\u2212").apply { addActionListener { miniGraph.zoomOut() } })
+                    add(JButton("+").apply { addActionListener { miniGraph.zoomIn() } })
+                    add(JButton("\u27f3").apply { addActionListener { miniGraph.zoomReset() } })
+                }, BorderLayout.EAST)
                 add(codeMapControls(), BorderLayout.SOUTH)
             }, BorderLayout.NORTH)
             add(JBScrollPane(miniGraph).apply {
