@@ -15,6 +15,10 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Planning code diff for Invite schema with Mode: MOCK."),
         )
         assertEquals(
+            "Generate Code Diff found no UML-backed work items ready to run.",
+            receiptTextForTest("Generate Code Diff found no UML-backed work items ready to run."),
+        )
+        assertEquals(
             "Applied approved changes for Invite schema: 1 applied, 0 skipped.",
             receiptTextForTest("Apply finished for Invite schema: 1 applied, 0 skipped."),
         )

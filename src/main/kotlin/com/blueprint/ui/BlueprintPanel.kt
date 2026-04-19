@@ -1848,7 +1848,15 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         importUmlText(text, "current UML")
         val nodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
         if (nodes.isEmpty()) {
-            status("No reviewed code diff created")
+            showArtifactTab("Review")
+            reviewSummaryArea.text = "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
+            safetyArea.text = "No reviewed code patch was generated because no UML-backed work items were ready."
+            appendChat(
+                "Blueprint",
+                "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
+            )
+            logActivity("Generate Code Diff found no UML-backed work items ready to run.")
+            status("No code changes needed")
             endPrimaryAction()
             return
         }
@@ -1862,17 +1870,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     ) {
         if (index >= nodes.size) {
             val checked = noChangeTitles.size
-            reviewSummaryArea.text = if (checked == 0) {
-                "No reviewed code patches were ready to run."
+            val nextStep = if (checked == 0) {
+                "Refresh UML From Code to load the current code map, or refine the UML and try a different change."
             } else {
-                "No code changes needed. The current UML already appears to match the code for $checked checked node(s)."
+                "Refine the UML, or click Refresh UML From Code to verify the current code before trying a different change."
+            }
+            reviewSummaryArea.text = if (checked == 0) {
+                "No code changes needed. $nextStep"
+            } else {
+                "No code changes needed. The current UML already appears to match the code for $checked checked node(s). $nextStep"
             }
             safetyArea.text = "No diff to apply."
             showArtifactTab("Review")
             status("No code changes needed")
             appendChat(
                 "Blueprint",
-                "No code changes needed. The UML already appears to match the current code for $checked checked node(s)."
+                if (checked == 0) {
+                    "No code changes needed. $nextStep"
+                } else {
+                    "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
+                }
             )
             logActivity("Generate Code Diff completed with no-op result across $checked node(s).")
             endPrimaryAction()
