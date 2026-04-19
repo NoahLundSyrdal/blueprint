@@ -2859,7 +2859,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             appendLine(refreshedNote)
                             appendLine()
                             appendLine("Validation:")
-                            append(validationReportText(result))
+                            appendLine(validationReportText(result))
                         }.trim(),
                         "Blueprint - Apply Complete"
                     )
