@@ -8,6 +8,7 @@ import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -25,6 +26,7 @@ class ProjectRunService(private val project: Project) {
         enum class Status { IDLE, STARTING, RUNNING, FINISHED, FAILED, STOPPED }
     }
 
+    private val launchToken = AtomicLong(0)
     private val activeProcess = AtomicReference<Process?>(null)
 
     /**
@@ -53,10 +55,7 @@ class ProjectRunService(private val project: Project) {
             onUi { onUpdate(RunState(RunState.Status.FAILED, command, "", summary = "Blueprint could not run the app because the project base path is missing.")) }
             return
         }
-        if (!activeProcess.compareAndSet(null, ProcessBuilder("/usr/bin/true").start())) {
-            activeProcess.get()?.destroyForcibly()
-            activeProcess.set(null)
-        }
+        val launchId = launchToken.incrementAndGet()
         onUi { onUpdate(RunState(RunState.Status.STARTING, command, "", summary = "Starting inferred run command: $command")) }
         ApplicationManager.getApplication().executeOnPooledThread {
             val output = StringBuilder()
@@ -65,7 +64,7 @@ class ProjectRunService(private val project: Project) {
                     .directory(Paths.get(basePath).toFile())
                     .redirectErrorStream(true)
                     .start()
-                activeProcess.set(process)
+                attachActiveProcess(launchId, process)
                 onUi { onUpdate(RunState(RunState.Status.RUNNING, command, "", summary = "Running inferred command: $command")) }
                 BufferedReader(InputStreamReader(process.inputStream, StandardCharsets.UTF_8)).use { reader ->
                     while (true) {
@@ -76,7 +75,7 @@ class ProjectRunService(private val project: Project) {
                     }
                 }
                 val finished = process.waitFor(2, TimeUnit.SECONDS)
-                activeProcess.compareAndSet(process, null)
+                clearActiveProcess(process)
                 val snapshot = output.toString().trimEnd()
                 if (!finished) {
                     process.destroy()
@@ -96,7 +95,7 @@ class ProjectRunService(private val project: Project) {
                 }
                 onUi { onUpdate(RunState(status, command, snapshot, exitCode, summary)) }
             } catch (t: Throwable) {
-                activeProcess.set(null)
+                clearActiveProcess()
                 val snapshot = output.toString().trimEnd()
                 onUi {
                     onUpdate(
@@ -115,18 +114,39 @@ class ProjectRunService(private val project: Project) {
     /**
      * Stops the active inferred run command, if one exists.
      */
-    fun stopRun(): Boolean {
-        val process = activeProcess.getAndSet(null) ?: return false
-        process.destroy()
-        if (process.isAlive) process.destroyForcibly()
-        return true
-    }
+    fun stopRun(): Boolean = stopProcess(activeProcess.getAndSet(null))
 
     /**
      * Returns the safe fallback message shown when no run command can be inferred.
      */
     fun noCommandSummary(): String =
         "Blueprint could not infer a run command yet. Refresh UML From Code first, or run the project entrypoint manually."
+
+    private fun attachActiveProcess(launchId: Long, process: Process) {
+        if (launchId != launchToken.get()) {
+            stopProcess(process)
+            return
+        }
+        val previous = activeProcess.getAndSet(process)
+        if (previous != null && previous != process) {
+            stopProcess(previous)
+        }
+    }
+
+    private fun clearActiveProcess(process: Process? = null) {
+        if (process == null) {
+            activeProcess.set(null)
+            return
+        }
+        activeProcess.compareAndSet(process, null)
+    }
+
+    private fun stopProcess(process: Process?): Boolean {
+        process ?: return false
+        process.destroy()
+        if (process.isAlive) process.destroyForcibly()
+        return true
+    }
 
     private fun onUi(action: () -> Unit) {
         ApplicationManager.getApplication().invokeLater(action)
