@@ -12,7 +12,10 @@ class PostApplyInlineSummaryRegressionTest {
     fun `successful apply stores inline summary state for review panel`() {
         assertTrue(source.contains("private var postApplyInlineSummary: PostApplyInlineSummary? = null"))
         assertTrue(source.contains("postApplyInlineSummary = PostApplyInlineSummary("))
-        assertTrue(source.contains("validationLine = result.summaryLine()"))
+        assertTrue(source.contains("val validationAndPathsLine = buildString {"))
+        assertTrue(source.contains("appendLine(result.summaryLine())"))
+        assertTrue(source.contains("append(changedFilesText)"))
+        assertTrue(source.contains("validationAndPathsLine = validationAndPathsLine"))
         assertTrue(source.contains("nextStepLine = refreshNote"))
     }
 
@@ -20,6 +23,7 @@ class PostApplyInlineSummaryRegressionTest {
     fun `review summary switches to inline applied summary when apply succeeds`() {
         assertTrue(source.contains("reviewSummaryArea.text = if (n.executionStatus == ExecutionStatus.APPLIED && inlineSummary != null) {"))
         assertTrue(source.contains("postApplyReviewSummary(exec, inlineSummary)"))
+        assertTrue(source.contains("appendLine(summary.validationAndPathsLine)"))
         assertTrue(source.contains("appendLine(summary.verifyChecklist)"))
         assertTrue(source.contains("append(\"\\nVerify In UML reruns that code reread when you want an explicit verification click. Refresh UML From Code stays available for the general refresh action. Open Changed Files to inspect what Blueprint wrote before you rerun the app.\")"))
     }

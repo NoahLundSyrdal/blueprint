@@ -536,7 +536,7 @@ internal object GuidedInviteScenario {
 internal data class PostApplyInlineSummary(
     val changedPaths: List<String>,
     val summaryLine: String,
-    val validationLine: String,
+    val validationAndPathsLine: String,
     val nextStepLine: String,
     val verifyChecklist: String,
 )
@@ -3381,8 +3381,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             changedPaths.forEach { appendLine("- $it") }
                         }.trim()
                     }
-                    val changedPathsReceipt = buildString {
-                        appendLine(changedFilesText)
+                    val validationAndPathsLine = buildString {
+                        appendLine(result.summaryLine())
+                        append(changedFilesText)
                     }.trim()
                     val verifyChecklist = buildString {
                         appendLine("Verify in UML tab:")
@@ -3403,7 +3404,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     postApplyInlineSummary = PostApplyInlineSummary(
                         changedPaths = changedPaths,
                         summaryLine = summaryLine,
-                        validationLine = result.summaryLine(),
+                        validationAndPathsLine = validationAndPathsLine,
                         nextStepLine = refreshNote,
                         verifyChecklist = verifyChecklist,
                     )
@@ -3439,7 +3440,6 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                             inferredRunGuideText(),
                             "Use Undo Last Apply to roll back this reviewed code patch.",
                         ).filter { it.isNotBlank() }.joinToString(" ")
-                        changedPathsReceipt.length
                     }
                 }
                 ProjectValidationService.ValidationResult.Status.FAIL -> {
@@ -3512,6 +3512,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     private fun postApplyReviewSummary(exec: ExecutionArtifact?, summary: PostApplyInlineSummary): String =
         buildString {
             appendLine(summary.summaryLine)
+            appendLine(summary.validationAndPathsLine)
+            appendLine()
             appendLine(PatchChangeSummary.applySummary(exec, summary.changedPaths))
             appendLine(summary.verifyChecklist)
             append("\nVerify In UML reruns that code reread when you want an explicit verification click. Refresh UML From Code stays available for the general refresh action. Open Changed Files to inspect what Blueprint wrote before you rerun the app.")

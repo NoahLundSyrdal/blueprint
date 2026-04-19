@@ -10,16 +10,17 @@ class ApplySuccessMessageFormattingTest {
     private val sourcePath = Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt")
 
     @Test
-    fun `apply completion dialog uses appendLine for validation block`() {
+    fun `apply completion dialog and inline receipt format changed paths and validation cleanly`() {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("appendLine(\"Changed paths:\")"))
         assertTrue(source.contains("changedPaths.forEach { appendLine(\"- \$it\") }"))
         assertTrue(source.contains("appendLine(\"Validation:\")"))
         assertTrue(source.contains("appendLine(validationReportText(result))"))
-        assertTrue(source.contains("appendLine(changedFilesText)"))
+        assertTrue(source.contains("val validationAndPathsLine = buildString {"))
+        assertTrue(source.contains("appendLine(result.summaryLine())"))
+        assertTrue(source.contains("append(changedFilesText)"))
         assertFalse(source.contains("append(validationReportText(result))"))
-        assertFalse(source.contains("append(changedFilesText)"))
     }
 
     @Test
