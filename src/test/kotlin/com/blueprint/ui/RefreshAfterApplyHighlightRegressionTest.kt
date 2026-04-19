@@ -20,7 +20,7 @@ class RefreshAfterApplyHighlightRegressionTest {
         assertTrue(source.contains("selectedCanvasId = matched.id"))
         assertTrue(source.contains("postApplyHighlightMessage = \"Blueprint highlighted "))
         assertTrue(source.contains("status(\"Refreshed UML and highlighted "))
-        assertTrue(source.contains("val umlRefreshLine = \"Code-backed UML was refreshed from disk after apply.\""))
+        assertTrue(source.contains("val umlRefreshLine = \"Blueprint automatically refreshed the code-backed UML from disk after apply.\""))
         assertTrue(source.contains("val highlightLine = postApplyHighlightMessage ?: \"Blueprint refreshed the code-backed UML after apply.\""))
     }
 
