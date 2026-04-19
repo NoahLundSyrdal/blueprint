@@ -1874,15 +1874,27 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val diagramPanel = JPanel(BorderLayout(6, 6)).apply {
             border = BorderFactory.createTitledBorder("UML Canvas")
             add(JPanel(BorderLayout()).apply {
-                add(JPanel(GridLayout(0, 1, 2, 2)).apply {
+                add(JPanel().apply {
+                    layout = BoxLayout(this, BoxLayout.Y_AXIS)
                     add(JLabel("Blueprint").apply {
                         font = font.deriveFont(java.awt.Font.BOLD, 15f)
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
                     })
-                    add(umlStatusLabel.apply { foreground = Color(0x555555) })
-                    add(modeBannerLabel)
+                    add(umlStatusLabel.apply {
+                        foreground = Color(0x555555)
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+                    })
+                    add(modeBannerLabel.apply {
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        maximumSize = Dimension(Int.MAX_VALUE, preferredSize.height)
+                    })
                     add(JBScrollPane(scopeReceiptArea).apply {
                         border = BorderFactory.createTitledBorder("Current Scope Receipt")
-                        preferredSize = Dimension(0, 110)
+                        alignmentX = Component.LEFT_ALIGNMENT
+                        preferredSize = Dimension(520, 86)
+                        maximumSize = Dimension(Int.MAX_VALUE, 96)
                         verticalScrollBar.unitIncrement = 16
                     })
                 }, BorderLayout.CENTER)
