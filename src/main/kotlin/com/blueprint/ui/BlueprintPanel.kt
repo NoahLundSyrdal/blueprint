@@ -363,6 +363,7 @@ internal object PatchChangeSummary {
         val semanticChanges = semanticChanges(exec.patches, exec.summary)
         return buildString {
             appendLine("What changed?")
+            appendLine("Plain-English summary before apply:")
             semanticChanges.forEach { appendLine("- $it") }
             appendLine()
             appendLine(changedFilesSummary(exec))

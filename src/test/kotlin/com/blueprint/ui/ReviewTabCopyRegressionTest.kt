@@ -14,6 +14,7 @@ class ReviewTabCopyRegressionTest {
 
         assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(exec)"))
         assertTrue(source.contains("reviewSummaryArea.text = PatchChangeSummary.reviewSummary(changedExec)"))
+        assertTrue(source.contains("Plain-English summary before apply:"))
         assertTrue(source.contains("ReviewExplanation.details("))
         assertTrue(source.contains("reviewDetails.joinToString(\"\\n\")"))
         assertTrue(source.contains("\"Why is it safe to apply?\""))

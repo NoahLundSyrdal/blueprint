@@ -33,6 +33,7 @@ class PatchChangeSummaryTest {
         val summary = PatchChangeSummary.reviewSummary(exec)
 
         assertTrue(summary.contains("What changed?"))
+        assertTrue(summary.contains("Plain-English summary before apply:"))
         assertTrue(summary.contains("Invite + accepted_at: datetime | None"))
         assertTrue(summary.contains("InviteAuditLog + actor_ip: str"))
         assertTrue(summary.contains("Changed files (1):"))
