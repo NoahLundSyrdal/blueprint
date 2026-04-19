@@ -1098,6 +1098,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
     private val umlStatusLabel = JLabel("UML: not generated yet")
     private val modeBannerLabel = JLabel("Viewing: current code map")
+    private val scopeReceiptArea = JBTextArea(5, 40).apply {
+        isEditable = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        rows = 5
+        text = "Scope receipt will appear here after Refresh UML From Code."
+    }
     private val umlEditor = JBTextArea(18, 72).apply {
         lineWrap = false
         text = """
@@ -1493,6 +1501,11 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     })
                     add(umlStatusLabel.apply { foreground = Color(0x555555) })
                     add(modeBannerLabel)
+                    add(JBScrollPane(scopeReceiptArea).apply {
+                        border = BorderFactory.createTitledBorder("Current Scope Receipt")
+                        preferredSize = Dimension(0, 110)
+                        verticalScrollBar.unitIncrement = 16
+                    })
                 }, BorderLayout.CENTER)
                 add(JPanel(FlowLayout(FlowLayout.RIGHT, 4, 0)).apply {
                     add(JButton("\u2212").apply { addActionListener { miniGraph.zoomOut() } })
@@ -2183,6 +2196,26 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         setUmlEditorText(generated.text, pendingEdits = false)
         focusChangedEntityAfterRefresh()
         umlStatusLabel.text = "UML: ${generated.classCount} class(es), ${generated.relationshipCount} relationship(s), ${generated.filesScanned} file(s) scanned. ${context.scopeSummaryLine()}"
+        scopeReceiptArea.text = buildString {
+            appendLine("Current Scope Receipt")
+            appendLine("- Included files: ${context.filesAnalyzed.size}")
+            appendLine("- Skipped files: ${context.skippedFiles.size}")
+            if (context.skippedFiles.isNotEmpty()) {
+                val topReasons = context.skippedFiles.groupingBy { it.reason }.eachCount()
+                    .entries.sortedByDescending { it.value }
+                    .take(3)
+                    .joinToString(", ") { (reason, count) -> if (count == 1) reason else "$count $reason" }
+                appendLine("- Top skipped reasons: $topReasons")
+            }
+            if (context.filesAnalyzed.isNotEmpty()) {
+                appendLine("- Included paths:")
+                context.filesAnalyzed.take(3).forEach { appendLine("  - $it") }
+            }
+            if (context.skippedFiles.isNotEmpty()) {
+                appendLine("- Skipped paths:")
+                context.skippedFiles.take(3).forEach { appendLine("  - ${it.path} — ${it.reason}") }
+            }
+        }.trim()
         graphArea.text = buildString {
             appendLine("Abstracted Python codebase to editable UML.")
             appendLine("Classes: ${generated.classCount}")
