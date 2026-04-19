@@ -2724,7 +2724,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val node = nodeList.selectedValue ?: return false
         if (node.executionStatus == ExecutionStatus.APPLIED || node.executionStatus == ExecutionStatus.FAILED) return false
         val exec = registry.getExecution(node.id) ?: return false
-        return exec.patches.isNotEmpty() && reviewAllowsApply(registry.getReview(node.id))
+        if (exec.patches.isEmpty()) return false
+        if (!reviewAllowsApply(registry.getReview(node.id))) return false
+        return reviewFreshnessFor(node, exec).badge == "FRESH"
     }
 
     private fun generateCodeDiffFromCurrentUml() {
