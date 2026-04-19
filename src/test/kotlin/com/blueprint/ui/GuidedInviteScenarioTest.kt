@@ -69,7 +69,8 @@ class GuidedInviteScenarioTest {
         val firstLines = first.lines()
         assertEquals("Demo prompt scenario:", firstLines[0])
         assertTrue(firstLines[1].startsWith("[next]"))
-        assertTrue(first.contains("Try this change: \"add an InvitePolicy entity\""))
+        assertTrue(first.contains("load the current code map first so Blueprint can choose a fresh demo change"))
+        assertTrue(first.contains("Try this change -> available after the current code map loads."))
         assertTrue(first.contains("Your own change:"))
 
         val middle = GuidedInviteScenario.checklistText(
@@ -137,6 +138,7 @@ class GuidedInviteScenarioTest {
 
         assertTrue(source.contains("use Try This Change for a fresh prompt based on the current sandbox state"))
         assertTrue(source.contains("Blueprint keeps this Try This Change prompt fresh by checking the current UML and imported invite code before suggesting the next demo change."))
+        assertTrue(source.contains("load the current code map first so Blueprint can choose a fresh demo change"))
         assertTrue(source.contains("Fresh demo prompt: "))
     }
 }

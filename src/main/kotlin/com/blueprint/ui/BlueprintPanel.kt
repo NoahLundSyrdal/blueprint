@@ -315,6 +315,19 @@ internal object GuidedInviteScenario {
                 "[next] Edit the UML directly or ask chat for a different architecture change, then Generate Code Diff.",
             ).joinToString("\n")
         }
+        if (!state.codeMapReady) {
+            return listOf(
+                "Demo prompt scenario:",
+                "[next] Abstract Code to UML -> load the current code map first so Blueprint can choose a fresh demo change.",
+                "[wait] Try this change -> available after the current code map loads.",
+                "[wait] Generate Code Diff -> available after the UML draft is updated.",
+                "[wait] Apply Approved Changes -> available after review approves the patch.",
+                "[wait] Refresh UML From Code -> verify the code-backed UML after apply.",
+                "",
+                "Your own change:",
+                "[next] You can skip the demo path and ask chat for a different architecture change after the first UML refresh.",
+            ).joinToString("\n")
+        }
         val currentStep = when {
             !state.codeMapReady -> 1
             !state.umlDraftReady -> 2
