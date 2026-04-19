@@ -300,6 +300,12 @@ internal object PatchChangeSummary {
         }.trim()
     }
 
+    fun semanticChangeLines(exec: ExecutionArtifact?, changedPaths: Collection<String>? = null): List<String> {
+        if (exec == null) return emptyList()
+        val filtered = if (changedPaths == null) exec.patches else exec.patches.filter { it.path in changedPaths.toSet() }
+        return semanticChanges(filtered, exec.summary)
+    }
+
     fun applySummary(exec: ExecutionArtifact?, appliedPaths: List<String>): String {
         if (exec == null || appliedPaths.isEmpty()) return "No code changes needed"
         val changedFiles = exec.patches.filter { it.path in appliedPaths.toSet() }
@@ -373,6 +379,80 @@ internal object PatchChangeSummary {
             else -> "$target updated"
         }
     }
+}
+
+internal object ReviewExplanation {
+    fun summary(
+        nodeTitle: String,
+        exec: ExecutionArtifact?,
+        review: ReviewArtifact?,
+        readiness: DependencyGraphService.NodeReadiness?,
+        validation: ProjectValidationService.ValidationResult?,
+    ): String {
+        if (review == null) return "Review not run yet. Generate Code Diff first so Blueprint can review the patch before apply."
+        val shortTitle = nodeTitle.ifBlank { "this change" }
+        val semanticChanges = PatchChangeSummary.semanticChangeLines(exec).take(2)
+        val changePhrase = if (semanticChanges.isEmpty()) {
+            "the reviewed code patch"
+        } else {
+            semanticChanges.joinToString(" and ")
+        }
+        val scopeLine = when (review.scopeCompliance.result.uppercase()) {
+            "PASS" -> "Scope: stays within the selected files."
+            "PARTIAL" -> "Scope: mostly in scope, but review found scope concerns."
+            else -> "Scope: review found out-of-scope changes."
+        }
+        val dependencyLine = if (readiness?.ready == false) {
+            "Dependency status: blocked by ${readiness.reasons.firstOrNull().orEmpty()}."
+        } else {
+            "Dependency status: ready."
+        }
+        val validationLine = when (validation?.status) {
+            ProjectValidationService.ValidationResult.Status.PASS -> "Validation status: passed after apply."
+            ProjectValidationService.ValidationResult.Status.SKIPPED -> "Validation status: skipped after apply."
+            ProjectValidationService.ValidationResult.Status.FAIL -> "Validation status: failed after apply."
+            null -> "Validation status: will run after apply if Blueprint can infer a command."
+        }
+        return when (review.reviewStatus.uppercase()) {
+            "APPROVE" -> buildString {
+                append("Approved because $changePhrase stays aligned with $shortTitle and review found no blocking scope or safety issues.")
+                append("\n")
+                append(scopeLine)
+                append("\nSafety: ${safetyLine(review)}")
+                append("\n")
+                append(dependencyLine)
+                append("\n")
+                append(validationLine)
+            }
+            else -> buildString {
+                append("Not approved because ${blockerLine(review)}")
+                append("\nFix: ${fixLine(review)}")
+                append("\n")
+                append(scopeLine)
+                append("\nSafety: ${safetyLine(review)}")
+                append("\n")
+                append(dependencyLine)
+                append("\n")
+                append(validationLine)
+            }
+        }
+    }
+
+    private fun blockerLine(review: ReviewArtifact): String =
+        review.issues.firstOrNull()?.details?.ifBlank { null }
+            ?: review.summary.ifBlank { "review found a blocker in the generated patch." }
+
+    private fun fixLine(review: ReviewArtifact): String =
+        review.issues.firstOrNull()?.suggestedFix?.ifBlank { null }
+            ?: review.followUpChecks.firstOrNull()
+            ?: "adjust the UML or regenerate the patch and review again."
+
+    private fun safetyLine(review: ReviewArtifact): String =
+        when {
+            review.positiveSignals.isNotEmpty() -> review.positiveSignals.take(2).joinToString(" ")
+            review.issues.isEmpty() -> "No concrete safety issues were reported."
+            else -> review.issues.take(2).joinToString(" ") { it.title.ifBlank { it.category } }
+        }
 }
 
 private class BlueprintButtonUi(private val primary: Boolean) : BasicButtonUI() {
@@ -2381,11 +2461,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             showArtifactTab("Review JSON")
             refreshArtifactSummary()
             val parseIssues = JsonExtractor.reviewIssues(r)
+            val reviewExplanation = ReviewExplanation.summary(
+                nodeTitle = n.title.ifBlank { n.id.take(8) },
+                exec = exec,
+                review = r,
+                readiness = project.service<DependencyGraphService>().readinessFor(n),
+                validation = validationResults[n.id],
+            )
             if (parseIssues.isNotEmpty()) {
                 logActivity("Review ${r.reviewStatus} with warnings for ${n.title}: ${parseIssues.joinToString("; ")}")
             } else {
-                logActivity("Review ${r.reviewStatus} for ${n.title}: ${r.issues.size} issue(s), next action ${r.recommendedNextAction}.")
+                logActivity(reviewExplanation.lineSequence().first())
             }
+            appendChat("Blueprint", reviewExplanation)
             status("Review ${r.reviewStatus}: ${n.title.ifBlank { n.id.take(8) }}")
         }
     }
@@ -2991,10 +3079,21 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         reviewSummaryArea.text = buildString {
             append(PatchChangeSummary.reviewSummary(exec))
             append("\n\n")
-            append(review?.summary ?: "No review yet. Run Review before applying for the safest demo flow.")
+            append(
+                ReviewExplanation.summary(
+                    nodeTitle = n.title.ifBlank { n.id.take(8) },
+                    exec = exec,
+                    review = review,
+                    readiness = readiness,
+                    validation = validation,
+                )
+            )
+            if (review?.summary?.isNotBlank() == true) {
+                append("\n\nReview summary:\n")
+                append(review.summary)
+            }
             if (validation != null) {
-                append("\n\n")
-                append("Validation:\n")
+                append("\n\nValidation:\n")
                 append(validation.summaryLine())
             }
         }
