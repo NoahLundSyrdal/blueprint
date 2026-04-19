@@ -26,13 +26,12 @@ class GenerateCodeDiffNoOpCopyTest {
     }
 
     @Test
-    fun `no-op guidance copy explains next steps`() {
-        val checked = 2
-        val nextStep = "Refine the UML, or click Refresh UML From Code to verify the current code before trying a different change."
-        val summary = "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
+    fun `no-op guidance copy explains what Blueprint checked and next steps`() {
+        val summary = "No code changes needed. Blueprint compared the current UML-backed request against the code on disk. Refresh UML From Code to verify the current code, or refine the UML and try a different change."
 
         assertTrue(summary.contains("No code changes needed."))
+        assertTrue(summary.contains("current UML-backed request against the code on disk"))
         assertTrue(summary.contains("Refresh UML From Code to verify the current code"))
-        assertTrue(summary.contains("trying a different change"))
+        assertTrue(summary.contains("refine the UML and try a different change"))
     }
 }

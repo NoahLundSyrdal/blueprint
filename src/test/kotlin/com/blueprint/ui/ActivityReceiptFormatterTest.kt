@@ -39,11 +39,11 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Generate Code Diff used existing nodes because the UML text was not parseable."),
         )
         assertEquals(
-            "Generate Code Diff found no file changes across 2 node(s).",
+            "Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk.",
             receiptTextForTest("Generate Code Diff completed with no-op result across 2 node(s)."),
         )
         assertEquals(
-            "No file changes were needed for Invite schema.",
+            "No file changes were needed for Invite schema because that UML-backed request already matched the code on disk.",
             receiptTextForTest("No-op code diff for Invite schema; generated content matched disk."),
         )
         assertEquals(

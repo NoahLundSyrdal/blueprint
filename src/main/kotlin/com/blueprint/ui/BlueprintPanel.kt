@@ -2385,14 +2385,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         importUmlText(text, "current UML")
         val nodes = project.service<DependencyGraphService>().readyNodes().ifEmpty { registry.all() }
         if (nodes.isEmpty()) {
+            val noOpMessage = noOpDiffMessage()
             showArtifactTab("Review")
-            reviewSummaryArea.text = "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
+            reviewSummaryArea.text = noOpMessage
             safetyArea.text = "No reviewed code patch was generated because no UML-backed work items were ready."
-            appendChat(
-                "Blueprint",
-                "No code changes needed. Refresh UML From Code to load the current code map, or refine the UML and try a different change."
-            )
-            logActivity("Generate Code Diff found no UML-backed work items ready to run.")
+            appendChat("Blueprint", noOpMessage)
+            logActivity("Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk.")
             status("No code changes needed")
             endPrimaryAction()
             return
@@ -2406,23 +2404,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         noChangeTitles: List<String> = emptyList(),
     ) {
         if (index >= nodes.size) {
-            val checked = noChangeTitles.size
-            val nextStep = if (checked == 0) {
-                "Refresh UML From Code to verify the current code, or refine the UML and try a different change."
-            } else {
-                "Refine the UML, or click Refresh UML From Code to verify the current code before trying a different change."
-            }
-            val noOpMessage = if (checked == 0) {
-                "No code changes needed. The UML already appears to match the current code. Refresh UML From Code to verify the current code, or refine the UML and try a different change."
-            } else {
-                "No code changes needed. The UML already appears to match the current code for $checked checked node(s). $nextStep"
-            }
+            val noOpMessage = noOpDiffMessage()
             reviewSummaryArea.text = noOpMessage
             safetyArea.text = "No reviewed code patch to apply."
             showArtifactTab("Review")
             status("No code changes needed")
             appendChat("Blueprint", noOpMessage)
-            logActivity("Generate Code Diff completed with no code changes because the UML already matched the current code across $checked node(s).")
+            logActivity("Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk.")
             endPrimaryAction()
             return
         }
@@ -2497,8 +2485,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
                     showArtifactTab("Review")
                     val title = n.title.ifBlank { n.id.take(8) }
                     status("No changes for $title; checking next node")
-                    reviewSummaryArea.text = "No code changes for $title. Checking the next UML code patch..."
-                    logActivity("No-op code diff for $title; generated content matched disk.")
+                    reviewSummaryArea.text = "No code changes for $title yet. Blueprint compared that UML-backed request against the code on disk and is checking the next UML change."
+                    logActivity("No file changes were needed for $title because that UML-backed request already matched the code on disk.")
                     onNoChange?.invoke(title)
                     return@executeNodeAsync
                 }
@@ -2526,6 +2514,9 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
         }
     }
+
+    private fun noOpDiffMessage(): String =
+        "No code changes needed. Blueprint compared the current UML-backed request against the code on disk. Refresh UML From Code to verify the current code, or refine the UML and try a different change."
 
     private fun patchChangesDisk(patch: Patch): Boolean {
         val before = project.service<ApplyChangesService>().readCurrentSnapshot(patch.path)
@@ -4980,11 +4971,13 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("code diff ready for") -> msg.replaceFirst("Code diff ready for", "Generated reviewed code patch for")
             lower.startsWith("generate code diff used existing nodes because") ->
                 "Generate Code Diff kept the last reviewed patch because the current UML could not be parsed."
+            lower.startsWith("generate code diff completed with no file changes because") -> msg
+            lower.startsWith("generate code diff found no file changes because") -> msg
             lower.startsWith("generate code diff completed with no-op result across") ->
-                msg.replaceFirst("Generate Code Diff completed with no-op result across", "Generate Code Diff found no file changes across")
+                "Generate Code Diff found no file changes because the current UML-backed request already matched the code on disk."
             lower.startsWith("no-op code diff for") ->
                 msg.replaceFirst("No-op code diff for", "No file changes were needed for")
-                    .replace("; generated content matched disk.", ".")
+                    .replace("; generated content matched disk.", " because that UML-backed request already matched the code on disk.")
             lower.startsWith("code diff blocked at plan for") ->
                 msg.replaceFirst("Code diff blocked at plan for", "Generate Code Diff stopped at planning for") + ". Review the blocked plan before continuing."
             lower.startsWith("cannot execute ") ->
