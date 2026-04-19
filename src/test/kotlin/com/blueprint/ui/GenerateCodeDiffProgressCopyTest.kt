@@ -18,7 +18,7 @@ class GenerateCodeDiffProgressCopyTest {
     fun `no op review summary says no code changes needed`() {
         val source = Files.readString(Paths.get("src/main/kotlin/com/blueprint/ui/BlueprintPanel.kt"))
 
-        assertTrue(source.contains("No code changes needed. The UML already appears to match the current code. Refresh UML From Code to load the current code map, or refine the UML and try a different change."))
+        assertTrue(source.contains("No code changes needed. The UML already appears to match the current code. Refresh UML From Code to verify the current code, or refine the UML and try a different change."))
         assertTrue(source.contains("No code changes needed. The UML already appears to match the current code for"))
     }
 
