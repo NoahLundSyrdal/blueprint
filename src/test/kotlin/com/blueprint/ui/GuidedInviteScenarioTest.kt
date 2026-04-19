@@ -1,5 +1,6 @@
 package com.blueprint.ui
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,10 +14,51 @@ class GuidedInviteScenarioTest {
     }
 
     @Test
-    fun `checklist advances through deterministic invite demo steps`() {
+    fun `picks a fresh invite demo prompt from current state`() {
+        assertEquals(
+            "add an InvitePolicy entity",
+            GuidedInviteScenario.pickPrompt(
+                componentNames = setOf("Project", "User", "Invite"),
+                entityNames = emptySet(),
+                inviteFields = emptyList(),
+            )?.prompt,
+        )
+        assertEquals(
+            "add an InviteReminder entity",
+            GuidedInviteScenario.pickPrompt(
+                componentNames = setOf("Project", "User", "Invite", "InvitePolicy"),
+                entityNames = setOf("InvitePolicy"),
+                inviteFields = emptyList(),
+            )?.prompt,
+        )
+        assertEquals(
+            "add an expires_at field to Invite",
+            GuidedInviteScenario.pickPrompt(
+                componentNames = setOf("Project", "User", "Invite", "InvitePolicy", "InviteReminder"),
+                entityNames = setOf("InvitePolicy", "InviteReminder"),
+                inviteFields = listOf("id", "email"),
+            )?.prompt,
+        )
+        assertEquals(
+            null,
+            GuidedInviteScenario.pickPrompt(
+                componentNames = setOf("Project", "User", "Invite", "InvitePolicy", "InviteReminder"),
+                entityNames = setOf("InvitePolicy", "InviteReminder"),
+                inviteFields = listOf("id", "email", "expires_at"),
+            ),
+        )
+    }
+
+    @Test
+    fun `checklist advances through selected guided prompt steps`() {
         val first = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
                 codeMapReady = false,
+                prompt = "add an InvitePolicy entity",
+                expectedEntity = "InvitePolicy",
+                expectedRelationSource = "Invite",
+                expectedRelationTarget = "InvitePolicy",
+                resetSuggested = false,
                 umlDraftReady = false,
                 reviewedDiffReady = false,
                 appliedReady = false,
@@ -25,11 +67,16 @@ class GuidedInviteScenarioTest {
         )
         val firstLines = first.lines()
         assertTrue(firstLines[0].startsWith("[next]"))
-        assertTrue(firstLines.drop(1).all { it.startsWith("[wait]") })
+        assertTrue(first.contains("Try this change: \"add an InvitePolicy entity\""))
 
         val middle = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
                 codeMapReady = true,
+                prompt = "add an InviteReminder entity",
+                expectedEntity = "InviteReminder",
+                expectedRelationSource = "Invite",
+                expectedRelationTarget = "InviteReminder",
+                resetSuggested = false,
                 umlDraftReady = true,
                 reviewedDiffReady = false,
                 appliedReady = false,
@@ -40,18 +87,22 @@ class GuidedInviteScenarioTest {
         assertTrue(middleLines[0].startsWith("[done]"))
         assertTrue(middleLines[1].startsWith("[done]"))
         assertTrue(middleLines[2].startsWith("[next]"))
+        assertTrue(middle.contains("InviteReminder linked from Invite"))
 
-        val complete = GuidedInviteScenario.checklistText(
+        val reset = GuidedInviteScenario.checklistText(
             GuidedInviteScenarioState(
                 codeMapReady = true,
-                umlDraftReady = true,
-                reviewedDiffReady = true,
-                appliedReady = true,
-                refreshedCodeMapReady = true,
+                prompt = "reset the invite demo sandbox",
+                expectedEntity = "Invite",
+                expectedRelationSource = null,
+                expectedRelationTarget = null,
+                resetSuggested = true,
+                umlDraftReady = false,
+                reviewedDiffReady = false,
+                appliedReady = false,
+                refreshedCodeMapReady = false,
             ),
         )
-        assertTrue(complete.lines().all { it.startsWith("[done]") })
-        assertTrue(complete.contains(GuidedInviteScenario.PROMPT))
-        assertTrue(complete.contains(GuidedInviteScenario.PATCH_PATH))
+        assertTrue(reset.contains("No safe fresh demo change remains"))
     }
 }

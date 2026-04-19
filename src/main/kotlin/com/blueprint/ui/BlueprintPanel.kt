@@ -246,6 +246,11 @@ private class ChatBubblePanel(
 
 internal data class GuidedInviteScenarioState(
     val codeMapReady: Boolean,
+    val prompt: String,
+    val expectedEntity: String,
+    val expectedRelationSource: String?,
+    val expectedRelationTarget: String?,
+    val resetSuggested: Boolean,
     val umlDraftReady: Boolean,
     val reviewedDiffReady: Boolean,
     val appliedReady: Boolean,
@@ -253,15 +258,57 @@ internal data class GuidedInviteScenarioState(
 )
 
 internal object GuidedInviteScenario {
-    const val PROMPT = "add an InvitePolicy entity"
     const val PATCH_PATH = "blueprint_demo/imported_invite/models.py"
+    private val promptPlans = listOf(
+        PromptPlan(
+            prompt = "add an InvitePolicy entity",
+            expectedEntity = "InvitePolicy",
+            relationSource = "Invite",
+            relationTarget = "InvitePolicy",
+        ),
+        PromptPlan(
+            prompt = "add an InviteReminder entity",
+            expectedEntity = "InviteReminder",
+            relationSource = "Invite",
+            relationTarget = "InviteReminder",
+        ),
+        PromptPlan(
+            prompt = "add an expires_at field to Invite",
+            expectedEntity = "Invite",
+            expectedField = "expires_at",
+        ),
+    )
+
+    data class PromptPlan(
+        val prompt: String,
+        val expectedEntity: String,
+        val relationSource: String? = null,
+        val relationTarget: String? = null,
+        val expectedField: String? = null,
+    )
 
     fun matchesProject(projectName: String, basePath: String?): Boolean {
         val normalizedPath = basePath.orEmpty().replace('\\', '/')
         return projectName == "invite_project" || normalizedPath.endsWith("/examples/invite_project")
     }
 
+    fun pickPrompt(componentNames: Set<String>, entityNames: Set<String>, inviteFields: List<String>): PromptPlan? =
+        promptPlans.firstOrNull { plan ->
+            when {
+                plan.expectedField != null -> plan.expectedField !in inviteFields
+                plan.expectedEntity !in componentNames && plan.expectedEntity !in entityNames -> true
+                else -> false
+            }
+        }
+
     fun checklistText(state: GuidedInviteScenarioState): String {
+        if (state.resetSuggested) {
+            return listOf(
+                "[done] Abstract Code to UML -> current code map is loaded.",
+                "[done] Guided demo changes already exist in this sandbox.",
+                "[next] No safe fresh demo change remains. Reset the sandbox or try your own architecture change.",
+            ).joinToString("\n")
+        }
         val currentStep = when {
             !state.codeMapReady -> 1
             !state.umlDraftReady -> 2
@@ -270,12 +317,24 @@ internal object GuidedInviteScenario {
             !state.refreshedCodeMapReady -> 5
             else -> 0
         }
+        val expectedResult = when {
+            state.expectedRelationSource != null && state.expectedRelationTarget != null ->
+                "expect ${state.expectedEntity} linked from ${state.expectedRelationSource} in the UML draft."
+            state.expectedEntity == "Invite" ->
+                "expect Invite to include ${state.prompt.substringAfter("add an ").substringBefore(" field")} in the UML draft."
+            else -> "expect ${state.expectedEntity} in the UML draft."
+        }
+        val refreshedResult = when {
+            state.expectedEntity == "Invite" ->
+                "expect the refreshed current code map to include ${state.prompt.substringAfter("add an ").substringBefore(" field")} on Invite."
+            else -> "expect ${state.expectedEntity} to appear in the refreshed current code map."
+        }
         return listOf(
             "${stepMarker(1, currentStep, state.codeMapReady)} Abstract Code to UML -> expect Project, User, and Invite in the current code map.",
-            "${stepMarker(2, currentStep, state.umlDraftReady)} Use demo prompt: \"$PROMPT\" -> expect InvitePolicy linked from Invite in the UML draft.",
+            "${stepMarker(2, currentStep, state.umlDraftReady)} Try this change: \"${state.prompt}\" -> $expectedResult",
             "${stepMarker(3, currentStep, state.reviewedDiffReady)} Generate Code Diff -> expect a reviewed diff for $PATCH_PATH.",
             "${stepMarker(4, currentStep, state.appliedReady)} Apply Approved Changes -> expect the imported invite patch to be written to disk.",
-            "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> expect InvitePolicy to appear in the refreshed current code map.",
+            "${stepMarker(5, currentStep, state.refreshedCodeMapReady)} Refresh UML From Code -> $refreshedResult",
         ).joinToString("\n")
     }
 
@@ -602,8 +661,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         wrapStyleWord = true
         rows = 5
     }
-    private val firstRunPromptButton = JButton("Use Demo Prompt").apply {
-        addActionListener { sendSuggestedChat(GuidedInviteScenario.PROMPT) }
+    private val firstRunPromptButton = JButton("Try This Change").apply {
+        addActionListener { currentInvitePrompt()?.let(::sendSuggestedChat) }
     }
     private val primaryActionButton = JButton("Generate Code Diff").apply {
         putClientProperty("blueprint.primary", true)
@@ -1319,7 +1378,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun seedInitialChat() {
-        val demoPrompt = if (shouldShowInviteFirstRunScenario()) GuidedInviteScenario.PROMPT else "add a Supplier entity"
+        val demoPrompt = if (shouldShowInviteFirstRunScenario()) currentInvitePrompt() ?: "reset the invite demo sandbox" else "add a Supplier entity"
         appendChat(
             "Blueprint",
             """
@@ -1419,7 +1478,7 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             }
             "uml" in lower || "diagram" in lower -> {
                 if (shouldShowInviteFirstRunScenario()) {
-                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${GuidedInviteScenario.PROMPT}', then click Generate Code Diff."
+                    "The main canvas is editable Mermaid UML. For the guided invite demo, try '${currentInvitePrompt() ?: "reset the invite demo sandbox"}', then click Generate Code Diff."
                 } else {
                     "The main canvas is editable Mermaid UML. Ask for architecture changes like 'add a Supplier entity' or 'make CarCompany own many Dealerships'. I will rewrite the UML, then you can Generate Code Diff."
                 }
@@ -1601,6 +1660,19 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
 
                 Invite --> InvitePolicy : uses
             """.trimIndent()
+            "invitereminder" in lower || ("reminder" in lower && currentUml.contains("class Invite")) -> """
+
+                class InviteReminder {
+                  sendAt: datetime
+                  channel: str
+                }
+
+                Invite --> InviteReminder : schedules
+            """.trimIndent()
+            "expires_at" in lower || ("expire" in lower && currentUml.contains("class Invite")) -> currentUml.replace(
+                "class Invite {",
+                "class Invite {\n  expires_at: datetime",
+            )
             "supplier" in lower -> """
 
                 class Supplier {
@@ -3321,7 +3393,29 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         if (!shouldShowInviteFirstRunScenario()) return
         val state = currentInviteFirstRunScenarioState()
         firstRunScenarioArea.text = GuidedInviteScenario.checklistText(state)
-        firstRunPromptButton.isEnabled = state.codeMapReady && !state.umlDraftReady
+        firstRunPromptButton.text = if (state.resetSuggested) "Reset Demo Path" else "Try This Change"
+        firstRunPromptButton.isEnabled = state.codeMapReady
+        firstRunPromptButton.toolTipText = if (state.resetSuggested) {
+            "All guided demo changes already exist. Reset the sandbox or pick your own change."
+        } else {
+            state.prompt
+        }
+    }
+
+    private fun currentInvitePrompt(): String? =
+        currentInvitePromptPlan()?.prompt
+
+    private fun currentInvitePromptPlan(): GuidedInviteScenario.PromptPlan? {
+        val ir = project.service<IRStore>().load()
+        val componentNames = ir?.components?.map { it.name }?.toSet().orEmpty()
+        val parsedUml = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
+        val entityNames = parsedUml?.entities?.map { it.name }?.toSet().orEmpty()
+        val inviteFields = parsedUml?.entities.orEmpty()
+            .firstOrNull { it.name == "Invite" }
+            ?.fields
+            .orEmpty()
+            .map { it.substringBefore(":").trim() }
+        return GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
     }
 
     private fun currentInviteFirstRunScenarioState(): GuidedInviteScenarioState {
@@ -3329,9 +3423,12 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
         val componentNames = ir?.components?.map { it.name }?.toSet().orEmpty()
         val parsedUml = runCatching { project.service<UmlImportService>().parse(umlEditor.text) }.getOrNull()
         val entityNames = parsedUml?.entities?.map { it.name }?.toSet().orEmpty()
-        val hasInvitePolicyLink = parsedUml?.relationships.orEmpty().any { relationship ->
-            setOf(relationship.from, relationship.to) == setOf("Invite", "InvitePolicy")
-        }
+        val inviteFields = parsedUml?.entities.orEmpty()
+            .firstOrNull { it.name == "Invite" }
+            ?.fields
+            .orEmpty()
+            .map { it.substringBefore(":").trim() }
+        val promptPlan = GuidedInviteScenario.pickPrompt(componentNames, entityNames, inviteFields)
         val reviewedInviteDiff = registry.all().any { node ->
             registry.getReview(node.id) != null &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
@@ -3340,12 +3437,36 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             node.executionStatus == ExecutionStatus.APPLIED &&
                 registry.getExecution(node.id)?.patches.orEmpty().any { it.path == GuidedInviteScenario.PATCH_PATH }
         }
+        val activePlan = promptPlan ?: GuidedInviteScenario.PromptPlan(
+            prompt = "reset the invite demo sandbox",
+            expectedEntity = "Invite",
+            expectedField = "expires_at",
+        )
+        val hasExpectedDraft = when {
+            activePlan.expectedField != null -> umlHasPendingEdits && activePlan.expectedField in inviteFields
+            activePlan.relationSource != null && activePlan.relationTarget != null ->
+                umlHasPendingEdits &&
+                    activePlan.expectedEntity in entityNames &&
+                    parsedUml?.relationships.orEmpty().any { relationship ->
+                        setOf(relationship.from, relationship.to) == setOf(activePlan.relationSource, activePlan.relationTarget)
+                    }
+            else -> umlHasPendingEdits && activePlan.expectedEntity in entityNames
+        }
+        val refreshedReady = when {
+            activePlan.expectedField != null -> appliedInviteDiff && !umlHasPendingEdits && activePlan.expectedField in componentNames
+            else -> appliedInviteDiff && !umlHasPendingEdits && activePlan.expectedEntity in componentNames
+        }
         return GuidedInviteScenarioState(
             codeMapReady = setOf("Project", "User", "Invite").all { it in componentNames },
-            umlDraftReady = umlHasPendingEdits && "InvitePolicy" in entityNames && hasInvitePolicyLink,
+            prompt = activePlan.prompt,
+            expectedEntity = activePlan.expectedEntity,
+            expectedRelationSource = activePlan.relationSource,
+            expectedRelationTarget = activePlan.relationTarget,
+            resetSuggested = promptPlan == null,
+            umlDraftReady = hasExpectedDraft,
             reviewedDiffReady = reviewedInviteDiff,
             appliedReady = appliedInviteDiff,
-            refreshedCodeMapReady = appliedInviteDiff && !umlHasPendingEdits && "InvitePolicy" in componentNames,
+            refreshedCodeMapReady = refreshedReady,
         )
     }
 
