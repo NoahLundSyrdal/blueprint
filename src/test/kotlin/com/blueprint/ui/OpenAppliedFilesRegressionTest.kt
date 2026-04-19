@@ -27,12 +27,11 @@ class OpenAppliedFilesRegressionTest {
 
         assertTrue(source.contains("private fun openAppliedFiles() {"))
         assertTrue(source.contains("if (changedPaths.size == 1) {"))
-        assertTrue(source.contains("openChangedFile(changedPaths.first())"))
-        assertTrue(source.contains("logActivity(\"Opened the only changed file from the last apply.\")"))
+        assertTrue(source.contains("openChangedFile("))
+        assertTrue(source.contains("\"Inspected the only changed file after apply: "))
         assertTrue(source.contains("JOptionPane.showInputDialog("))
         assertTrue(source.contains("\"Blueprint - Open Changed Files\""))
         assertTrue(source.contains("changedPaths.toTypedArray()"))
-        assertTrue(source.contains("openChangedFile(selectedPath)"))
-        assertTrue(source.contains("logActivity(\"Opened one changed file from the last apply chooser.\")"))
+        assertTrue(source.contains("\"Inspected one changed file after apply from the chooser: \$selectedPath\""))
     }
 }

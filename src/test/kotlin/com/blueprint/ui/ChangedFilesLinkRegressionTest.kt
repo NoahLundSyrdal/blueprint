@@ -27,9 +27,11 @@ class ChangedFilesLinkRegressionTest {
         val source = Files.readString(sourcePath)
 
         assertTrue(source.contains("private fun openChangedFile(path: String) {"))
+        assertTrue(source.contains("openChangedFileWithReceipt(path, \"Opened changed file from review: \$path\")"))
+        assertTrue(source.contains("private fun openChangedFileWithReceipt(path: String, receiptMessage: String) {"))
         assertTrue(source.contains("if (!openProjectFile(sourceFile, path)) return"))
         assertTrue(source.contains("Opening a file here does not apply changes. Generate Code Diff and Apply Approved Changes are still separate steps."))
         assertTrue(source.contains("status(\"Opened changed file: \$path\")"))
-        assertTrue(source.contains("logActivity(\"Opened changed file from review: \$path\")"))
+        assertTrue(source.contains("logActivity(receiptMessage)"))
     }
 }

@@ -67,6 +67,14 @@ class ActivityReceiptFormatterTest {
             receiptTextForTest("Opened diff preview for Invite schema (1 file(s))."),
         )
         assertEquals(
+            "Inspected the only changed file after apply: app/models.py",
+            receiptTextForTest("Inspected the only changed file after apply: app/models.py"),
+        )
+        assertEquals(
+            "Inspected one changed file after apply from the chooser: app/models.py",
+            receiptTextForTest("Inspected one changed file after apply from the chooser: app/models.py"),
+        )
+        assertEquals(
             "Run the changed app with python main.py. Expected visible result: InviteReminder appears on the screen",
             receiptTextForTest("Demo e2e step passed: Run the changed app with python main.py. Expected visible result: InviteReminder appears on the screen"),
         )

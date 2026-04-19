@@ -23,6 +23,8 @@ class ActivityTimelineCoverageRegressionTest {
         assertTrue(source.contains("\"Validation skipped after apply for \${node.title.ifBlank { node.id.take(8) }}: no command inferred.\""))
         assertTrue(source.contains("\"Freshness verified after apply: refreshed UML from disk with \" +"))
         assertTrue(source.contains("logActivity(\"Opened diff preview for"))
+        assertTrue(source.contains("\"Inspected the only changed file after apply: "))
+        assertTrue(source.contains("\"Inspected one changed file after apply from the chooser: \$selectedPath\""))
         assertTrue(source.contains("logActivity(\"Opened source for"))
         assertTrue(source.contains("activityLog.append(\"[\$at] \${numbered.toString().padStart(2, '0')}. \${receiptText(msg)}\\n\")"))
     }

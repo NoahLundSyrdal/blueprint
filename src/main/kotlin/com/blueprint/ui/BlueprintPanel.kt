@@ -3449,8 +3449,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             return
         }
         if (changedPaths.size == 1) {
-            openChangedFile(changedPaths.first())
-            logActivity("Opened the only changed file from the last apply.")
+            openChangedFileWithReceipt(
+                changedPaths.first(),
+                "Inspected the only changed file after apply: ${changedPaths.first()}",
+            )
             return
         }
         val selectedPath = JOptionPane.showInputDialog(
@@ -3462,8 +3464,10 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             changedPaths.toTypedArray(),
             changedPaths.first(),
         ) as? String ?: return
-        openChangedFile(selectedPath)
-        logActivity("Opened one changed file from the last apply chooser.")
+        openChangedFileWithReceipt(
+            selectedPath,
+            "Inspected one changed file after apply from the chooser: $selectedPath",
+        )
     }
 
     private fun reviewBlockMessage(review: ReviewArtifact?): String {
@@ -3601,10 +3605,14 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
     }
 
     private fun openChangedFile(path: String) {
+        openChangedFileWithReceipt(path, "Opened changed file from review: $path")
+    }
+
+    private fun openChangedFileWithReceipt(path: String, receiptMessage: String) {
         val sourceFile = resolveProjectFile(path)
         if (!openProjectFile(sourceFile, path)) return
         status("Opened changed file: $path")
-        logActivity("Opened changed file from review: $path")
+        logActivity(receiptMessage)
     }
 
     private fun refreshChangedFilesPanel(exec: ExecutionArtifact?) {
@@ -4754,6 +4762,8 @@ class BlueprintPanel(private val project: Project) : JPanel(BorderLayout()) {
             lower.startsWith("demo e2e step passed:") -> msg.removePrefix("Demo e2e step passed: ")
             lower.startsWith("demo e2e step failed:") -> msg.removePrefix("Demo e2e step failed: ")
             lower.startsWith("opened diff preview for") -> msg.replaceFirst("Opened diff preview for", "Opened reviewed diff for")
+            lower.startsWith("inspected the only changed file after apply:") -> msg
+            lower.startsWith("inspected one changed file after apply from the chooser:") -> msg
             lower.startsWith("opened source for") -> msg.replaceFirst("Opened source for", "Opened source file for")
             lower.startsWith("uml import found no entities") -> "Could not build UML from the imported text because no entities were found."
             lower.startsWith("saved node ") -> msg.replaceFirst("Saved node", "Saved workflow node")
